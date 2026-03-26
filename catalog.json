@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "generated_at": "2026-03-26T09:52:44Z",
+  "skills_count": 3,
+  "skills": [
+    {
+      "name": "feature-accept",
+      "description": "Use when the user wants to accept/finish a completed feature, merge it, and clean up artifacts. Triggers: 'принять фичу', 'accept feature', 'feature done', 'закрыть фичу', 'завершить фичу', 'merge feature', 'фича готова'.",
+      "tags": ["planning","workflow","git"],
+      "author": "maksimklisin",
+      "version": "1.0.0",
+      "scope": "global",
+      "platforms": ["claude-code"],
+      "path": "skills/feature-accept",
+      "files": ["SKILL.md"],
+      "dependencies": []
+    },
+    {
+      "name": "feature-planning",
+      "description": "Use when the user wants to plan a new feature, asks to 'спланировать фичу', 'новая фича', 'feature planning', 'давай спроектируем', or wants structured discovery-to-implementation workflow for any project.",
+      "tags": ["planning","workflow","architecture","jira"],
+      "author": "maksimklisin",
+      "version": "1.0.0",
+      "scope": "global",
+      "platforms": ["claude-code"],
+      "path": "skills/feature-planning",
+      "files": ["SKILL.md"],
+      "dependencies": []
+    },
+    {
+      "name": "git-commit-and-push",
+      "description": "Use when the user asks to commit changes, push to git, \"залей в git\", \"закоммить\", or save work to the repository. Covers staging, commit message formatting, and push.",
+      "tags": ["git","workflow","safety"],
+      "author": "maksimklisin",
+      "version": "1.0.0",
+      "scope": "global",
+      "platforms": ["claude-code"],
+      "path": "skills/git-commit-and-push",
+      "files": ["SKILL.md"],
+      "dependencies": []
+    }
+  ],
+  "tags_index": {
+    "architecture": ["feature-planning"],
+    "git": ["feature-accept","git-commit-and-push"],
+    "jira": ["feature-planning"],
+    "planning": ["feature-accept","feature-planning"],
+    "safety": ["git-commit-and-push"],
+    "workflow": ["feature-accept","feature-planning","git-commit-and-push"]
+  }
+}
