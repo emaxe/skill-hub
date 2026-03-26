@@ -1,8 +1,8 @@
 ---
-name: skillhub
-description: "Use when the user invokes /skillhub or asks to search, install, remove, update, list skills, or initialize project with recommended skills. Triggers: '/skillhub', 'skillhub search', 'skillhub install', 'найди скилл', 'установи скилл', 'удали скилл', 'обнови скиллы', 'skillhub init'."
+name: skill-hub
+description: "Use when the user invokes /skill-hub or asks to search, install, remove, update, list skills, or initialize project with recommended skills. Triggers: '/skill-hub', 'skill-hub search', 'skill-hub install', 'найди скилл', 'установи скилл', 'удали скилл', 'обнови скиллы', 'skill-hub init'."
 tags: [package-manager, skills, workflow]
-author: maksimklisin
+author: emaxe
 version: "1.0.0"
 scope: global
 platforms: [claude-code]
@@ -10,15 +10,15 @@ dependencies: []
 language: any
 ---
 
-# skillHub — Skill Package Manager
+# Skill-Hub — Skill Package Manager
 
-You are the skillHub client — a package manager for AI coding skills. You manage skills from the skillHub registry: search, install, remove, update, list, and recommend skills for projects.
+You are the Skill-Hub client — a package manager for AI coding skills. You manage skills from the Skill-Hub registry: search, install, remove, update, list, and recommend skills for projects.
 
-**Cache repository:** `https://github.com/maksimklisin/skillHub.git`
-**Cache location:** `~/.claude/skillhub/`
+**Cache repository:** `https://github.com/emaxe/skill-hub.git`
+**Cache location:** `~/.claude/skill-hub/`
 **Global skills:** `~/.claude/skills/{name}/`
 **Project skills:** `.claude/skills/{name}/`
-**Installation registry:** `~/.claude/skillhub/installed.json`
+**Installation registry:** `~/.claude/skill-hub/installed.json`
 
 ---
 
@@ -27,8 +27,8 @@ You are the skillHub client — a package manager for AI coding skills. You mana
 Before any operation that reads the catalog, ensure the local cache exists:
 
 ```
-if [ ! -d ~/.claude/skillhub ]; then
-  git clone --depth 1 https://github.com/maksimklisin/skillHub.git ~/.claude/skillhub/
+if [ ! -d ~/.claude/skill-hub ]; then
+  git clone --depth 1 https://github.com/emaxe/skill-hub.git ~/.claude/skill-hub/
 fi
 ```
 
@@ -38,14 +38,14 @@ Use Bash tool for this check. If the directory exists but is corrupted (no catal
 
 ## Operations
 
-### 1. `/skillhub search <query>`
+### 1. `/skill-hub search <query>`
 
 Search the skill registry for skills matching a query.
 
 **Steps:**
 
 1. Ensure cache (see above).
-2. Read `~/.claude/skillhub/catalog.json` using Read tool.
+2. Read `~/.claude/skill-hub/catalog.json` using Read tool.
 3. Apply search strategy in priority order:
    - **Exact tag match:** Check `tags_index` object — if `query` matches a tag key exactly, return all skills listed under that tag.
    - **Name contains:** Filter `skills` array where `name` contains the query (case-insensitive).
@@ -65,16 +65,16 @@ Found N skill(s) for "<query>":
 
 5. Ask the user: "Install any of these? Specify the name or number."
 
-### 2. `/skillhub install <skill-name> [--global|--project]`
+### 2. `/skill-hub install <skill-name> [--global|--project]`
 
 Install a skill from the registry.
 
 **Steps:**
 
 1. Ensure cache.
-2. Read `~/.claude/skillhub/catalog.json`. Find the skill by `name` in the `skills` array. If not found, suggest running `/skillhub search`.
+2. Read `~/.claude/skill-hub/catalog.json`. Find the skill by `name` in the `skills` array. If not found, suggest running `/skill-hub search`.
 3. **Check dependencies:** Read the skill's `dependencies` array. For each dependency:
-   - Check if it is already installed (exists in `~/.claude/skillhub/installed.json` or in the skill directories).
+   - Check if it is already installed (exists in `~/.claude/skill-hub/installed.json` or in the skill directories).
    - If missing, list all missing dependencies and ask the user: "This skill requires: dep1, dep2. Install them first?"
    - If user confirms, install each dependency recursively before proceeding.
 4. **Determine scope:**
@@ -82,14 +82,14 @@ Install a skill from the registry.
    - If `--project` flag is provided → project scope.
    - Otherwise, use the skill's `scope` field from catalog metadata.
    - If scope is `"both"`, ask the user which they prefer.
-5. **Copy skill files:** The skill source is at `~/.claude/skillhub/skills/{name}/`. Copy the entire directory to the target:
+5. **Copy skill files:** The skill source is at `~/.claude/skill-hub/skills/{name}/`. Copy the entire directory to the target:
    - **Global:** `~/.claude/skills/{name}/`
    - **Project:** `.claude/skills/{name}/` (relative to current working directory)
 
-   Use Bash tool: `cp -r ~/.claude/skillhub/skills/{name}/ {target_path}`
+   Use Bash tool: `cp -r ~/.claude/skill-hub/skills/{name}/ {target_path}`
 
    Create the target parent directory if it does not exist: `mkdir -p {target_parent}`
-6. **Record installation:** Read or create `~/.claude/skillhub/installed.json`. Add an entry:
+6. **Record installation:** Read or create `~/.claude/skill-hub/installed.json`. Add an entry:
 
 ```json
 {
@@ -109,20 +109,20 @@ If the file does not exist, create it with the structure above. If it exists, ap
 
 7. Confirm to the user: "Installed **skill-name** v1.0.0 (global/project)."
 
-### 3. `/skillhub remove <skill-name>`
+### 3. `/skill-hub remove <skill-name>`
 
 Remove an installed skill.
 
 **Steps:**
 
-1. **Find the skill:** Read `~/.claude/skillhub/installed.json`. Find the entry by `name`. If not found there, scan `~/.claude/skills/*/SKILL.md` and `.claude/skills/*/SKILL.md` for a matching skill name in frontmatter.
+1. **Find the skill:** Read `~/.claude/skill-hub/installed.json`. Find the entry by `name`. If not found there, scan `~/.claude/skills/*/SKILL.md` and `.claude/skills/*/SKILL.md` for a matching skill name in frontmatter.
 2. **Check dependents:** Read `installed.json` and cross-reference — are any other installed skills listing this skill as a dependency? If yes, warn the user: "Warning: **other-skill** depends on **skill-name**. Removing it may break that skill. Continue?"
 3. **Ask confirmation:** "Remove **skill-name** (scope)? This will delete the directory at {path}."
 4. **Delete:** Use Bash tool: `rm -rf {path}`
 5. **Update registry:** Remove the entry from `installed.json` and write the file back.
 6. Confirm: "Removed **skill-name**."
 
-### 4. `/skillhub list`
+### 4. `/skill-hub list`
 
 List all installed skills.
 
@@ -132,22 +132,22 @@ List all installed skills.
    - `~/.claude/skills/*/SKILL.md` (global skills)
    - `.claude/skills/*/SKILL.md` (project skills)
 2. **Read frontmatter** from each found SKILL.md using Read tool. Extract: name, version, description, scope.
-3. **Determine source:** If the skill name appears in `~/.claude/skillhub/installed.json`, source is `skillhub`. Otherwise, source is `manual`.
-4. **Check for updates:** If cache exists (`~/.claude/skillhub/catalog.json`), compare installed version with catalog version. Mark skills that have available updates.
+3. **Determine source:** If the skill name appears in `~/.claude/skill-hub/installed.json`, source is `skill-hub`. Otherwise, source is `manual`.
+4. **Check for updates:** If cache exists (`~/.claude/skill-hub/catalog.json`), compare installed version with catalog version. Mark skills that have available updates.
 5. **Display as table:**
 
 ```
 Installed skills:
 
-| Name          | Version | Description              | Scope   | Source   | Update    |
-|---------------|---------|--------------------------|---------|----------|-----------|
-| git-commit    | 1.0.0   | Smart git commits        | global  | skillhub | 1.1.0 available |
-| my-custom     | 0.1.0   | Custom workflow          | project | manual   | —         |
+| Name          | Version | Description              | Scope   | Source    | Update    |
+|---------------|---------|--------------------------|---------|-----------|-----------|
+| git-commit    | 1.0.0   | Smart git commits        | global  | skill-hub | 1.1.0 available |
+| my-custom     | 0.1.0   | Custom workflow          | project | manual    | —         |
 ```
 
-If no skills are found, suggest: "No skills installed. Try `/skillhub search` or `/skillhub init`."
+If no skills are found, suggest: "No skills installed. Try `/skill-hub search` or `/skill-hub init`."
 
-### 5. `/skillhub update [skill-name]`
+### 5. `/skill-hub update [skill-name]`
 
 Update installed skills to latest versions.
 
@@ -155,13 +155,13 @@ Update installed skills to latest versions.
 
 1. **Update cache:**
    ```bash
-   cd ~/.claude/skillhub && git pull origin main --depth 1
+   cd ~/.claude/skill-hub && git pull origin main --depth 1
    ```
    If pull fails (detached HEAD, conflicts, etc.), fall back to re-clone:
    ```bash
-   rm -rf ~/.claude/skillhub && git clone --depth 1 https://github.com/maksimklisin/skillHub.git ~/.claude/skillhub/
+   rm -rf ~/.claude/skill-hub && git clone --depth 1 https://github.com/emaxe/skill-hub.git ~/.claude/skill-hub/
    ```
-2. **Compare versions:** Read `~/.claude/skillhub/catalog.json` and `~/.claude/skillhub/installed.json`. For each installed skill (or just the specified one), compare version strings.
+2. **Compare versions:** Read `~/.claude/skill-hub/catalog.json` and `~/.claude/skill-hub/installed.json`. For each installed skill (or just the specified one), compare version strings.
 3. **Show available updates:**
 
 ```
@@ -177,12 +177,12 @@ If a specific `skill-name` was provided, show only that skill.
 
 4. **Apply updates:** Ask the user which skills to update (or confirm all). For each selected skill:
    - Check if local files at the installed path differ from the cache version (use `diff` command). If modified, warn: "Local modifications detected in **skill-name**. Overwrite?"
-   - Copy updated files: `cp -r ~/.claude/skillhub/skills/{name}/ {installed_path}`
+   - Copy updated files: `cp -r ~/.claude/skill-hub/skills/{name}/ {installed_path}`
    - Update version in `installed.json`.
-5. **Self-update check:** Compare `~/.claude/skillhub/client/SKILL.md` frontmatter version with the current skill version (1.0.0). If a newer version is available, offer: "A new version of the skillhub client is available (current: X, latest: Y). Update? This will overwrite the skillhub skill file."
-   - If user confirms, copy `~/.claude/skillhub/client/SKILL.md` to where this skill is currently installed (global skills path).
+5. **Self-update check:** Compare `~/.claude/skill-hub/client/SKILL.md` frontmatter version with the current skill version (1.0.0). If a newer version is available, offer: "A new version of the Skill-Hub client is available (current: X, latest: Y). Update? This will overwrite the skill-hub skill file."
+   - If user confirms, copy `~/.claude/skill-hub/client/SKILL.md` to where this skill is currently installed (global skills path).
 
-### 6. `/skillhub init`
+### 6. `/skill-hub init`
 
 Analyze the current project and recommend skills from the registry.
 
@@ -209,7 +209,7 @@ Analyze the current project and recommend skills from the registry.
 | `supabase/` | exists | `supabase` |
 
 3. **Collect detected tags** into a list. Remove duplicates.
-4. **Match against catalog:** Read `~/.claude/skillhub/catalog.json`. For each skill in the catalog, count how many of its `tags` overlap with the detected project tags.
+4. **Match against catalog:** Read `~/.claude/skill-hub/catalog.json`. For each skill in the catalog, count how many of its `tags` overlap with the detected project tags.
 5. **Rank and group:**
    - **Recommended (3+ tag matches):** Skills with 3 or more matching tags.
    - **Also relevant (1-2 matches):** Skills with 1-2 matching tags.

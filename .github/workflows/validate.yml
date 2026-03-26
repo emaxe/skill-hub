@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          KNOWN_TAGS="javascript typescript python react node docker git testing css html api database security devops cloud linux bash sql graphql rest websocket"
+          KNOWN_TAGS="git workflow safety ci-cd planning jira javascript typescript python go rust java react vue nextjs express django flask fastapi svelte docker eslint testing debugging logging architecture security performance accessibility documentation claude-code cursor gemini codex"
           ERRORS=()
           WARNINGS=()
           SEEN_NAMES=()

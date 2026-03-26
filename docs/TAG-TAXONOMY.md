@@ -1,6 +1,6 @@
 # Tag Taxonomy
 
-Standardized tags for categorizing skills in skillHub. When creating a skill, use tags from this list in your frontmatter. If you need a new tag, propose it in your PR.
+Standardized tags for categorizing skills in Skill-Hub. When creating a skill, use tags from this list in your frontmatter. If you need a new tag, propose it in your PR.
 
 ## Workflow
 
@@ -13,6 +13,7 @@ Tags related to development workflows and processes.
 | `safety`   | Safety checks, validation, guardrails          |
 | `ci-cd`    | Continuous integration and deployment          |
 | `planning` | Feature planning, task breakdown, estimation   |
+| `jira`     | Jira integration, issue tracking                |
 
 ## Language
 

@@ -6,7 +6,7 @@ author: your-github-username   # optional, your GitHub username
 version: "1.0.0"              # optional, semantic version (major.minor.patch)
 scope: global                  # optional, global | project | both (default: global)
 platforms: [claude-code]       # optional, claude-code | cursor | gemini | codex
-dependencies: []               # optional, other skillHub skills this depends on
+dependencies: []               # optional, other Skill-Hub skills this depends on
 language: any                  # optional, target language or "any" for language-agnostic
 ---
 

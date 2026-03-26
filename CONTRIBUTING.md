@@ -1,16 +1,16 @@
-# Contributing to skillHub
+# Contributing to Skill-Hub
 
-Thank you for your interest in contributing a skill to skillHub! This guide walks you through the process.
+Thank you for your interest in contributing a skill to Skill-Hub! This guide walks you through the process.
 
 ## How to Add a Skill
 
 ### 1. Fork the repository
 
-Fork `skillHub` on GitHub and clone your fork locally.
+Fork `Skill-Hub` on GitHub and clone your fork locally.
 
 ```bash
-git clone https://github.com/<your-username>/skillHub.git
-cd skillHub
+git clone https://github.com/<your-username>/skill-hub.git
+cd skill-hub
 ```
 
 ### 2. Create a skill directory
@@ -42,7 +42,7 @@ Edit the YAML frontmatter at the top of your `SKILL.md`. Required fields:
 | `version`     | No       | Semantic version (e.g., `1.0.0`)               |
 | `scope`       | No       | `global`, `project`, or `both` (default: `global`) |
 | `platforms`   | No       | Target platforms: `claude-code`, `cursor`, `gemini`, `codex` |
-| `dependencies`| No       | Other skillHub skills this depends on          |
+| `dependencies`| No       | Other Skill-Hub skills this depends on          |
 | `language`    | No       | Target programming language (default: `any`)   |
 
 See [schema/frontmatter.schema.json](schema/frontmatter.schema.json) for the full validation schema.
@@ -85,7 +85,7 @@ Fix any issues flagged by the validation before requesting review.
 
 ### 9. After merge
 
-Once your PR is merged, `catalog.json` is automatically regenerated to include your skill. Users can then discover and install it via `/skillhub search` and `/skillhub install`.
+Once your PR is merged, `catalog.json` is automatically regenerated to include your skill. Users can then discover and install it via `/skill-hub search` and `/skill-hub install`.
 
 ## Guidelines
 

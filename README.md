@@ -1,4 +1,4 @@
-# skillHub
+# Skill-Hub
 
 Open-source package manager for Claude Code skills. Search, install, and manage reusable AI coding skills from a central repository.
 
@@ -8,12 +8,12 @@ A skill is a `SKILL.md` file containing instructions that extend your AI coding 
 
 ## Quick Start
 
-### 1. Install the skillHub client
+### 1. Install the Skill-Hub client
 
 ```bash
 # Copy the client skill to your global skills directory
-mkdir -p ~/.claude/skills/skillhub
-cp client/SKILL.md ~/.claude/skills/skillhub/SKILL.md
+mkdir -p ~/.claude/skills/skill-hub
+cp client/SKILL.md ~/.claude/skills/skill-hub/SKILL.md
 ```
 
 ### 2. Start using skills
@@ -21,12 +21,12 @@ cp client/SKILL.md ~/.claude/skills/skillhub/SKILL.md
 Once installed, you can use the following commands in Claude Code:
 
 ```
-/skillhub search <query>     Search for skills by name, tag, or keyword
-/skillhub install <name>     Install a skill to the current scope
-/skillhub remove <name>      Remove an installed skill
-/skillhub list               List all installed skills
-/skillhub update             Update all installed skills to latest versions
-/skillhub init               Initialize skillHub in the current project
+/skill-hub search <query>     Search for skills by name, tag, or keyword
+/skill-hub install <name>     Install a skill to the current scope
+/skill-hub remove <name>      Remove an installed skill
+/skill-hub list               List all installed skills
+/skill-hub update             Update all installed skills to latest versions
+/skill-hub init               Initialize Skill-Hub in the current project
 ```
 
 ## Commands
@@ -36,8 +36,8 @@ Once installed, you can use the following commands in Claude Code:
 Search the catalog for skills matching a query. Supports skill names, tags, and keywords.
 
 ```
-/skillhub search git
-/skillhub search testing typescript
+/skill-hub search git
+/skill-hub search testing typescript
 ```
 
 ### install
@@ -45,8 +45,8 @@ Search the catalog for skills matching a query. Supports skill names, tags, and 
 Install a skill by name. By default installs to the scope defined in the skill's metadata.
 
 ```
-/skillhub install git-commit-and-push
-/skillhub install feature-planning
+/skill-hub install git-commit-and-push
+/skill-hub install feature-planning
 ```
 
 ### remove
@@ -54,7 +54,7 @@ Install a skill by name. By default installs to the scope defined in the skill's
 Remove a previously installed skill.
 
 ```
-/skillhub remove git-commit-and-push
+/skill-hub remove git-commit-and-push
 ```
 
 ### list
@@ -62,7 +62,7 @@ Remove a previously installed skill.
 Show all currently installed skills with their versions and scope.
 
 ```
-/skillhub list
+/skill-hub list
 ```
 
 ### update
@@ -70,21 +70,21 @@ Show all currently installed skills with their versions and scope.
 Update all installed skills to the latest versions from the repository.
 
 ```
-/skillhub update
+/skill-hub update
 ```
 
 ### init
 
-Initialize skillHub configuration in the current project directory. Creates a `.claude/skills/` directory and optionally installs recommended skills.
+Initialize Skill-Hub configuration in the current project directory. Creates a `.claude/skills/` directory and optionally installs recommended skills.
 
 ```
-/skillhub init
+/skill-hub init
 ```
 
 ## Architecture
 
 ```
-skillHub (GitHub repo)
+Skill-Hub (GitHub repo)
 |
 |-- client/SKILL.md          # Client skill (the package manager itself)
 |-- skills/                   # All published skills
@@ -99,7 +99,7 @@ skillHub (GitHub repo)
 +-- docs/                     # Documentation
 
 Delivery flow:
-1. git clone --depth 1 => ~/.claude/skillhub/   (local cache)
+1. git clone --depth 1 => ~/.claude/skill-hub/   (local cache)
 2. Install = copy skill SKILL.md to target scope directory
 3. Update = git pull in cache, re-copy installed skills
 
