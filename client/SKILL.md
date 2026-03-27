@@ -2,58 +2,72 @@
 name: skill-hub
 description: Use when the user invokes /skill-hub or asks to search, install, remove, update, list extensions, or set up the skill-hub CLI. Bootstrap skill that helps install skill-hub CLI and MCP server.
 tags: [workflow]
-version: "3.0.0"
+version: "3.2.0"
 scope: global
 platforms: [claude-code]
 ---
 
-# Skill-Hub Bootstrap
+# Skill-Hub
 
-Ты помогаешь пользователю установить и использовать skill-hub — CLI менеджер расширений для AI-агентов (Claude Code, Cursor, Copilot).
+Ты — AI-агент. Когда пользователь вызывает `/skill-hub`, ты выполняешь действие сам, а не показываешь пользователю команды для ввода.
 
-## Установка (первый запуск)
+## Алгоритм действий
 
-Если skill-hub CLI не установлен, помоги пользователю установить его:
+### 1. MCP-инструменты доступны (приоритет)
+
+Если в твоём контексте есть MCP-инструменты `search_extensions`, `install_extension`, `remove_extension`, `list_extensions` — вызывай их напрямую как tool call:
+
+### Определение scope установки
+
+Перед вызовом `install_extension` или `remove_extension` определи scope по следующим приоритетам:
+
+| Приоритет | Условие | Scope |
+|-----------|---------|-------|
+| 1 | Флаг `--global` в запросе пользователя | `global` |
+| 2 | Флаг `--local` в запросе пользователя | `project` |
+| 3 | Слова «глобально», «для всех проектов» | `global` |
+| 4 | Слова «в проект», «локально», «только здесь» | `project` |
+| 5 | Scope не указан | `project` (по умолчанию) |
+
+| Запрос пользователя | Вызов инструмента |
+|---------------------|-------------------|
+| `/skill-hub search X` | `search_extensions({query: "X", agent: "claude-code"})` |
+| `/skill-hub install X` | `install_extension({name: "X", scope: "project", agent: "claude-code"})` |
+| `/skill-hub install X --global` | `install_extension({name: "X", scope: "global", agent: "claude-code"})` |
+| `/skill-hub install X --local` | `install_extension({name: "X", scope: "project", agent: "claude-code"})` |
+| `/skill-hub remove X` | `remove_extension({name: "X", scope: "project", agent: "claude-code"})` |
+| `/skill-hub remove X --global` | `remove_extension({name: "X", scope: "global", agent: "claude-code"})` |
+| `/skill-hub list` | `list_extensions({agent: "claude-code"})` — показывает тип, имя, версию, scope и способ установки: `[skill-hub]` или `[manual]` |
+| `/skill-hub info X` | `search_extensions({query: "X", agent: "claude-code"})` |
+| `/skill-hub update` | `list_extensions(...)`, затем `install_extension(...)` для каждого |
+
+Не показывай CLI-команды пользователю — просто выполни действие и покажи результат.
+
+### 2. MCP недоступен, CLI установлен
+
+Если MCP-инструментов нет, но `skill-hub` CLI доступен — выполни через Bash:
+
+```
+skill-hub search <query> --agent claude-code
+skill-hub install <name>          # в текущий проект (по умолчанию)
+skill-hub install <name> --local  # в текущий проект (явно)
+skill-hub install <name> --global # глобально
+skill-hub remove <name>           # удалить проектную установку
+skill-hub remove <name> --global  # удалить глобальную установку
+skill-hub list
+skill-hub info <name>
+skill-hub update
+```
+
+Выполняй команду и показывай результат. Не выводи список команд как подсказку.
+
+### 3. Ничего не установлено
+
+Если ни MCP-инструменты, ни CLI недоступны — помоги пользователю установить CLI:
 
 ```bash
 npm install -g @emaxe/skill-hub
-```
-
-После установки — настроить MCP сервер для Claude Code:
-
-```bash
 skill-hub setup-mcp --agent claude-code
 ```
 
-Это добавит MCP сервер в конфиг Claude Code. После перезапуска Claude Code у тебя появятся MCP инструменты для управления расширениями.
-
-## Использование через MCP (после установки)
-
-После настройки MCP у тебя доступны инструменты:
-- `search_extensions` — поиск расширений по имени, тегам, описанию
-- `install_extension` — установка расширения
-- `remove_extension` — удаление расширения
-- `list_extensions` — список установленных расширений
-
-Примеры использования:
-- Поиск: `search_extensions({query: "git", agent: "claude-code"})`
-- Установка: `install_extension({name: "git-commit-and-push", scope: "global"})`
-- Для Cursor: `install_extension({name: "git-commit-and-push", agent: "cursor", scope: "project"})`
-
-## Если CLI не установлен и MCP недоступен
-
-Сообщи пользователю:
-"Для работы с расширениями установите CLI: `npm install -g @emaxe/skill-hub`
-Затем настройте MCP: `skill-hub setup-mcp --agent claude-code`"
-
-## CLI команды (справка)
-
-```bash
-skill-hub search [query] [--agent claude-code|cursor|copilot] [--type skill|agent|command]
-skill-hub install <name> [--agent ...] [--global|--project]
-skill-hub remove <name> [--agent ...] [--global|--project]
-skill-hub list [--agent ...] [--type ...]
-skill-hub info <name>
-skill-hub update [name] [--agent ...]
-skill-hub setup-mcp [--agent claude-code|cursor]
-```
+После установки перезапусти Claude Code, чтобы MCP-инструменты стали доступны.
