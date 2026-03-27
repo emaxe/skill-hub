@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { Extension, ExtensionType } from '../catalog';
-import { AgentAdapter } from './types';
+import { AgentAdapter, ScanResult } from './types';
 
 export class ClaudeCodeAdapter implements AgentAdapter {
   agentName = 'claude-code' as const;
@@ -60,5 +60,47 @@ export class ClaudeCodeAdapter implements AgentAdapter {
 
   isInstalled(ext: Extension, scope: 'global' | 'project'): boolean {
     return fs.existsSync(this.getInstallPath(ext, scope));
+  }
+
+  scanInstalled(): ScanResult[] {
+    const results: ScanResult[] = [];
+
+    for (const scope of ['global', 'project'] as const) {
+      const base = scope === 'global'
+        ? path.join(this.homeDir, '.claude')
+        : path.join(this.projectDir, '.claude');
+
+      const skillsDir = path.join(base, 'skills');
+      if (fs.existsSync(skillsDir)) {
+        for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+          if (entry.isDirectory()) {
+            const skillFile = path.join(skillsDir, entry.name, 'SKILL.md');
+            if (fs.existsSync(skillFile)) {
+              results.push({ type: 'skill', name: entry.name, scope, path: skillFile });
+            }
+          }
+        }
+      }
+
+      const agentsDir = path.join(base, 'agents');
+      if (fs.existsSync(agentsDir)) {
+        for (const entry of fs.readdirSync(agentsDir, { withFileTypes: true })) {
+          if (entry.isFile() && entry.name.endsWith('.md')) {
+            results.push({ type: 'agent', name: entry.name.slice(0, -3), scope, path: path.join(agentsDir, entry.name) });
+          }
+        }
+      }
+
+      const commandsDir = path.join(base, 'commands');
+      if (fs.existsSync(commandsDir)) {
+        for (const entry of fs.readdirSync(commandsDir, { withFileTypes: true })) {
+          if (entry.isFile() && entry.name.endsWith('.md')) {
+            results.push({ type: 'command', name: entry.name.slice(0, -3), scope, path: path.join(commandsDir, entry.name) });
+          }
+        }
+      }
+    }
+
+    return results;
   }
 }

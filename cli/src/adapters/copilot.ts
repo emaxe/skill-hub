@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { Extension, ExtensionType } from '../catalog';
-import { AgentAdapter } from './types';
+import { AgentAdapter, ScanResult } from './types';
 
 const MARKER_START = (name: string) => `<!-- skill-hub: ${name} -->`;
 const MARKER_END = (name: string) => `<!-- /skill-hub: ${name} -->`;
@@ -63,6 +63,24 @@ export class CopilotAdapter implements AgentAdapter {
     const destPath = this.getInstallPath(ext, scope);
     if (!fs.existsSync(destPath)) return false;
     return fs.readFileSync(destPath, 'utf-8').includes(MARKER_START(ext.name));
+  }
+
+  scanInstalled(): ScanResult[] {
+    const results: ScanResult[] = [];
+    const MARKER_RE = /<!-- skill-hub: ([\w-]+) -->/g;
+
+    for (const scope of ['global', 'project'] as const) {
+      const filePath = this.getInstallPath({} as Extension, scope);
+      if (!fs.existsSync(filePath)) continue;
+      const content = fs.readFileSync(filePath, 'utf-8');
+      MARKER_RE.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = MARKER_RE.exec(content)) !== null) {
+        results.push({ type: 'skill', name: match[1], scope, path: filePath });
+      }
+    }
+
+    return results;
   }
 
   private removeSection(content: string, name: string): string {
