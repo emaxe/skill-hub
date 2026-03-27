@@ -26,11 +26,12 @@ export function makeRemoveCommand(): Command {
     .option('--agent <agent>', 'Агент: claude-code, cursor, copilot')
     .option('--global', 'Удалить глобальную установку')
     .option('--project', 'Удалить проектную установку')
-    .action(async (nameArg: string, opts: { agent?: string; global?: boolean; project?: boolean }) => {
+    .option('--local', 'Удалить проектную установку (alias для --project)')
+    .action(async (nameArg: string, opts: { agent?: string; global?: boolean; project?: boolean; local?: boolean }) => {
       const spinner = ora('Удаление...').start();
       try {
         const agent = (opts.agent || detectAgent()) as AgentName;
-        const scope = opts.project ? 'project' : 'global';
+        const scope = (opts.project || opts.local) ? 'project' : 'global';
 
         let type: ExtensionType | undefined;
         let name = nameArg;
