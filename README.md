@@ -1,81 +1,104 @@
 # Skill-Hub
 
-Open-source package manager for Claude Code skills. Search, install, and manage reusable AI coding skills from a central repository.
+Open-source extension manager for Claude Code. Search, install, and manage reusable skills, agents, and commands from a central repository.
 
-## What is a Skill?
+## What are Extensions?
 
-A skill is a `SKILL.md` file containing instructions that extend your AI coding assistant's capabilities. Skills can define workflows, enforce conventions, add domain expertise, and more.
+Skill-Hub manages three types of Claude Code extensions:
+
+| Type | Description | Install location |
+|------|-------------|-----------------|
+| **Skill** (`SKILL.md`) | AI behavior instructions activated by context | `~/.claude/skills/{name}/` or `.claude/skills/{name}/` |
+| **Agent** (`AGENT.md`) | Specialized AI assistants spawned as subprocesses | `~/.claude/agents/{name}.md` or `.claude/agents/{name}.md` |
+| **Command** (`COMMAND.md`) | User-invocable slash commands | `.claude/commands/{name}.md` |
 
 ## Quick Start
 
-### 1. Install the Skill-Hub client
+### Option A: CLI + MCP (recommended)
 
 ```bash
-# Copy the client skill to your global skills directory
+npm install -g @emaxe/skill-hub
+skill-hub setup-mcp --agent claude-code
+```
+
+After restarting Claude Code, the MCP tools are available automatically.
+
+### Option B: Bootstrap skill (manual)
+
+```bash
 mkdir -p ~/.claude/skills/skill-hub
 cp client/SKILL.md ~/.claude/skills/skill-hub/SKILL.md
 ```
 
-### 2. Start using skills
+### Using extensions
 
 Once installed, you can use the following commands in Claude Code:
 
 ```
-/skill-hub search <query>     Search for skills by name, tag, or keyword
-/skill-hub install <name>     Install a skill to the current scope
-/skill-hub remove <name>      Remove an installed skill
-/skill-hub list               List all installed skills
-/skill-hub update             Update all installed skills to latest versions
-/skill-hub init               Initialize Skill-Hub in the current project
+/skill-hub search <query>              Search by name, tag, or keyword
+/skill-hub search agent:<query>        Search only agents
+/skill-hub install <name>              Install a skill
+/skill-hub install agent:<name>        Install an agent
+/skill-hub install command:<name>      Install a command
+/skill-hub remove <name>               Remove an installed extension
+/skill-hub list                        List all installed extensions
+/skill-hub list --type=agent           List only agents
+/skill-hub update                      Update all to latest versions
+/skill-hub init                        Recommend extensions for project
 ```
 
 ## Commands
 
 ### search
 
-Search the catalog for skills matching a query. Supports skill names, tags, and keywords.
+Search the catalog for extensions matching a query. Supports names, tags, and keywords. Use `type:query` prefix to filter by type.
 
 ```
 /skill-hub search git
+/skill-hub search agent:reviewer
 /skill-hub search testing typescript
 ```
 
 ### install
 
-Install a skill by name. By default installs to the scope defined in the skill's metadata.
+Install an extension by name. Use `type:name` prefix for agents and commands. Without prefix, defaults to skill.
 
 ```
 /skill-hub install git-commit-and-push
-/skill-hub install feature-planning
+/skill-hub install agent:code-reviewer
+/skill-hub install command:deploy-check
 ```
 
 ### remove
 
-Remove a previously installed skill.
+Remove a previously installed extension.
 
 ```
 /skill-hub remove git-commit-and-push
+/skill-hub remove agent:code-reviewer
 ```
 
 ### list
 
-Show all currently installed skills with their versions and scope.
+Show all currently installed extensions with their versions and scope.
 
 ```
 /skill-hub list
+/skill-hub list --type=agent
 ```
 
 ### update
 
-Update all installed skills to the latest versions from the repository.
+Update all installed extensions to the latest versions from the repository.
 
 ```
 /skill-hub update
+/skill-hub update agent:code-reviewer
 ```
 
 ### init
 
-Initialize Skill-Hub configuration in the current project directory. Creates a `.claude/skills/` directory and optionally installs recommended skills.
+Analyze the current project and recommend relevant extensions from the catalog.
 
 ```
 /skill-hub init
@@ -87,30 +110,54 @@ Initialize Skill-Hub configuration in the current project directory. Creates a `
 Skill-Hub (GitHub repo)
 |
 |-- client/SKILL.md          # Client skill (the package manager itself)
-|-- skills/                   # All published skills
+|-- skills/                   # Published skills
 |   |-- _template/SKILL.md   # Template for new skills
 |   |-- git-commit-and-push/
 |   |-- feature-planning/
-|   |-- feature-accept/
 |   +-- ...
-|-- catalog.json              # Auto-generated skill index
-|-- schema/                   # Frontmatter validation schema
+|-- agents/                   # Published agents
+|   |-- _template/AGENT.md   # Template for new agents
+|   +-- ...
+|-- commands/                 # Published commands
+|   |-- _template/COMMAND.md  # Template for new commands
+|   +-- ...
+|-- catalog.json              # Auto-generated extension index (v3)
+|-- schema/                   # Frontmatter validation schemas
 |-- scripts/                  # Build & validation scripts
 +-- docs/                     # Documentation
 
 Delivery flow:
 1. git clone --depth 1 => ~/.claude/skill-hub/   (local cache)
-2. Install = copy skill SKILL.md to target scope directory
-3. Update = git pull in cache, re-copy installed skills
+2. Install = copy extension to target scope directory
+3. Update = git pull in cache, re-copy installed extensions
 
-Scope directories:
-  Global:  ~/.claude/skills/<skill-name>/SKILL.md
-  Project: ./.claude/skills/<skill-name>/SKILL.md
+Install paths by type:
+  Skill:   ~/.claude/skills/{name}/    or .claude/skills/{name}/
+  Agent:   ~/.claude/agents/{name}.md  or .claude/agents/{name}.md
+  Command: .claude/commands/{name}.md
 ```
+
+## Локальная разработка CLI
+
+Для тестирования CLI без публикации в npm:
+
+```bash
+# Собрать и залинковать глобально
+bash scripts/dev-link.sh
+
+# Тестировать как обычно
+skill-hub search git
+skill-hub install skill:feature-planning
+
+# Удалить глобальный линк
+bash scripts/dev-link.sh unlink
+```
+
+При изменениях в исходниках достаточно пересобрать (`cd cli && npm run build`) — линк обновится автоматически.
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide on how to create and submit your own skills.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide on how to create and submit skills, agents, and commands.
 
 ## License
 

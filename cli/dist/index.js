@@ -21,4 +21,7 @@ program.addCommand((0, install_1.makeInstallCommand)());
 program.addCommand((0, remove_1.makeRemoveCommand)());
 program.addCommand((0, update_1.makeUpdateCommand)());
 program.addCommand((0, setup_mcp_1.makeSetupMcpCommand)());
-program.parse(process.argv);
+program.parseAsync(process.argv).catch((err) => {
+    console.error(`\nError: ${err.message}`);
+    process.exit(1);
+});

@@ -15,7 +15,7 @@ Every `SKILL.md` starts with YAML frontmatter between `---` delimiters. Here is 
 | `version`      | string   | No       | --         | Semantic version (e.g., `1.0.0`). Pattern: `^\d+\.\d+\.\d+$` |
 | `scope`        | string   | No       | `global`   | Where the skill applies. Values: `global`, `project`, `both`. |
 | `platforms`    | string[] | No       | --         | Supported platforms. Values: `claude-code`, `cursor`, `gemini`, `codex`. |
-| `dependencies` | string[] | No       | `[]`       | Other Skill-Hub skill names this skill depends on. |
+| `dependencies` | string[] | No       | `[]`       | Other Skill-Hub extensions this depends on. Format: `type:name` (e.g., `skill:git-commit-and-push`, `agent:code-reviewer`). Without prefix, `skill` is assumed. |
 | `language`     | string   | No       | `any`      | Target programming language or `any` for language-agnostic skills. |
 
 Full JSON Schema: [schema/frontmatter.schema.json](../schema/frontmatter.schema.json)
@@ -70,11 +70,13 @@ The `scope` field controls where a skill can be installed:
 
 ## Dependencies
 
-If your skill depends on another Skill-Hub skill, list it in the `dependencies` array:
+If your skill depends on other Skill-Hub extensions, list them in the `dependencies` array using `type:name` format:
 
 ```yaml
-dependencies: [git-commit-and-push]
+dependencies: [skill:git-commit-and-push, agent:code-reviewer]
 ```
+
+Without a type prefix, `skill` is assumed (e.g., `git-commit-and-push` = `skill:git-commit-and-push`).
 
 When a user installs your skill, Skill-Hub will prompt to install any missing dependencies.
 

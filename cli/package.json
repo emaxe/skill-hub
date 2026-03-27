@@ -1,17 +1,45 @@
 {
-  "name": "skill-hub",
-  "version": "0.1.0",
+  "name": "@emaxe/skill-hub",
+  "version": "0.1.1",
   "description": "Extension manager for AI coding agents (Claude Code, Cursor, Copilot)",
   "bin": {
-    "skill-hub": "./dist/index.js",
-    "skillhub": "./dist/index.js",
-    "skill-hub-mcp": "./dist/mcp-entry.js"
+    "skill-hub": "dist/index.js",
+    "skillhub": "dist/index.js",
+    "skill-hub-mcp": "dist/mcp-entry.js"
   },
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist/"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emaxe/skill-hub.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/emaxe/skill-hub#readme",
+  "bugs": {
+    "url": "https://github.com/emaxe/skill-hub/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "cursor",
+    "copilot",
+    "ai-agent",
+    "skills",
+    "extensions",
+    "mcp",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "ts-node src/index.ts",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

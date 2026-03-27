@@ -1,6 +1,8 @@
 # Tag Taxonomy
 
-Standardized tags for categorizing skills in Skill-Hub. When creating a skill, use tags from this list in your frontmatter. If you need a new tag, propose it in your PR.
+Standardized tags for categorizing extensions (skills, agents, commands) in Skill-Hub. When creating an extension, use tags from this list in your frontmatter. If you need a new tag, propose it in your PR.
+
+Tags are shared across all extension types — the same tag can be used for skills, agents, and commands.
 
 ## Workflow
 
@@ -75,15 +77,16 @@ Tags for target AI coding platforms.
 |--------------|--------------------------|
 | `claude-code`| Anthropic Claude Code    |
 | `cursor`     | Cursor IDE               |
+| `copilot`    | GitHub Copilot           |
 | `gemini`     | Google Gemini            |
 | `codex`      | OpenAI Codex             |
 
 ## Using Tags
 
-In your skill's frontmatter, specify tags as a YAML array:
+In your extension's frontmatter, specify tags as a YAML array:
 
 ```yaml
 tags: [git, workflow, safety]
 ```
 
-Choose tags that accurately describe what your skill does. Use 1-5 tags per skill. Prefer existing tags over creating new ones.
+Choose tags that accurately describe what your extension does. Use 1-5 tags per extension. Prefer existing tags over creating new ones. Tags are shared across all extension types (skills, agents, commands) — the same tag taxonomy applies to all.

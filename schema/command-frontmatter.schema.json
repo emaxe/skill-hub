@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://skill-hub.dev/schema/command-frontmatter.schema.json",
+  "title": "COMMAND.md Frontmatter",
+  "description": "Schema for validating COMMAND.md frontmatter in Skill-Hub",
+  "type": "object",
+  "required": ["name", "description"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique kebab-case identifier for the command",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Short description of what the command does",
+      "minLength": 10
+    },
+    "tags": {
+      "type": "array",
+      "description": "Tags for categorizing the command",
+      "items": {
+        "type": "string"
+      }
+    },
+    "author": {
+      "type": "string",
+      "description": "Author of the command"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version of the command",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "scope": {
+      "type": "string",
+      "description": "Where the command can be installed",
+      "enum": ["project", "both"],
+      "default": "project"
+    },
+    "platforms": {
+      "type": "array",
+      "description": "Supported AI coding platforms",
+      "items": {
+        "type": "string",
+        "enum": ["claude-code", "cursor", "gemini", "codex"]
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "description": "Other extensions this command depends on (format: type:name or just name for skills)",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

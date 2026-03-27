@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://skill-hub.dev/schema/agent-frontmatter.schema.json",
+  "title": "AGENT.md Frontmatter",
+  "description": "Schema for validating AGENT.md frontmatter in Skill-Hub",
+  "type": "object",
+  "required": ["name", "description"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique kebab-case identifier for the agent",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Short description of what the agent does",
+      "minLength": 10
+    },
+    "model": {
+      "type": "string",
+      "description": "Preferred Claude model for the agent (e.g., claude-sonnet-4-6, claude-opus-4-6)"
+    },
+    "color": {
+      "type": "string",
+      "description": "Color for the agent's status line indicator",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "tags": {
+      "type": "array",
+      "description": "Tags for categorizing the agent",
+      "items": {
+        "type": "string"
+      }
+    },
+    "author": {
+      "type": "string",
+      "description": "Author of the agent"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version of the agent",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "scope": {
+      "type": "string",
+      "description": "Where the agent can be installed",
+      "enum": ["global", "project", "both"],
+      "default": "global"
+    },
+    "platforms": {
+      "type": "array",
+      "description": "Supported AI coding platforms",
+      "items": {
+        "type": "string",
+        "enum": ["claude-code", "cursor", "gemini", "codex"]
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "description": "Other extensions this agent depends on (format: type:name or just name for skills)",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

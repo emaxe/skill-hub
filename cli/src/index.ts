@@ -22,4 +22,7 @@ program.addCommand(makeRemoveCommand());
 program.addCommand(makeUpdateCommand());
 program.addCommand(makeSetupMcpCommand());
 
-program.parse(process.argv);
+program.parseAsync(process.argv).catch((err: Error) => {
+  console.error(`\nError: ${err.message}`);
+  process.exit(1);
+});

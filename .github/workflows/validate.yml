@@ -1,12 +1,14 @@
-name: Validate Skills
+name: Validate Extensions
 
 on:
   pull_request:
     paths:
       - 'skills/**/*'
+      - 'agents/**/*'
+      - 'commands/**/*'
 
 jobs:
-  validate-skills:
+  validate-extensions:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -16,27 +18,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Find changed SKILL.md files
+      - name: Find changed extension files
         id: changed
         run: |
-          CHANGED=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'skills/**/SKILL.md')
+          CHANGED=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'skills/**/SKILL.md' 'agents/**/AGENT.md' 'commands/**/COMMAND.md')
           echo "files<<EOF" >> "$GITHUB_OUTPUT"
           echo "$CHANGED" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
-      - name: Validate skills
+      - name: Validate extensions
         run: |
           set -euo pipefail
 
-          KNOWN_TAGS="git workflow safety ci-cd planning jira javascript typescript python go rust java react vue nextjs express django flask fastapi svelte docker eslint testing debugging logging architecture security performance accessibility documentation claude-code cursor gemini codex"
+          KNOWN_TAGS="git workflow safety ci-cd planning jira javascript typescript python go rust java react vue nextjs express django flask fastapi svelte docker eslint testing debugging logging architecture security performance accessibility documentation claude-code cursor copilot gemini codex"
           ERRORS=()
           WARNINGS=()
-          SEEN_NAMES=()
+          SEEN_SKILL_NAMES=()
+          SEEN_AGENT_NAMES=()
+          SEEN_COMMAND_NAMES=()
 
           FILES="${{ steps.changed.outputs.files }}"
 
           if [ -z "$FILES" ]; then
-            echo "No SKILL.md files changed."
+            echo "No extension files changed."
             exit 0
           fi
 
@@ -55,6 +59,19 @@ jobs:
             if [ "$FILE_SIZE" -gt 102400 ]; then
               ERRORS+=("$file: file size ${FILE_SIZE} bytes exceeds 100KB limit")
             fi
+
+            # Determine extension type from filename
+            BASENAME=$(basename "$file")
+            EXT_TYPE=""
+            case "$BASENAME" in
+              SKILL.md)   EXT_TYPE="skill" ;;
+              AGENT.md)   EXT_TYPE="agent" ;;
+              COMMAND.md) EXT_TYPE="command" ;;
+              *)
+                WARNINGS+=("$file: unexpected filename '$BASENAME', expected SKILL.md, AGENT.md, or COMMAND.md")
+                continue
+                ;;
+            esac
 
             # Extract YAML frontmatter (between --- markers)
             FRONTMATTER=$(sed -n '/^---$/,/^---$/p' "$file" | sed '1d;$d')
@@ -84,13 +101,41 @@ jobs:
                 ERRORS+=("$file: name '$NAME' does not match directory name '$DIR_NAME'")
               fi
 
-              # Check uniqueness
-              for seen in "${SEEN_NAMES[@]+"${SEEN_NAMES[@]}"}"; do
-                if [ "$seen" = "$NAME" ]; then
-                  ERRORS+=("$file: duplicate skill name '$NAME'")
-                fi
-              done
-              SEEN_NAMES+=("$NAME")
+              # Check uniqueness within type
+              case "$EXT_TYPE" in
+                skill)
+                  for seen in "${SEEN_SKILL_NAMES[@]+"${SEEN_SKILL_NAMES[@]}"}"; do
+                    if [ "$seen" = "$NAME" ]; then
+                      ERRORS+=("$file: duplicate skill name '$NAME'")
+                    fi
+                  done
+                  SEEN_SKILL_NAMES+=("$NAME")
+                  ;;
+                agent)
+                  for seen in "${SEEN_AGENT_NAMES[@]+"${SEEN_AGENT_NAMES[@]}"}"; do
+                    if [ "$seen" = "$NAME" ]; then
+                      ERRORS+=("$file: duplicate agent name '$NAME'")
+                    fi
+                  done
+                  SEEN_AGENT_NAMES+=("$NAME")
+                  ;;
+                command)
+                  for seen in "${SEEN_COMMAND_NAMES[@]+"${SEEN_COMMAND_NAMES[@]}"}"; do
+                    if [ "$seen" = "$NAME" ]; then
+                      ERRORS+=("$file: duplicate command name '$NAME'")
+                    fi
+                  done
+                  SEEN_COMMAND_NAMES+=("$NAME")
+                  ;;
+              esac
+            fi
+
+            # Validate scope for commands (only project or both allowed)
+            if [ "$EXT_TYPE" = "command" ]; then
+              SCOPE=$(echo "$FRONTMATTER" | grep -E '^scope:' | head -1 | sed 's/^scope:[[:space:]]*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//')
+              if [ -n "$SCOPE" ] && [ "$SCOPE" != "project" ] && [ "$SCOPE" != "both" ]; then
+                ERRORS+=("$file: command scope must be 'project' or 'both', got '$SCOPE'")
+              fi
             fi
 
             # Secret detection
@@ -101,7 +146,6 @@ jobs:
             # Warn on unknown tags
             TAGS=$(echo "$FRONTMATTER" | grep -E '^tags:' | head -1 | sed 's/^tags:[[:space:]]*//')
             if [ -n "$TAGS" ]; then
-              # Handle both [a, b] and - a style
               CLEAN_TAGS=$(echo "$TAGS" | tr -d '[]' | tr ',' '\n' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
               while IFS= read -r tag; do
                 [ -z "$tag" ] && continue

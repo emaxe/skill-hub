@@ -1,249 +1,59 @@
 ---
 name: skill-hub
-description: "Use when the user invokes /skill-hub or asks to search, install, remove, update, list skills, or initialize project with recommended skills. Triggers: '/skill-hub', 'skill-hub search', 'skill-hub install', 'найди скилл', 'установи скилл', 'удали скилл', 'обнови скиллы', 'skill-hub init'."
-tags: [package-manager, skills, workflow]
-author: emaxe
-version: "1.0.0"
+description: Use when the user invokes /skill-hub or asks to search, install, remove, update, list extensions, or set up the skill-hub CLI. Bootstrap skill that helps install skill-hub CLI and MCP server.
+tags: [workflow]
+version: "3.0.0"
 scope: global
 platforms: [claude-code]
-dependencies: []
-language: any
 ---
 
-# Skill-Hub — Skill Package Manager
+# Skill-Hub Bootstrap
 
-You are the Skill-Hub client — a package manager for AI coding skills. You manage skills from the Skill-Hub registry: search, install, remove, update, list, and recommend skills for projects.
+Ты помогаешь пользователю установить и использовать skill-hub — CLI менеджер расширений для AI-агентов (Claude Code, Cursor, Copilot).
 
-**Cache repository:** `https://github.com/emaxe/skill-hub.git`
-**Cache location:** `~/.claude/skill-hub/`
-**Global skills:** `~/.claude/skills/{name}/`
-**Project skills:** `.claude/skills/{name}/`
-**Installation registry:** `~/.claude/skill-hub/installed.json`
+## Установка (первый запуск)
 
----
+Если skill-hub CLI не установлен, помоги пользователю установить его:
 
-## Ensure Cache
-
-Before any operation that reads the catalog, ensure the local cache exists:
-
-```
-if [ ! -d ~/.claude/skill-hub ]; then
-  git clone --depth 1 https://github.com/emaxe/skill-hub.git ~/.claude/skill-hub/
-fi
+```bash
+npm install -g @emaxe/skill-hub
 ```
 
-Use Bash tool for this check. If the directory exists but is corrupted (no catalog.json), remove it and re-clone.
+После установки — настроить MCP сервер для Claude Code:
 
----
-
-## Operations
-
-### 1. `/skill-hub search <query>`
-
-Search the skill registry for skills matching a query.
-
-**Steps:**
-
-1. Ensure cache (see above).
-2. Read `~/.claude/skill-hub/catalog.json` using Read tool.
-3. Apply search strategy in priority order:
-   - **Exact tag match:** Check `tags_index` object — if `query` matches a tag key exactly, return all skills listed under that tag.
-   - **Name contains:** Filter `skills` array where `name` contains the query (case-insensitive).
-   - **Description contains:** Filter `skills` array where `description` contains the query (case-insensitive).
-   - **Fuzzy match:** If no results from above, try partial/substring matches across name, description, and tags.
-4. Display results as a formatted list:
-
-```
-Found N skill(s) for "<query>":
-
-1. **skill-name** (v1.0.0) by author
-   Description text here
-   Tags: tag1, tag2, tag3 | Scope: global
-
-2. ...
+```bash
+skill-hub setup-mcp --agent claude-code
 ```
 
-5. Ask the user: "Install any of these? Specify the name or number."
+Это добавит MCP сервер в конфиг Claude Code. После перезапуска Claude Code у тебя появятся MCP инструменты для управления расширениями.
 
-### 2. `/skill-hub install <skill-name> [--global|--project]`
+## Использование через MCP (после установки)
 
-Install a skill from the registry.
+После настройки MCP у тебя доступны инструменты:
+- `search_extensions` — поиск расширений по имени, тегам, описанию
+- `install_extension` — установка расширения
+- `remove_extension` — удаление расширения
+- `list_extensions` — список установленных расширений
 
-**Steps:**
+Примеры использования:
+- Поиск: `search_extensions({query: "git", agent: "claude-code"})`
+- Установка: `install_extension({name: "git-commit-and-push", scope: "global"})`
+- Для Cursor: `install_extension({name: "git-commit-and-push", agent: "cursor", scope: "project"})`
 
-1. Ensure cache.
-2. Read `~/.claude/skill-hub/catalog.json`. Find the skill by `name` in the `skills` array. If not found, suggest running `/skill-hub search`.
-3. **Check dependencies:** Read the skill's `dependencies` array. For each dependency:
-   - Check if it is already installed (exists in `~/.claude/skill-hub/installed.json` or in the skill directories).
-   - If missing, list all missing dependencies and ask the user: "This skill requires: dep1, dep2. Install them first?"
-   - If user confirms, install each dependency recursively before proceeding.
-4. **Determine scope:**
-   - If `--global` flag is provided → global scope.
-   - If `--project` flag is provided → project scope.
-   - Otherwise, use the skill's `scope` field from catalog metadata.
-   - If scope is `"both"`, ask the user which they prefer.
-5. **Copy skill files:** The skill source is at `~/.claude/skill-hub/skills/{name}/`. Copy the entire directory to the target:
-   - **Global:** `~/.claude/skills/{name}/`
-   - **Project:** `.claude/skills/{name}/` (relative to current working directory)
+## Если CLI не установлен и MCP недоступен
 
-   Use Bash tool: `cp -r ~/.claude/skill-hub/skills/{name}/ {target_path}`
+Сообщи пользователю:
+"Для работы с расширениями установите CLI: `npm install -g @emaxe/skill-hub`
+Затем настройте MCP: `skill-hub setup-mcp --agent claude-code`"
 
-   Create the target parent directory if it does not exist: `mkdir -p {target_parent}`
-6. **Record installation:** Read or create `~/.claude/skill-hub/installed.json`. Add an entry:
+## CLI команды (справка)
 
-```json
-{
-  "installations": [
-    {
-      "name": "skill-name",
-      "version": "1.0.0",
-      "scope": "global",
-      "installed_at": "2026-03-26T12:00:00Z",
-      "path": "/absolute/path/to/installed/skill/"
-    }
-  ]
-}
+```bash
+skill-hub search [query] [--agent claude-code|cursor|copilot] [--type skill|agent|command]
+skill-hub install <name> [--agent ...] [--global|--project]
+skill-hub remove <name> [--agent ...] [--global|--project]
+skill-hub list [--agent ...] [--type ...]
+skill-hub info <name>
+skill-hub update [name] [--agent ...]
+skill-hub setup-mcp [--agent claude-code|cursor]
 ```
-
-If the file does not exist, create it with the structure above. If it exists, append to the `installations` array. Use the current ISO-8601 timestamp. Use the absolute path to the installed skill directory.
-
-7. Confirm to the user: "Installed **skill-name** v1.0.0 (global/project)."
-
-### 3. `/skill-hub remove <skill-name>`
-
-Remove an installed skill.
-
-**Steps:**
-
-1. **Find the skill:** Read `~/.claude/skill-hub/installed.json`. Find the entry by `name`. If not found there, scan `~/.claude/skills/*/SKILL.md` and `.claude/skills/*/SKILL.md` for a matching skill name in frontmatter.
-2. **Check dependents:** Read `installed.json` and cross-reference — are any other installed skills listing this skill as a dependency? If yes, warn the user: "Warning: **other-skill** depends on **skill-name**. Removing it may break that skill. Continue?"
-3. **Ask confirmation:** "Remove **skill-name** (scope)? This will delete the directory at {path}."
-4. **Delete:** Use Bash tool: `rm -rf {path}`
-5. **Update registry:** Remove the entry from `installed.json` and write the file back.
-6. Confirm: "Removed **skill-name**."
-
-### 4. `/skill-hub list`
-
-List all installed skills.
-
-**Steps:**
-
-1. **Scan directories:** Use Glob tool to find:
-   - `~/.claude/skills/*/SKILL.md` (global skills)
-   - `.claude/skills/*/SKILL.md` (project skills)
-2. **Read frontmatter** from each found SKILL.md using Read tool. Extract: name, version, description, scope.
-3. **Determine source:** If the skill name appears in `~/.claude/skill-hub/installed.json`, source is `skill-hub`. Otherwise, source is `manual`.
-4. **Check for updates:** If cache exists (`~/.claude/skill-hub/catalog.json`), compare installed version with catalog version. Mark skills that have available updates.
-5. **Display as table:**
-
-```
-Installed skills:
-
-| Name          | Version | Description              | Scope   | Source    | Update    |
-|---------------|---------|--------------------------|---------|-----------|-----------|
-| git-commit    | 1.0.0   | Smart git commits        | global  | skill-hub | 1.1.0 available |
-| my-custom     | 0.1.0   | Custom workflow          | project | manual    | —         |
-```
-
-If no skills are found, suggest: "No skills installed. Try `/skill-hub search` or `/skill-hub init`."
-
-### 5. `/skill-hub update [skill-name]`
-
-Update installed skills to latest versions.
-
-**Steps:**
-
-1. **Update cache:**
-   ```bash
-   cd ~/.claude/skill-hub && git pull origin main --depth 1
-   ```
-   If pull fails (detached HEAD, conflicts, etc.), fall back to re-clone:
-   ```bash
-   rm -rf ~/.claude/skill-hub && git clone --depth 1 https://github.com/emaxe/skill-hub.git ~/.claude/skill-hub/
-   ```
-2. **Compare versions:** Read `~/.claude/skill-hub/catalog.json` and `~/.claude/skill-hub/installed.json`. For each installed skill (or just the specified one), compare version strings.
-3. **Show available updates:**
-
-```
-Available updates:
-
-| Name       | Installed | Latest |
-|------------|-----------|--------|
-| skill-a    | 1.0.0     | 1.2.0  |
-| skill-b    | 0.5.0     | 1.0.0  |
-```
-
-If a specific `skill-name` was provided, show only that skill.
-
-4. **Apply updates:** Ask the user which skills to update (or confirm all). For each selected skill:
-   - Check if local files at the installed path differ from the cache version (use `diff` command). If modified, warn: "Local modifications detected in **skill-name**. Overwrite?"
-   - Copy updated files: `cp -r ~/.claude/skill-hub/skills/{name}/ {installed_path}`
-   - Update version in `installed.json`.
-5. **Self-update check:** Compare `~/.claude/skill-hub/client/SKILL.md` frontmatter version with the current skill version (1.0.0). If a newer version is available, offer: "A new version of the Skill-Hub client is available (current: X, latest: Y). Update? This will overwrite the skill-hub skill file."
-   - If user confirms, copy `~/.claude/skill-hub/client/SKILL.md` to where this skill is currently installed (global skills path).
-
-### 6. `/skill-hub init`
-
-Analyze the current project and recommend skills from the registry.
-
-**Steps:**
-
-1. Ensure cache.
-2. **Detect project stack** by scanning the current working directory for known files. Use Glob and Read tools. Detect tags from:
-
-| File/Pattern | Check | Tags |
-|---|---|---|
-| `package.json` | exists; read `dependencies` + `devDependencies` for known frameworks | `javascript`, `typescript` (if has ts deps), `react`, `vue`, `nextjs`, `express`, `nestjs`, `svelte`, etc. |
-| `tsconfig.json` | exists | `typescript` |
-| `go.mod` | exists; read `require` block | `go`, `gin`, `echo`, etc. |
-| `Cargo.toml` | exists | `rust` |
-| `requirements.txt` | exists; read for `django`, `flask`, `fastapi`, etc. | `python`, `django`, `flask`, `fastapi` |
-| `pyproject.toml` | exists; read dependencies | `python`, framework tags |
-| `Dockerfile` or `docker-compose.yml` | exists | `docker` |
-| `.github/workflows/*.yml` | exists | `ci-cd`, `github-actions` |
-| `.eslintrc*` or `eslint.config.*` | exists | `eslint` |
-| `jest.config.*` or `vitest.config.*` or `**/test/**` or `**/*.test.*` | exists | `testing` |
-| `.prettierrc*` or `prettier.config.*` | exists | `formatting` |
-| `tailwind.config.*` | exists | `tailwindcss` |
-| `prisma/schema.prisma` | exists | `prisma`, `database` |
-| `supabase/` | exists | `supabase` |
-
-3. **Collect detected tags** into a list. Remove duplicates.
-4. **Match against catalog:** Read `~/.claude/skill-hub/catalog.json`. For each skill in the catalog, count how many of its `tags` overlap with the detected project tags.
-5. **Rank and group:**
-   - **Recommended (3+ tag matches):** Skills with 3 or more matching tags.
-   - **Also relevant (1-2 matches):** Skills with 1-2 matching tags.
-   - Exclude skills already installed.
-6. **Display results:**
-
-```
-Project stack detected: javascript, typescript, react, nextjs, testing, eslint
-
-Recommended skills (3+ matches):
-  1. nextjs-dev (v1.0.0) — Next.js development patterns [matches: nextjs, react, typescript]
-  2. react-testing (v1.2.0) — React testing best practices [matches: react, testing, typescript]
-
-Also relevant:
-  3. eslint-fixer (v0.5.0) — Auto-fix ESLint issues [matches: eslint]
-  4. ts-strict (v1.0.0) — Strict TypeScript patterns [matches: typescript]
-
-Already installed: git-commit
-```
-
-7. **Let user select:** "Enter numbers to install (e.g., 1, 2, 4) or 'all recommended'."
-8. For each selected skill, run the install operation (step 2 above) with the scope from the skill's metadata.
-
----
-
-## General Rules
-
-- **Always use Bash tool** for git operations and file copying.
-- **Always use Read tool** for reading files (catalog.json, installed.json, SKILL.md frontmatter).
-- **Always use Write tool** for creating or updating files (installed.json).
-- **Always use Glob tool** for scanning directories for files.
-- **Format output** with markdown tables, bold skill names, and clear structure.
-- **Respond in the user's language.** If the user writes in Russian, respond in Russian. If English, respond in English.
-- **Be concise** but include all relevant information (name, version, description, scope).
-- **Handle errors gracefully:** If network is unavailable, inform the user and suggest checking connectivity. If a skill is not found, suggest search. If catalog.json is missing, re-clone.
-- **Never install without user confirmation** when dependencies are involved or when overwriting existing files.
-- **Use ISO-8601 timestamps** (e.g., `2026-03-26T12:00:00Z`) when recording installation dates. Generate the current timestamp using: `date -u +"%Y-%m-%dT%H:%M:%SZ"`

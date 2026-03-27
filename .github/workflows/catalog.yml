@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'skills/**/*'
+      - 'agents/**/*'
+      - 'commands/**/*'
 
 jobs:
   update-catalog:

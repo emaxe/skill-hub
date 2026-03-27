@@ -1,7 +1,91 @@
 {
-  "version": 1,
-  "generated_at": "2026-03-26T12:45:15Z",
-  "skills_count": 3,
+  "version": 3,
+  "generated_at": "2026-03-27T10:10:08Z",
+  "counts": {
+    "skill": 3,
+    "agent": 1,
+    "command": 1,
+    "total": 5
+  },
+  "extensions": [
+    {
+      "type": "skill",
+      "name": "feature-accept",
+      "description": "Use when the user wants to accept/finish a completed feature, merge it, and clean up artifacts. Triggers: 'принять фичу', 'accept feature', 'feature done', 'закрыть фичу', 'завершить фичу', 'merge feature', 'фича готова'.",
+      "tags": ["planning","workflow","git"],
+      "author": "maksimklisin",
+      "version": "1.0.0",
+      "scope": "global",
+      "platforms": {"claude-code": "SKILL.md", "cursor": "CURSOR.md", "copilot": null},
+      "path": "skills/feature-accept",
+      "files": ["SKILL.md", "CURSOR.md"],
+      "dependencies": []
+    },
+    {
+      "type": "skill",
+      "name": "feature-planning",
+      "description": "Use when the user wants to plan a new feature, asks to 'спланировать фичу', 'новая фича', 'feature planning', 'давай спроектируем', or wants structured discovery-to-implementation workflow for any project.",
+      "tags": ["planning","workflow","architecture","jira"],
+      "author": "maksimklisin",
+      "version": "1.0.0",
+      "scope": "global",
+      "platforms": {"claude-code": "SKILL.md", "cursor": "CURSOR.md", "copilot": null},
+      "path": "skills/feature-planning",
+      "files": ["SKILL.md", "CURSOR.md"],
+      "dependencies": []
+    },
+    {
+      "type": "skill",
+      "name": "git-commit-and-push",
+      "description": "Use when the user asks to commit changes, push to git, \"залей в git\", \"закоммить\", or save work to the repository. Covers staging, commit message formatting, and push.",
+      "tags": ["git","workflow","safety"],
+      "author": "maksimklisin",
+      "version": "1.0.0",
+      "scope": "global",
+      "platforms": {"claude-code": "SKILL.md", "cursor": "CURSOR.md", "copilot": null},
+      "path": "skills/git-commit-and-push",
+      "files": ["SKILL.md", "CURSOR.md"],
+      "dependencies": []
+    },
+    {
+      "type": "agent",
+      "name": "code-reviewer",
+      "description": "Use when the user asks to review code changes, validate implementation quality, check for bugs, or review a PR before merging. Triggers: 'review code', 'check my changes', 'проверь код', 'ревью кода', 'посмотри изменения'.",
+      "tags": ["workflow","safety","architecture"],
+      "author": "maksimklisin",
+      "version": "1.0.0",
+      "scope": "global",
+      "platforms": {"claude-code": "AGENT.md", "cursor": "CURSOR.md", "copilot": null},
+      "path": "agents/code-reviewer",
+      "files": ["AGENT.md", "CURSOR.md"],
+      "dependencies": [],
+      "model": "claude-sonnet-4-6",
+      "color": "#FF6600"
+    },
+    {
+      "type": "command",
+      "name": "deploy-check",
+      "description": "Use when the user invokes /deploy-check to validate project readiness before deployment. Runs tests, lint, build, and checks environment configuration.",
+      "tags": ["ci-cd","safety","testing"],
+      "author": "maksimklisin",
+      "version": "1.0.0",
+      "scope": "project",
+      "platforms": {"claude-code": "COMMAND.md", "cursor": "CURSOR.md", "copilot": null},
+      "path": "commands/deploy-check",
+      "files": ["COMMAND.md", "CURSOR.md"],
+      "dependencies": []
+    }
+  ],
+  "tags_index": {
+    "architecture": ["agent:code-reviewer","skill:feature-planning"],
+    "ci-cd": ["command:deploy-check"],
+    "git": ["skill:feature-accept","skill:git-commit-and-push"],
+    "jira": ["skill:feature-planning"],
+    "planning": ["skill:feature-accept","skill:feature-planning"],
+    "safety": ["agent:code-reviewer","command:deploy-check","skill:git-commit-and-push"],
+    "testing": ["command:deploy-check"],
+    "workflow": ["agent:code-reviewer","skill:feature-accept","skill:feature-planning","skill:git-commit-and-push"]
+  },
   "skills": [
     {
       "name": "feature-accept",
@@ -10,9 +94,9 @@
       "author": "maksimklisin",
       "version": "1.0.0",
       "scope": "global",
-      "platforms": ["claude-code"],
+      "platforms": {"claude-code": "SKILL.md", "cursor": "CURSOR.md", "copilot": null},
       "path": "skills/feature-accept",
-      "files": ["SKILL.md"],
+      "files": ["SKILL.md", "CURSOR.md"],
       "dependencies": []
     },
     {
@@ -22,9 +106,9 @@
       "author": "maksimklisin",
       "version": "1.0.0",
       "scope": "global",
-      "platforms": ["claude-code"],
+      "platforms": {"claude-code": "SKILL.md", "cursor": "CURSOR.md", "copilot": null},
       "path": "skills/feature-planning",
-      "files": ["SKILL.md"],
+      "files": ["SKILL.md", "CURSOR.md"],
       "dependencies": []
     },
     {
@@ -34,18 +118,11 @@
       "author": "maksimklisin",
       "version": "1.0.0",
       "scope": "global",
-      "platforms": ["claude-code"],
+      "platforms": {"claude-code": "SKILL.md", "cursor": "CURSOR.md", "copilot": null},
       "path": "skills/git-commit-and-push",
-      "files": ["SKILL.md"],
+      "files": ["SKILL.md", "CURSOR.md"],
       "dependencies": []
     }
   ],
-  "tags_index": {
-    "architecture": ["feature-planning"],
-    "git": ["feature-accept","git-commit-and-push"],
-    "jira": ["feature-planning"],
-    "planning": ["feature-accept","feature-planning"],
-    "safety": ["git-commit-and-push"],
-    "workflow": ["feature-accept","feature-planning","git-commit-and-push"]
-  }
+  "skills_count": 3
 }
