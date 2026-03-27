@@ -44,14 +44,15 @@ export function makeInstallCommand(): Command {
     .option('--agent <agent>', 'Агент: claude-code, cursor, copilot')
     .option('--global', 'Глобальная установка (по умолчанию)')
     .option('--project', 'Установка в текущий проект')
-    .action(async (nameArg: string, opts: { agent?: string; global?: boolean; project?: boolean }) => {
+    .option('--local', 'Установка в текущий проект (alias для --project)')
+    .action(async (nameArg: string, opts: { agent?: string; global?: boolean; project?: boolean; local?: boolean }) => {
       const spinner = ora('Обновление каталога...').start();
       try {
         await ensureCache();
         const cachePath = getCachePath();
         const catalog = loadCatalog(cachePath);
         const agent = (opts.agent || detectAgent()) as AgentName;
-        const scope = opts.project ? 'project' : 'global';
+        const scope = (opts.project || opts.local) ? 'project' : 'global';
 
         let type: ExtensionType | undefined;
         let name = nameArg;
