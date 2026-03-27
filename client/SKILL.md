@@ -49,10 +49,9 @@ platforms: [claude-code]
 
 ```
 skill-hub search <query> --agent claude-code
-skill-hub install <name>          # в текущий проект (по умолчанию)
-skill-hub install <name> --local  # в текущий проект (явно)
+skill-hub install <name> --local  # в текущий проект (по умолчанию для этого скила)
 skill-hub install <name> --global # глобально
-skill-hub remove <name>           # удалить проектную установку
+skill-hub remove <name> --local   # удалить проектную установку
 skill-hub remove <name> --global  # удалить глобальную установку
 skill-hub list
 skill-hub info <name>

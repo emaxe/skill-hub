@@ -19,5 +19,5 @@ test('scope: --global явно → global', () => {
 });
 
 test('scope: --local и --global одновременно → project (local приоритетнее)', () => {
-  expect(computeScope({ local: true, global: false })).toBe('project');
+  expect(computeScope({ local: true, global: true })).toBe('project');
 });

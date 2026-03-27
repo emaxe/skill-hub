@@ -52,7 +52,7 @@ export function makeRemoveCommand(): Command {
         const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
         reg.remove(ext.name, ext.type, agent);
 
-        spinner.succeed(chalk.green(`Удалён ${ext.type}:${ext.name} (${agent})`));
+        spinner.succeed(chalk.green(`Удалён ${ext.type}:${ext.name} (${agent}, ${scope})`));
       } catch (err) {
         spinner.fail(chalk.red(String(err)));
         process.exit(1);
