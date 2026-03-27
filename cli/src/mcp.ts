@@ -26,7 +26,8 @@ function str(v: unknown): string | undefined {
 }
 
 export async function startMcpServer(): Promise<void> {
-  const server = new Server(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const server: any = new Server(
     { name: 'skill-hub', version: '0.1.0' },
     { capabilities: { tools: {} } }
   );
@@ -87,7 +88,8 @@ export async function startMcpServer(): Promise<void> {
     };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
     const { name, arguments: args = {} } = request.params;
     const a = args as Record<string, unknown>;
 
