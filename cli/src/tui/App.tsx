@@ -1,16 +1,22 @@
 import React, { useState, useCallback } from 'react';
 import { Box, useInput, useApp } from 'ink';
+import { normalizeInput, isCtrl } from './keymap';
 import { Header, TabName } from './components/Header';
 import { HintBar, Hint } from './components/HintBar';
 import { StatusBar, StatusType } from './components/StatusBar';
+import { InfoBar } from './components/InfoBar';
 import { useNavigation } from './hooks/useNavigation';
+import { useRegistry } from './hooks/useRegistry';
+import { useSettings } from './hooks/useSettings';
 import { StatusContext } from './contexts/StatusContext';
 import { CatalogScreen } from './screens/CatalogScreen';
 import { InstalledScreen } from './screens/InstalledScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { DetailScreen } from './screens/DetailScreen';
 import { MoveScreen } from './screens/MoveScreen';
+import { InstalledDetailScreen } from './screens/InstalledDetailScreen';
 import { Extension, AgentName } from '../catalog';
+import { InstalledEntry } from './hooks/useRegistry';
 import { detectAgent } from '../detect-agent';
 
 const TABS: TabName[] = ['catalog', 'installed', 'settings'];
@@ -18,13 +24,15 @@ const TABS: TabName[] = ['catalog', 'installed', 'settings'];
 const GLOBAL_HINTS: Hint[] = [
   { key: 'Tab', description: 'следующий таб' },
   { key: '1-3', description: 'перейти к табу' },
-  { key: 'q', description: 'выход' },
+  { key: 'Ctrl+Q', description: 'выход' },
 ];
 
 export const App: React.FC = () => {
   const { exit } = useApp();
   const nav = useNavigation();
   const agent = detectAgent() as AgentName;
+  const registry = useRegistry();
+  const { config, updateConfig } = useSettings();
 
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
   const [statusType, setStatusType] = useState<StatusType>('idle');
@@ -48,10 +56,17 @@ export const App: React.FC = () => {
   const [detailExt, setDetailExt] = useState<Extension | null>(null);
   const [moveExt, setMoveExt] = useState<Extension | null>(null);
   const [moveScope, setMoveScope] = useState<'global' | 'project'>('project');
+  const [installedDetailEntry, setInstalledDetailEntry] = useState<InstalledEntry | null>(null);
+  const [searchFocused, setSearchFocused] = useState(false);
 
   const handleOpenDetail = useCallback((ext: Extension) => {
     setDetailExt(ext);
     nav.pushScreen('detail');
+  }, [nav]);
+
+  const handleOpenInstalledDetail = useCallback((entry: InstalledEntry) => {
+    setInstalledDetailEntry(entry);
+    nav.pushScreen('installedDetail');
   }, [nav]);
 
   const handleOpenMove = useCallback((ext: Extension, scope: 'global' | 'project') => {
@@ -64,13 +79,16 @@ export const App: React.FC = () => {
     nav.popScreen();
     setDetailExt(null);
     setMoveExt(null);
+    setInstalledDetailEntry(null);
   }, [nav]);
 
   useInput((input, key) => {
     const screen = nav.currentScreen;
     const isTopLevel = screen === 'catalog' || screen === 'installed' || screen === 'settings';
 
-    if (input === 'q' && isTopLevel) {
+    if (searchFocused) return;
+
+    if (isCtrl(key) && normalizeInput(input) === 'q') {
       exit();
       return;
     }
@@ -98,6 +116,9 @@ export const App: React.FC = () => {
 
   const screen = nav.currentScreen;
 
+  const globalCount = registry.installed.filter(e => e.scope === 'global').length;
+  const projectCount = registry.installed.filter(e => e.scope === 'project').length;
+
   const renderScreen = () => {
     if (screen === 'detail' && detailExt) {
       return (
@@ -105,6 +126,10 @@ export const App: React.FC = () => {
           extension={detailExt}
           agent={agent}
           onBack={handleBack}
+          install={registry.install}
+          remove={registry.remove}
+          isInstalled={registry.isInstalled}
+          defaultScope={config.defaultScope}
         />
       );
     }
@@ -115,6 +140,21 @@ export const App: React.FC = () => {
           currentScope={moveScope}
           agent={agent}
           onBack={handleBack}
+          move={registry.move}
+        />
+      );
+    }
+    if (screen === 'installedDetail' && installedDetailEntry) {
+      return (
+        <InstalledDetailScreen
+          entry={installedDetailEntry}
+          agent={agent}
+          onBack={handleBack}
+          remove={registry.remove}
+          move={registry.move}
+          update={registry.update}
+          install={registry.install}
+          defaultScope={config.defaultScope}
         />
       );
     }
@@ -123,24 +163,39 @@ export const App: React.FC = () => {
         <InstalledScreen
           agent={agent}
           onMoveExt={handleOpenMove}
+          onOpenDetail={handleOpenInstalledDetail}
+          installed={registry.installed}
+          loading={registry.loading}
+          error={registry.error}
+          remove={registry.remove}
+          update={registry.update}
         />
       );
     }
     if (nav.activeTab === 'settings') {
-      return <SettingsScreen />;
+      return (
+        <SettingsScreen
+          config={config}
+          updateConfig={updateConfig}
+        />
+      );
     }
     return (
       <CatalogScreen
         agent={agent}
         onOpenDetail={handleOpenDetail}
+        onSearchFocusChange={setSearchFocused}
+        install={registry.install}
+        installed={registry.installed}
+        defaultScope={config.defaultScope}
       />
     );
   };
 
   const isTopLevel = screen === 'catalog' || screen === 'installed' || screen === 'settings';
   const hints: Hint[] = isTopLevel
-    ? GLOBAL_HINTS
-    : [{ key: 'Esc', description: 'назад' }, ...GLOBAL_HINTS.slice(2)];
+    ? (searchFocused ? GLOBAL_HINTS.filter(h => h.key === 'Tab') : GLOBAL_HINTS)
+    : [{ key: 'Esc', description: 'назад' }, { key: 'Ctrl+Q', description: 'выход' }];
 
   return (
     <StatusContext.Provider value={{ message: statusMessage, status: statusType, setStatus, clearStatus }}>
@@ -149,6 +204,13 @@ export const App: React.FC = () => {
         <Box flexGrow={1} flexDirection="column">
           {renderScreen()}
         </Box>
+        <InfoBar
+          totalCount={registry.installed.length}
+          globalCount={globalCount}
+          projectCount={projectCount}
+          agent={agent}
+          defaultScope={config.defaultScope}
+        />
         <StatusBar message={statusMessage} status={statusType} />
         <HintBar hints={hints} />
       </Box>
