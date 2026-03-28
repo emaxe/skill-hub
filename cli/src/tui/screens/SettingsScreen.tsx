@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { AgentName } from '../../catalog';
-import { useSettings } from '../hooks/useSettings';
+import { SkillHubConfig } from '../../config';
 import { useStatus } from '../contexts/StatusContext';
 import { getCachePath, isCloned } from '../../git';
 import { HintBar } from '../components/HintBar';
@@ -12,8 +12,12 @@ const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
 
 type Field = 'agent' | 'scope';
 
-export const SettingsScreen: React.FC = () => {
-  const { config, updateConfig } = useSettings();
+export interface SettingsScreenProps {
+  config: SkillHubConfig;
+  updateConfig: (updates: Partial<SkillHubConfig>) => void;
+}
+
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateConfig }) => {
   const { setStatus } = useStatus();
 
   const [localAgent, setLocalAgent] = useState<AgentName>(config.agent);
