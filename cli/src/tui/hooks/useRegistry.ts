@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import os from 'os';
 import path from 'path';
 import { AgentName, ExtensionType, Extension } from '../../catalog';
@@ -35,12 +35,14 @@ export function useRegistry(): UseRegistryState & UseRegistryActions {
   const [error, setError] = useState<string | null>(null);
   const [operationStatus, setOperationStatus] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
-  const registry = createRegistry(REGISTRY_DIR);
+  const registryRef = useRef(createRegistry(REGISTRY_DIR));
 
   // Загрузка списка установленных
   useEffect(() => {
-    const records = registry.list();
+    const records = registryRef.current.list();
     const entries: InstalledEntry[] = records.map(r => ({ ...r, source: 'registry' as const }));
 
     // Добавляем manual installs из filesystem scan
@@ -72,19 +74,22 @@ export function useRegistry(): UseRegistryState & UseRegistryActions {
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
   const withStatus = useCallback(async (label: string, fn: () => Promise<void>) => {
+    if (!mountedRef.current) return;
     setError(null);
     setOperationStatus(label);
     setLoading(true);
     try {
       await fn();
+      if (!mountedRef.current) return;
       setOperationStatus(`✓ ${label}`);
       refresh();
-      setTimeout(() => setOperationStatus(null), 3000);
+      setTimeout(() => { if (mountedRef.current) setOperationStatus(null); }, 3000);
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(String(err));
       setOperationStatus(null);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [refresh]);
 
@@ -93,7 +98,7 @@ export function useRegistry(): UseRegistryState & UseRegistryActions {
       const adapter = getAdapter(agent);
       const cachePath = getCachePath();
       await adapter.install(ext, scope, cachePath);
-      registry.add({
+      registryRef.current.add({
         type: ext.type, name: ext.name,
         version: ext.version || '0.0.0',
         agent, scope,
@@ -106,7 +111,7 @@ export function useRegistry(): UseRegistryState & UseRegistryActions {
     await withStatus(`Удаляю ${ext.name}...`, async () => {
       const adapter = getAdapter(agent);
       await adapter.remove(ext, scope);
-      registry.remove(ext.name, ext.type, agent);
+      registryRef.current.remove(ext.name, ext.type, agent);
     });
   }, [withStatus]);
 
@@ -117,7 +122,7 @@ export function useRegistry(): UseRegistryState & UseRegistryActions {
       const cachePath = getCachePath();
       // Устанавливаем в новый scope
       await adapter.install(ext, toScope, cachePath);
-      registry.add({
+      registryRef.current.add({
         type: ext.type, name: ext.name,
         version: ext.version || '0.0.0',
         agent, scope: toScope,
@@ -134,7 +139,7 @@ export function useRegistry(): UseRegistryState & UseRegistryActions {
       const cachePath = getCachePath();
       // Переустанавливаем — это и есть обновление
       await adapter.install(ext, scope, cachePath);
-      registry.add({
+      registryRef.current.add({
         type: ext.type, name: ext.name,
         version: ext.version || '0.0.0',
         agent, scope,
@@ -144,7 +149,7 @@ export function useRegistry(): UseRegistryState & UseRegistryActions {
   }, [withStatus]);
 
   const isInstalled = useCallback((name: string, type: ExtensionType, agent: AgentName) => {
-    return registry.isInstalled(name, type, agent);
+    return registryRef.current.isInstalled(name, type, agent);
   }, [refreshKey]);
 
   return {
