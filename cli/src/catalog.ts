@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 export type AgentName = 'claude-code' | 'cursor' | 'copilot';
-export type ExtensionType = 'skill' | 'agent' | 'command';
+export type ExtensionType = 'skill' | 'agent' | 'command' | 'rule';
 
 export interface Extension {
   type: ExtensionType;

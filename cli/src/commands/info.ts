@@ -3,6 +3,10 @@ import chalk from 'chalk';
 import { loadCatalog, AgentName, ExtensionType } from '../catalog';
 import { detectAgent } from '../detect-agent';
 import { getCachePath, ensureCache } from '../git';
+import { ClaudeCodeAdapter } from '../adapters/claude-code';
+import { CursorAdapter } from '../adapters/cursor';
+import { CopilotAdapter } from '../adapters/copilot';
+import { AgentAdapter } from '../adapters/types';
 
 export function makeInfoCommand(): Command {
   return new Command('info')
@@ -25,6 +29,17 @@ export function makeInfoCommand(): Command {
       );
 
       if (!ext) {
+        const adapter: AgentAdapter = agent === 'cursor' ? new CursorAdapter()
+          : agent === 'copilot' ? new CopilotAdapter()
+          : new ClaudeCodeAdapter();
+        const scanned = adapter.scanInstalled().find(s => s.name === name && (!type || s.type === type));
+        if (scanned) {
+          console.log(chalk.bold(`\n${scanned.type}: ${scanned.name}`) + '  (установлено вручную)');
+          console.log(`  Scope: ${scanned.scope}`);
+          console.log(`  Путь:  ${scanned.path}`);
+          console.log();
+          return;
+        }
         console.error(chalk.red(`Расширение "${nameArg}" не найдено`));
         process.exit(1);
       }

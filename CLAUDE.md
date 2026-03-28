@@ -24,7 +24,7 @@ mkdir -p .claude/commands
 cp commands/<command-name>/COMMAND.md .claude/commands/<command-name>.md
 ```
 
-There is also a CLI package in `cli/` (published as `skill-hub` on npm) providing CLI commands and an MCP server for AI agents.
+There is also a CLI package in `cli/` (published as `@emaxe/skill-hub` on npm) providing CLI commands and an MCP server for AI agents.
 
 ```bash
 # Local CLI development — build, link globally, test without npm publish
@@ -50,10 +50,10 @@ No build tools, linters, or test suites outside of `cli/` — the repository its
 **Via CLI (recommended):**
 1. `npm install -g @emaxe/skill-hub` — install the CLI
 2. `skill-hub setup-mcp --agent claude-code` — configure MCP server
-3. CLI handles clone, install, update automatically via `~/.claude/skill-hub/` cache
+3. CLI handles clone, install, update automatically via `~/.skill-hub/` cache
 
 **Manual:**
-1. User clones repo to `~/.claude/skill-hub/` (local cache)
+1. User clones repo to `~/.skill-hub/` (local cache)
 2. Install = copy extension to target scope directory (agents/commands: single file renamed to `{name}.md`)
 3. Update = `git pull` in cache, re-copy installed extensions
 
@@ -110,7 +110,7 @@ Rebuilt by `scripts/generate-catalog.sh`. On GitHub, automated via `.github/work
 
 ### Client Skill
 
-`client/SKILL.md` is the bootstrap skill — installed to global skills, it guides users through CLI installation (`npm install -g @emaxe/skill-hub`) and MCP server setup. After setup, the CLI/MCP handles `/skill-hub search|install|remove|list|update|init` with `type:name` syntax, manages `~/.claude/skill-hub/installed.json` registry, and supports dependency resolution.
+`client/SKILL.md` is the bootstrap skill — installed to global skills, it guides users through CLI installation (`npm install -g @emaxe/skill-hub`) and MCP server setup. After setup, the CLI/MCP handles `/skill-hub search|install|remove|list|update|init` with `type:name` syntax, manages `~/.skill-hub/installed.json` registry, and supports dependency resolution.
 
 ### CLI Package
 

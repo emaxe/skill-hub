@@ -7,16 +7,7 @@ import { loadCatalog, AgentName } from '../catalog';
 import { detectAgent } from '../detect-agent';
 import { getCachePath, updateCache } from '../git';
 import { createRegistry } from '../registry';
-import { ClaudeCodeAdapter } from '../adapters/claude-code';
-import { CursorAdapter } from '../adapters/cursor';
-import { CopilotAdapter } from '../adapters/copilot';
-import { AgentAdapter } from '../adapters/types';
-
-function getAdapter(agent: AgentName): AgentAdapter {
-  if (agent === 'cursor') return new CursorAdapter();
-  if (agent === 'copilot') return new CopilotAdapter();
-  return new ClaudeCodeAdapter();
-}
+import { getAdapter } from '../adapters/get-adapter';
 
 export function makeUpdateCommand(): Command {
   return new Command('update')

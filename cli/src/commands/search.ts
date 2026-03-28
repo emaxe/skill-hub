@@ -10,18 +10,24 @@ export function makeSearchCommand(): Command {
     .argument('[query]', 'Поисковый запрос (имя, тег, описание)', '')
     .option('--agent <agent>', 'Агент: claude-code, cursor, copilot')
     .option('--type <type>', 'Тип: skill, agent, command')
-    .action(async (query: string, opts: { agent?: string; type?: string }) => {
+    .option('--limit <n>', 'Максимум результатов на страницу', '10')
+    .option('--offset <n>', 'Пропустить первые N результатов', '0')
+    .action(async (query: string, opts: { agent?: string; type?: string; limit?: string; offset?: string }) => {
       await ensureCache();
       const catalog = loadCatalog(getCachePath());
       const agent = (opts.agent || detectAgent()) as AgentName;
-      const results = searchExtensions(catalog, query, agent, opts.type as ExtensionType);
+      const allResults = searchExtensions(catalog, query, agent, opts.type as ExtensionType);
+      const total = allResults.length;
+      const limit = Math.max(1, parseInt(opts.limit || '10', 10) || 10);
+      const offset = Math.max(0, parseInt(opts.offset || '0', 10) || 0);
+      const results = allResults.slice(offset, offset + limit);
 
-      if (results.length === 0) {
+      if (total === 0) {
         console.log(chalk.yellow('Расширения не найдены'));
         return;
       }
 
-      console.log(chalk.bold(`\nНайдено ${results.length} расширений для ${agent}:\n`));
+      console.log(chalk.bold(`\nНайдено ${total} расширений для ${agent}:\n`));
       for (const ext of results) {
         const typeLabel = ext.type === 'agent' ? chalk.blue('[agent]')
           : ext.type === 'command' ? chalk.magenta('[cmd]') : chalk.green('[skill]');
@@ -29,6 +35,9 @@ export function makeSearchCommand(): Command {
         console.log(`    ${ext.description}`);
         if (ext.tags.length) console.log(`    ${chalk.dim(ext.tags.join(', '))}`);
         console.log();
+      }
+      if (total > limit) {
+        console.log(chalk.dim(`Показано ${results.length} из ${total} (offset=${offset}, limit=${limit})`));
       }
     });
 }

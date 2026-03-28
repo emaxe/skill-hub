@@ -10,16 +10,7 @@ import { loadCatalog, searchExtensions, AgentName, ExtensionType } from './catal
 import { detectAgent } from './detect-agent';
 import { getCachePath, ensureCache } from './git';
 import { createRegistry } from './registry';
-import { ClaudeCodeAdapter } from './adapters/claude-code';
-import { CursorAdapter } from './adapters/cursor';
-import { CopilotAdapter } from './adapters/copilot';
-import { AgentAdapter } from './adapters/types';
-
-function getAdapter(agent: AgentName): AgentAdapter {
-  if (agent === 'cursor') return new CursorAdapter();
-  if (agent === 'copilot') return new CopilotAdapter();
-  return new ClaudeCodeAdapter();
-}
+import { getAdapter } from './adapters/get-adapter';
 
 function str(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined;
@@ -28,7 +19,7 @@ function str(v: unknown): string | undefined {
 export async function startMcpServer(): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const server: any = new Server(
-    { name: 'skill-hub', version: '0.1.0' },
+    { name: 'skill-hub', version: '0.1.1' },
     { capabilities: { tools: {} } }
   );
 
@@ -44,6 +35,8 @@ export async function startMcpServer(): Promise<void> {
               query: { type: 'string', description: 'Поисковый запрос (имя, описание, тег)' },
               agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot'], description: 'Фильтр по агенту' },
               type: { type: 'string', enum: ['skill', 'agent', 'command'], description: 'Фильтр по типу' },
+              limit: { type: 'number', description: 'Макс. количество результатов (по умолчанию 10)' },
+              offset: { type: 'number', description: 'Пропустить первые N результатов (по умолчанию 0)' },
             },
           },
         },
@@ -55,7 +48,7 @@ export async function startMcpServer(): Promise<void> {
             properties: {
               name: { type: 'string', description: 'Имя расширения (или type:name, например skill:git-helper)' },
               agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot'], description: 'Агент' },
-              scope: { type: 'string', enum: ['global', 'project'], description: 'Область установки (по умолчанию: global)' },
+              scope: { type: 'string', enum: ['global', 'project'], description: 'Область установки (по умолчанию: project)' },
             },
             required: ['name'],
           },
@@ -68,9 +61,22 @@ export async function startMcpServer(): Promise<void> {
             properties: {
               name: { type: 'string', description: 'Имя расширения (или type:name)' },
               agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot'], description: 'Агент' },
-              scope: { type: 'string', enum: ['global', 'project'], description: 'Область установки (по умолчанию: global)' },
+              scope: { type: 'string', enum: ['global', 'project'], description: 'Область установки (по умолчанию: project)' },
             },
             required: ['name'],
+          },
+        },
+        {
+          name: 'move_extension',
+          description: 'Перенести расширение между scope (global ↔ project)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Имя расширения (или type:name)' },
+              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot'], description: 'Агент' },
+              to: { type: 'string', enum: ['global', 'project'], description: 'Целевой scope' },
+            },
+            required: ['name', 'to'],
           },
         },
         {
@@ -81,6 +87,8 @@ export async function startMcpServer(): Promise<void> {
             properties: {
               agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot'], description: 'Фильтр по агенту' },
               type: { type: 'string', enum: ['skill', 'agent', 'command'], description: 'Фильтр по типу' },
+              limit: { type: 'number', description: 'Макс. количество результатов (по умолчанию 10)' },
+              offset: { type: 'number', description: 'Пропустить первые N результатов (по умолчанию 0)' },
             },
           },
         },
@@ -98,14 +106,18 @@ export async function startMcpServer(): Promise<void> {
         await ensureCache();
         const cachePath = getCachePath();
         const catalog = loadCatalog(cachePath);
-        const results = searchExtensions(
+        const allResults = searchExtensions(
           catalog,
           str(a.query) || '',
           str(a.agent) as AgentName | undefined,
           str(a.type) as ExtensionType | undefined
         );
+        const total = allResults.length;
+        const limit = typeof a.limit === 'number' && a.limit > 0 ? a.limit : 10;
+        const offset = typeof a.offset === 'number' && a.offset >= 0 ? a.offset : 0;
+        const results = allResults.slice(offset, offset + limit);
         return {
-          content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ results, total, limit, offset }, null, 2) }],
         };
       } catch (err) {
         return {
@@ -121,7 +133,7 @@ export async function startMcpServer(): Promise<void> {
         const cachePath = getCachePath();
         const catalog = loadCatalog(cachePath);
         const agent = (str(a.agent) || detectAgent()) as AgentName;
-        const scope = (str(a.scope) === 'project' ? 'project' : 'global') as 'global' | 'project';
+        const scope = (str(a.scope) === 'global' ? 'global' : 'project') as 'global' | 'project';
         const nameArg = str(a.name) || '';
 
         let type: ExtensionType | undefined;
@@ -192,7 +204,7 @@ export async function startMcpServer(): Promise<void> {
     if (name === 'remove_extension') {
       try {
         const agent = (str(a.agent) || detectAgent()) as AgentName;
-        const scope = (str(a.scope) === 'project' ? 'project' : 'global') as 'global' | 'project';
+        const scope = (str(a.scope) === 'global' ? 'global' : 'project') as 'global' | 'project';
         const nameArg = str(a.name) || '';
 
         let type: ExtensionType | undefined;
@@ -230,15 +242,113 @@ export async function startMcpServer(): Promise<void> {
       }
     }
 
+    if (name === 'move_extension') {
+      try {
+        await ensureCache();
+        const cachePath = getCachePath();
+        const catalog = loadCatalog(cachePath);
+        const agent = (str(a.agent) || detectAgent()) as AgentName;
+        const to = str(a.to) as 'global' | 'project';
+        if (to !== 'global' && to !== 'project') {
+          return {
+            content: [{ type: 'text', text: 'Параметр "to" обязателен: "global" или "project"' }],
+            isError: true,
+          };
+        }
+        const from: 'global' | 'project' = to === 'global' ? 'project' : 'global';
+        const nameArg = str(a.name) || '';
+
+        let type: ExtensionType | undefined;
+        let extName = nameArg;
+        if (nameArg.includes(':')) {
+          const parts = nameArg.split(':');
+          type = parts[0] as ExtensionType;
+          extName = parts[1];
+        }
+
+        const ext = catalog.extensions.find(e => e.name === extName && (!type || e.type === type));
+        if (!ext) {
+          return {
+            content: [{ type: 'text', text: `Расширение "${nameArg}" не найдено в каталоге` }],
+            isError: true,
+          };
+        }
+
+        const adapter = getAdapter(agent);
+        if (!ext.platforms[adapter.agentName]) {
+          return {
+            content: [{ type: 'text', text: `Расширение "${ext.name}" не поддерживает агента ${adapter.agentName}` }],
+            isError: true,
+          };
+        }
+        if (!adapter.isInstalled(ext, from)) {
+          return {
+            content: [{ type: 'text', text: `Расширение "${ext.name}" не установлено в scope "${from}"` }],
+            isError: true,
+          };
+        }
+
+        const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
+        await adapter.install(ext, to, cachePath);
+        await adapter.remove(ext, from);
+        reg.add({
+          type: ext.type, name: ext.name,
+          version: ext.version || '0.0.0',
+          agent, scope: to,
+          path: adapter.getInstallPath(ext, to),
+        });
+
+        return {
+          content: [{ type: 'text', text: `Перенесён ${ext.type}:${ext.name} из ${from} в ${to} (${agent})` }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Ошибка переноса: ${String(err)}` }],
+          isError: true,
+        };
+      }
+    }
+
     if (name === 'list_extensions') {
       try {
+        const agent = (str(a.agent) || detectAgent()) as AgentName;
+        const typeFilter = str(a.type) as ExtensionType | undefined;
         const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
-        const items = reg.list(
-          str(a.agent) as AgentName | undefined,
-          str(a.type) as ExtensionType | undefined
-        );
+        const registryItems = reg.list(agent, typeFilter);
+
+        interface ListEntry {
+          type: ExtensionType;
+          name: string;
+          version: string;
+          scope: 'global' | 'project';
+          source: 'skill-hub' | 'manual';
+        }
+
+        const map = new Map<string, ListEntry>();
+        for (const r of registryItems) {
+          map.set(`${r.name}:${r.scope}`, {
+            type: r.type, name: r.name, version: r.version, scope: r.scope, source: 'skill-hub',
+          });
+        }
+
+        try {
+          const adapter = getAdapter(agent);
+          for (const s of adapter.scanInstalled()) {
+            if (typeFilter && s.type !== typeFilter) continue;
+            const key = `${s.name}:${s.scope}`;
+            if (!map.has(key)) {
+              map.set(key, { type: s.type, name: s.name, version: '?', scope: s.scope, source: 'manual' });
+            }
+          }
+        } catch { /* scan failure is silent — registry data is still shown */ }
+
+        const allEntries = [...map.values()];
+        const total = allEntries.length;
+        const limit = typeof a.limit === 'number' && a.limit > 0 ? a.limit : 10;
+        const offset = typeof a.offset === 'number' && a.offset >= 0 ? a.offset : 0;
+        const entries = allEntries.slice(offset, offset + limit);
         return {
-          content: [{ type: 'text', text: JSON.stringify(items, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ results: entries, total, limit, offset }, null, 2) }],
         };
       } catch (err) {
         return {

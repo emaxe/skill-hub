@@ -28,21 +28,36 @@ afterEach(() => {
   fs.rmSync(tmpCache, { recursive: true, force: true });
 });
 
-test('install project: создаёт .cursor/rules/{name}.mdc', async () => {
+test('install project skill: создаёт .cursor/skills/{name}/SKILL.md', async () => {
   const adapter = new CursorAdapter(tmpProject, tmpHome);
   await adapter.install(mockSkill, 'project', tmpCache);
-  expect(fs.existsSync(path.join(tmpProject, '.cursor', 'rules', 'test-skill.mdc'))).toBe(true);
+  expect(fs.existsSync(path.join(tmpProject, '.cursor', 'skills', 'test-skill', 'SKILL.md'))).toBe(true);
 });
 
-test('install global: создаёт ~/.cursor/rules/{name}.mdc', async () => {
+test('install global skill: создаёт ~/.cursor/skills/{name}/SKILL.md', async () => {
   const adapter = new CursorAdapter(tmpProject, tmpHome);
   await adapter.install(mockSkill, 'global', tmpCache);
-  expect(fs.existsSync(path.join(tmpHome, '.cursor', 'rules', 'test-skill.mdc'))).toBe(true);
+  expect(fs.existsSync(path.join(tmpHome, '.cursor', 'skills', 'test-skill', 'SKILL.md'))).toBe(true);
 });
 
-test('remove: удаляет mdc файл', async () => {
+test('remove skill: удаляет каталог skills/{name}', async () => {
   const adapter = new CursorAdapter(tmpProject, tmpHome);
   await adapter.install(mockSkill, 'project', tmpCache);
   await adapter.remove(mockSkill, 'project');
-  expect(fs.existsSync(path.join(tmpProject, '.cursor', 'rules', 'test-skill.mdc'))).toBe(false);
+  expect(fs.existsSync(path.join(tmpProject, '.cursor', 'skills', 'test-skill'))).toBe(false);
+});
+
+const mockAgent: Extension = {
+  type: 'agent', name: 'test-agent', description: 'Test', tags: [],
+  version: '1.0.0', scope: 'global',
+  platforms: { cursor: 'CURSOR.md' },
+  path: 'agents/test-agent', dependencies: [],
+};
+
+test('install agent: создаёт .cursor/rules/{name}.mdc', async () => {
+  fs.mkdirSync(path.join(tmpCache, 'agents', 'test-agent'), { recursive: true });
+  fs.writeFileSync(path.join(tmpCache, 'agents', 'test-agent', 'CURSOR.md'), '---\ndescription: A\n---\n# A');
+  const adapter = new CursorAdapter(tmpProject, tmpHome);
+  await adapter.install(mockAgent, 'project', tmpCache);
+  expect(fs.existsSync(path.join(tmpProject, '.cursor', 'rules', 'test-agent.mdc'))).toBe(true);
 });
