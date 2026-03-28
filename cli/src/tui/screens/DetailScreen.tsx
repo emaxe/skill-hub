@@ -1,22 +1,25 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { Extension, AgentName } from '../../catalog';
-import { useRegistry } from '../hooks/useRegistry';
-import { useSettings } from '../hooks/useSettings';
+import { Extension, AgentName, ExtensionType } from '../../catalog';
 import { useStatus } from '../contexts/StatusContext';
 import { Confirm } from '../components/Confirm';
 import { HintBar, Hint } from '../components/HintBar';
+import { normalizeInput } from '../keymap';
 import { theme } from '../theme';
 
 export interface DetailScreenProps {
   extension: Extension;
   agent: AgentName;
   onBack: () => void;
+  install: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
+  remove: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
+  isInstalled: (name: string, type: ExtensionType, agent: AgentName) => boolean;
+  defaultScope: 'global' | 'project';
 }
 
-export const DetailScreen: React.FC<DetailScreenProps> = ({ extension, agent, onBack }) => {
-  const { install, remove, isInstalled } = useRegistry();
-  const { config } = useSettings();
+export const DetailScreen: React.FC<DetailScreenProps> = ({
+  extension, agent, onBack, install, remove, isInstalled, defaultScope,
+}) => {
   const { setStatus } = useStatus();
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -28,12 +31,13 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({ extension, agent, on
       onBack();
       return;
     }
-    if (input === 'i' && !installed) {
-      install(extension, agent, config.defaultScope)
+    const ni = normalizeInput(input);
+    if (ni === 'i' && !installed) {
+      install(extension, agent, defaultScope)
         .then(() => setStatus(`Установлен: ${extension.name}`, 'success'))
         .catch((err: unknown) => setStatus(String(err), 'error'));
     }
-    if (input === 'd' && installed) {
+    if (ni === 'd' && installed) {
       setShowConfirm(true);
     }
   });
@@ -53,7 +57,6 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({ extension, agent, on
   const hints: Hint[] = [
     ...(installed ? [] : [{ key: 'i', description: 'установить' }]),
     ...(installed ? [{ key: 'd', description: 'удалить' }] : []),
-    { key: 'Esc', description: 'назад' },
   ];
 
   return (
@@ -82,7 +85,7 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({ extension, agent, on
             message={`Удалить ${extension.name}?`}
             onConfirm={() => {
               setShowConfirm(false);
-              remove(extension, agent, config.defaultScope)
+              remove(extension, agent, defaultScope)
                 .then(() => {
                   setStatus(`Удалён: ${extension.name}`, 'success');
                   onBack();
