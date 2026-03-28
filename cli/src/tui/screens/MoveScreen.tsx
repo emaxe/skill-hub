@@ -1,7 +1,6 @@
 import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import { Extension, AgentName } from '../../catalog';
-import { useRegistry } from '../hooks/useRegistry';
 import { useStatus } from '../contexts/StatusContext';
 import { HintBar } from '../components/HintBar';
 import { theme } from '../theme';
@@ -11,10 +10,10 @@ export interface MoveScreenProps {
   currentScope: 'global' | 'project';
   agent: AgentName;
   onBack: () => void;
+  move: (ext: Extension, agent: AgentName, fromScope: 'global' | 'project') => Promise<void>;
 }
 
-export const MoveScreen: React.FC<MoveScreenProps> = ({ extension, currentScope, agent, onBack }) => {
-  const { move } = useRegistry();
+export const MoveScreen: React.FC<MoveScreenProps> = ({ extension, currentScope, agent, onBack, move }) => {
   const { setStatus } = useStatus();
 
   const targetScope = currentScope === 'global' ? 'project' : 'global';
