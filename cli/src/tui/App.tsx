@@ -5,6 +5,7 @@ import { Header, TabName } from './components/Header';
 import { HintBar, Hint } from './components/HintBar';
 import { StatusBar, StatusType } from './components/StatusBar';
 import { InfoBar } from './components/InfoBar';
+import { Separator } from './components/Separator';
 import { useNavigation } from './hooks/useNavigation';
 import { useRegistry } from './hooks/useRegistry';
 import { useSettings } from './hooks/useSettings';
@@ -204,6 +205,7 @@ export const App: React.FC = () => {
         <Box flexGrow={1} flexDirection="column">
           {renderScreen()}
         </Box>
+        <Separator />
         <InfoBar
           totalCount={registry.installed.length}
           globalCount={globalCount}
@@ -211,6 +213,7 @@ export const App: React.FC = () => {
           agent={agent}
           defaultScope={config.defaultScope}
         />
+        <Separator />
         <StatusBar message={statusMessage} status={statusType} />
         <HintBar hints={hints} />
       </Box>

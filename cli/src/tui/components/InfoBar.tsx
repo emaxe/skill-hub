@@ -12,16 +12,16 @@ interface Props {
 }
 
 export const InfoBar: React.FC<Props> = ({ totalCount, globalCount, projectCount, agent, defaultScope }) => (
-  <Box paddingX={1}>
-    <Text color={theme.secondary}>Установлено: </Text>
+  <Box paddingX={1} paddingY={0}>
+    <Text color={theme.secondary} bold>Установлено: </Text>
     <Text color={theme.primary} bold>{totalCount}</Text>
     <Text color={theme.muted}>  (global: </Text>
-    <Text color={theme.success}>{globalCount}</Text>
+    <Text color={theme.success} bold>{globalCount}</Text>
     <Text color={theme.muted}>  project: </Text>
-    <Text color={theme.warning}>{projectCount}</Text>
+    <Text color={theme.warning} bold>{projectCount}</Text>
     <Text color={theme.muted}>)   │   agent: </Text>
-    <Text color={theme.accent}>{agent}</Text>
+    <Text color={theme.primary}>{agent}</Text>
     <Text color={theme.muted}>   │   scope: </Text>
-    <Text color={theme.accent}>{defaultScope}</Text>
+    <Text color={theme.primary}>{defaultScope}</Text>
   </Box>
 );
