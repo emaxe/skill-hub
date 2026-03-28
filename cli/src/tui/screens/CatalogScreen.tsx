@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { normalizeInput } from '../keymap';
 import { Extension, AgentName, ExtensionType } from '../../catalog';
+import { InstalledEntry } from '../hooks/useRegistry';
 import { useCatalog } from '../hooks/useCatalog';
-import { useRegistry } from '../hooks/useRegistry';
-import { useSettings } from '../hooks/useSettings';
 import { useStatus } from '../contexts/StatusContext';
 import { ExtensionList } from '../components/ExtensionList';
 import { SearchInput } from '../components/SearchInput';
@@ -14,38 +14,56 @@ import type { Hint } from '../components/HintBar';
 export interface CatalogScreenProps {
   agent: AgentName;
   onOpenDetail: (ext: Extension) => void;
+  onSearchFocusChange?: (focused: boolean) => void;
+  install: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
+  installed: InstalledEntry[];
+  defaultScope: 'global' | 'project';
 }
 
-export const CatalogScreen: React.FC<CatalogScreenProps> = ({ agent, onOpenDetail }) => {
+const PAGE_SIZE = 10;
+
+export const CatalogScreen: React.FC<CatalogScreenProps> = ({
+  agent, onOpenDetail, onSearchFocusChange, install, installed, defaultScope,
+}) => {
   const { results, query, typeFilter, loading, error, setQuery, setTypeFilter } = useCatalog(agent);
-  const { install, installed } = useRegistry();
   const { setStatus } = useStatus();
-  const { config } = useSettings();
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [searchFocused, setSearchFocused] = useState(false);
 
-  // Сбрасываем selectedIndex если выходит за пределы
   useEffect(() => {
     if (results.length > 0 && selectedIndex >= results.length) {
       setSelectedIndex(Math.max(0, results.length - 1));
     }
   }, [results.length, selectedIndex]);
 
+  const totalPages = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
+  const currentPage = Math.floor(selectedIndex / PAGE_SIZE);
+  const pageStart = currentPage * PAGE_SIZE;
+  const pageItems = results.slice(pageStart, pageStart + PAGE_SIZE);
+  const localIndex = selectedIndex - pageStart;
+
   const installedNames = useMemo(() => {
     return new Set<string>(installed.map(e => e.name));
   }, [installed]);
 
+  const setSearch = (focused: boolean) => {
+    setSearchFocused(focused);
+    onSearchFocusChange?.(focused);
+  };
+
   useInput((input, key) => {
     if (searchFocused) {
-      if (key.escape) {
-        setSearchFocused(false);
+      if (key.escape || key.return) {
+        setSearch(false);
       }
-      return; // SearchInput сам обрабатывает ввод
+      return;
     }
 
-    if (input === '/') {
-      setSearchFocused(true);
+    const ni = normalizeInput(input);
+
+    if (ni === '/') {
+      setSearch(true);
       return;
     }
 
@@ -64,9 +82,9 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ agent, onOpenDetai
       return;
     }
 
-    if (input === 'i' && results[selectedIndex]) {
+    if (ni === 'i' && results[selectedIndex]) {
       const ext = results[selectedIndex];
-      install(ext, agent, config.defaultScope).then(() => {
+      install(ext, agent, defaultScope).then(() => {
         setStatus(`Установлен: ${ext.name}`, 'success');
       }).catch((err: unknown) => {
         setStatus(String(err), 'error');
@@ -74,7 +92,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ agent, onOpenDetai
       return;
     }
 
-    if (input === 't') {
+    if (ni === 't') {
       const types: (ExtensionType | 'all')[] = ['all', 'skill', 'agent', 'command'];
       const idx = types.indexOf(typeFilter);
       setTypeFilter(types[(idx + 1) % types.length]);
@@ -104,12 +122,17 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ agent, onOpenDetai
           <Text color="red">{error}</Text>
         </Box>
       ) : (
-        <Box flexGrow={1} flexDirection="column">
+        <Box flexGrow={1} flexDirection="column" marginTop={1} marginBottom={1}>
           <ExtensionList
-            extensions={results}
-            selectedIndex={selectedIndex}
+            extensions={pageItems}
+            selectedIndex={localIndex}
             installedNames={installedNames}
           />
+          {totalPages > 1 && (
+            <Box paddingX={1} marginTop={1}>
+              <Text dimColor>{`Стр. ${currentPage + 1} из ${totalPages}  (${results.length} шт.)`}</Text>
+            </Box>
+          )}
         </Box>
       )}
       <HintBar hints={hints} />
