@@ -9,6 +9,7 @@ import { Separator } from './components/Separator';
 import { useNavigation } from './hooks/useNavigation';
 import { useRegistry } from './hooks/useRegistry';
 import { useSettings } from './hooks/useSettings';
+import { useBaseSetup } from './hooks/useBaseSetup';
 import { StatusContext } from './contexts/StatusContext';
 import { CatalogScreen } from './screens/CatalogScreen';
 import { InstalledScreen } from './screens/InstalledScreen';
@@ -33,6 +34,7 @@ export const App: React.FC = () => {
   const { config, updateConfig } = useSettings();
   const agent = config.agent;
   const registry = useRegistry(agent);
+  const setup = useBaseSetup(agent);
 
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
   const [statusType, setStatusType] = useState<StatusType>('idle');
@@ -169,6 +171,7 @@ export const App: React.FC = () => {
           error={registry.error}
           remove={registry.remove}
           update={registry.update}
+          updateSelf={setup.doUpdateSelf}
         />
       );
     }

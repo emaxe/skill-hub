@@ -18,6 +18,7 @@ export interface InstalledScreenProps {
   error: string | null;
   remove: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
   update: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
+  updateSelf: () => Promise<void>;
 }
 
 type ScopeFilter = 'all' | 'global' | 'project';
@@ -49,7 +50,7 @@ function nextScopeFilter(current: ScopeFilter): ScopeFilter {
 }
 
 export const InstalledScreen: React.FC<InstalledScreenProps> = ({
-  agent, onMoveExt, onOpenDetail, installed, loading, error, remove, update,
+  agent, onMoveExt, onOpenDetail, installed, loading, error, remove, update, updateSelf,
 }) => {
   const { setStatus } = useStatus();
 
@@ -105,6 +106,19 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
           setStatus(`Ошибка обновления: ${String(err)}`, 'error');
         });
       }
+    } else if (input === 'U' || input === 'Г') {
+      setStatus('Обновляю все расширения и систему...', 'loading');
+      void (async () => {
+        try {
+          for (const entry of filtered) {
+            await update(recordToExtension(entry), agent, entry.scope);
+          }
+          await updateSelf();
+          setStatus('Всё обновлено', 'success');
+        } catch (err: unknown) {
+          setStatus(`Ошибка обновления: ${String(err)}`, 'error');
+        }
+      })();
     }
   });
 
@@ -128,6 +142,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
     { key: 'd', description: 'удалить' },
     { key: 'm', description: 'переместить' },
     { key: 'u', description: 'обновить' },
+    { key: 'U', description: 'обновить все' },
   ];
 
   return (

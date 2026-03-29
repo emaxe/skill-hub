@@ -29,6 +29,9 @@ export function getBaseSkillDestPath(agent: AgentName): string | null {
   if (agent === 'claude-code') {
     return path.join(os.homedir(), '.claude', 'skills', 'skill-hub', 'SKILL.md');
   }
+  if (agent === 'cursor') {
+    return path.join(os.homedir(), '.cursor', 'skills', 'skill-hub', 'SKILL.md');
+  }
   if (agent === 'copilot') {
     return path.join(os.homedir(), '.copilot', 'skills', 'skill-hub', 'SKILL.md');
   }
@@ -97,4 +100,23 @@ export async function installBaseSkill(agent: AgentName): Promise<void> {
   }
   fs.mkdirSync(path.dirname(destPath), { recursive: true });
   fs.copyFileSync(sourcePath, destPath);
+}
+
+export interface SelfUpdateResult {
+  skill: boolean;
+  mcp: boolean;
+}
+
+/**
+ * Обновляет base-skill и MCP-конфигурацию до актуальных версий.
+ * Обновляет только те компоненты, которые уже установлены.
+ */
+export async function updateSelf(agent: AgentName): Promise<SelfUpdateResult> {
+  const skillInstalled = checkBaseSkill(agent) === true;
+  if (skillInstalled) await installBaseSkill(agent);
+
+  const mcpInstalled = checkMcp(agent) === true;
+  if (mcpInstalled) await installMcp(agent);
+
+  return { skill: skillInstalled, mcp: mcpInstalled };
 }

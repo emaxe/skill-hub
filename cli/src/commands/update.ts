@@ -8,13 +8,15 @@ import { detectAgent } from '../detect-agent';
 import { getCachePath, updateCache } from '../git';
 import { createRegistry } from '../registry';
 import { getAdapter } from '../adapters/get-adapter';
+import { updateSelf } from '../base-setup';
 
 export function makeUpdateCommand(): Command {
   return new Command('update')
     .description('Обновить расширения и каталог')
     .argument('[name]', 'Имя конкретного расширения (необязательно)')
     .option('--agent <agent>', 'Агент: claude-code, cursor, copilot')
-    .action(async (name: string | undefined, opts: { agent?: string }) => {
+    .option('--no-self', 'Не обновлять базовый скилл и MCP')
+    .action(async (name: string | undefined, opts: { agent?: string; self: boolean }) => {
       const spinner = ora('Обновление каталога...').start();
       try {
         await updateCache();
@@ -42,6 +44,18 @@ export function makeUpdateCommand(): Command {
         }
 
         spinner.succeed(chalk.green(`Обновлено ${updated} расширений (${agent})`));
+
+        if (!name && opts.self) {
+          spinner.start('Обновление базового скилла и MCP...');
+          const selfResult = await updateSelf(agent);
+          spinner.stop();
+          console.log(selfResult.skill
+            ? chalk.green('✓ base-skill обновлён')
+            : chalk.dim('— base-skill не установлен, пропускаю'));
+          console.log(selfResult.mcp
+            ? chalk.green('✓ MCP обновлён')
+            : chalk.dim('— MCP не настроен, пропускаю'));
+        }
       } catch (err) {
         spinner.fail(chalk.red(String(err)));
         process.exit(1);
