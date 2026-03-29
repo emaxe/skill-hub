@@ -141,7 +141,7 @@ export function scoreExtensions(extensions: Extension[], context: string): Score
         reasons.push(`tag:${tag}`);
       } else {
         for (const token of tokenSet) {
-          if (tag.includes(token) && !reasons.some(r => r.includes(token))) {
+          if (tag.includes(token) && !reasons.some(r => r === `tag~${token}` || r === `tag:${token}`)) {
             score += 1;
             reasons.push(`tag~${token}`);
           }
