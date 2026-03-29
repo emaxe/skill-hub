@@ -29,7 +29,7 @@ export interface UseRegistryActions {
   refresh: () => void;
 }
 
-export function useRegistry(): UseRegistryState & UseRegistryActions {
+export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryActions {
   const [installed, setInstalled] = useState<InstalledEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,15 +40,14 @@ export function useRegistry(): UseRegistryState & UseRegistryActions {
 
   const registryRef = useRef(createRegistry(REGISTRY_DIR));
 
-  // Загрузка списка установленных
+  // Загрузка списка установленных (фильтруем по текущему агенту)
   useEffect(() => {
-    const records = registryRef.current.list();
+    const records = registryRef.current.list(agent);
     const entries: InstalledEntry[] = records.map(r => ({ ...r, source: 'registry' as const }));
 
-    // Добавляем manual installs из filesystem scan
-    // (используем claude-code адаптер для сканирования)
+    // Добавляем manual installs из filesystem scan для текущего агента
     try {
-      const adapter = getAdapter('claude-code');
+      const adapter = getAdapter(agent);
       const scanned: ScanResult[] = adapter.scanInstalled();
       for (const scan of scanned) {
         const alreadyInRegistry = entries.some(e => e.name === scan.name && e.type === scan.type);
@@ -57,7 +56,7 @@ export function useRegistry(): UseRegistryState & UseRegistryActions {
             type: scan.type,
             name: scan.name,
             version: '?',
-            agent: 'claude-code',
+            agent,
             scope: scan.scope,
             path: scan.path,
             source: 'manual',
@@ -69,7 +68,7 @@ export function useRegistry(): UseRegistryState & UseRegistryActions {
     }
 
     setInstalled(entries);
-  }, [refreshKey]);
+  }, [agent, refreshKey]);
 
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
 

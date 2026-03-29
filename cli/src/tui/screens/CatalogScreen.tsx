@@ -47,6 +47,14 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
     return new Set<string>(installed.map(e => e.name));
   }, [installed]);
 
+  const installedScopes = useMemo(() => {
+    const map = new Map<string, 'global' | 'project'>();
+    for (const e of installed) {
+      map.set(`${e.type}:${e.name}`, e.scope);
+    }
+    return map;
+  }, [installed]);
+
   const setSearch = (focused: boolean) => {
     setSearchFocused(focused);
     onSearchFocusChange?.(focused);
@@ -127,6 +135,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
             extensions={pageItems}
             selectedIndex={localIndex}
             installedNames={installedNames}
+            installedScopes={installedScopes}
           />
           {totalPages > 1 && (
             <Box paddingX={1} marginTop={1}>

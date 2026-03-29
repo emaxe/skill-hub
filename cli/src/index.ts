@@ -16,6 +16,7 @@ if (process.argv.length <= 2) {
   const { makeMoveCommand } = require('./commands/move') as typeof import('./commands/move');
   const { makeUpdateCommand } = require('./commands/update') as typeof import('./commands/update');
   const { makeSetupMcpCommand } = require('./commands/setup-mcp') as typeof import('./commands/setup-mcp');
+  const { makeConfigCommand } = require('./commands/config') as typeof import('./commands/config');
 
   const program = new Command();
   program
@@ -31,6 +32,7 @@ if (process.argv.length <= 2) {
   program.addCommand(makeMoveCommand());
   program.addCommand(makeUpdateCommand());
   program.addCommand(makeSetupMcpCommand());
+  program.addCommand(makeConfigCommand());
 
   program.parseAsync(process.argv).catch((err: Error) => {
     console.error(`\nError: ${err.message}`);

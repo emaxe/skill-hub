@@ -127,27 +127,21 @@ Analyze the current project and recommend relevant extensions from the catalog.
 ## Architecture
 
 ```
-Skill-Hub (GitHub repo)
-|
-|-- client/SKILL.md          # Client skill (the package manager itself)
-|-- skills/                   # Published skills
-|   |-- _template/SKILL.md   # Template for new skills
-|   |-- git-commit-and-push/
-|   |-- feature-planning/
-|   +-- ...
-|-- agents/                   # Published agents
-|   |-- _template/AGENT.md   # Template for new agents
-|   +-- ...
-|-- commands/                 # Published commands
-|   |-- _template/COMMAND.md  # Template for new commands
-|   +-- ...
-|-- catalog.json              # Auto-generated extension index (v3)
-|-- schema/                   # Frontmatter validation schemas
-|-- scripts/                  # Build & validation scripts
-+-- docs/                     # Documentation
+skill-hub (this repo)
+|-- client/SKILL.md          # Bootstrap client skill
++-- cli/                     # CLI tool + MCP server (npm: @emaxe/skill-hub)
+
+skill-hub-catalog (separate repo)
+|-- skills/                  # Published skills
+|-- agents/                  # Published agents
+|-- commands/                # Published commands
+|-- catalog.json             # Auto-generated extension index
+|-- schema/                  # Frontmatter validation schemas
+|-- scripts/                 # Build & validation scripts
++-- docs/                    # Extension authoring guides
 
 Delivery flow:
-1. git clone --depth 1 => ~/.skill-hub/   (local cache)
+1. git clone --depth 1 skill-hub-catalog => ~/.skill-hub/  (local cache)
 2. Install = copy extension to target scope directory
 3. Update = git pull in cache, re-copy installed extensions
 
@@ -162,22 +156,27 @@ Install paths by type:
 Для тестирования CLI без публикации в npm:
 
 ```bash
-# Собрать и залинковать глобально
-bash scripts/dev-link.sh
+# Собрать
+cd cli && npm run build
+
+# Залинковать глобально
+npm link
 
 # Тестировать как обычно
 skill-hub search git
 skill-hub install skill:feature-planning
 
 # Удалить глобальный линк
-bash scripts/dev-link.sh unlink
+npm unlink -g @emaxe/skill-hub
 ```
 
 При изменениях в исходниках достаточно пересобрать (`cd cli && npm run build`) — линк обновится автоматически.
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide on how to create and submit skills, agents, and commands.
+Extensions (skills, agents, commands) live in [skill-hub-catalog](https://github.com/emaxe/skill-hub-catalog). See its `docs/` directory for authoring guides.
+
+For CLI improvements, open a PR in this repo. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
 

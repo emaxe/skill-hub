@@ -6,6 +6,7 @@ import { AgentName } from './catalog';
 export interface SkillHubConfig {
   agent: AgentName;
   defaultScope: 'global' | 'project';
+  registryUrl: string;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), '.skill-hub');
@@ -14,6 +15,7 @@ const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const DEFAULT_CONFIG: SkillHubConfig = {
   agent: 'claude-code',
   defaultScope: 'project',
+  registryUrl: 'https://github.com/emaxe/skill-hub-catalog.git',
 };
 
 export function loadConfig(): SkillHubConfig {

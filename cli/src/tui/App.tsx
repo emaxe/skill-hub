@@ -16,9 +16,8 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { DetailScreen } from './screens/DetailScreen';
 import { MoveScreen } from './screens/MoveScreen';
 import { InstalledDetailScreen } from './screens/InstalledDetailScreen';
-import { Extension, AgentName } from '../catalog';
+import { Extension } from '../catalog';
 import { InstalledEntry } from './hooks/useRegistry';
-import { detectAgent } from '../detect-agent';
 
 const TABS: TabName[] = ['catalog', 'installed', 'settings'];
 
@@ -31,9 +30,9 @@ const GLOBAL_HINTS: Hint[] = [
 export const App: React.FC = () => {
   const { exit } = useApp();
   const nav = useNavigation();
-  const agent = detectAgent() as AgentName;
-  const registry = useRegistry();
   const { config, updateConfig } = useSettings();
+  const agent = config.agent;
+  const registry = useRegistry(agent);
 
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
   const [statusType, setStatusType] = useState<StatusType>('idle');

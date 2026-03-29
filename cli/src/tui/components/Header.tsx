@@ -16,8 +16,9 @@ export const Header: React.FC<Props> = ({ activeTab }) => {
   ];
 
   return (
-    <Box borderStyle="single" borderColor={theme.border} paddingX={1}>
-      <Text bold color={theme.primary}>skill-hub  </Text>
+    <Box borderStyle="double" borderColor={theme.border} paddingX={1}>
+      <Text bold color={theme.primary}>skill-hub</Text>
+      <Text color={theme.muted}>  │  </Text>
       {tabs.map((tab, i) => (
         <React.Fragment key={tab.id}>
           {i > 0 && <Text color={theme.muted}>  │  </Text>}
