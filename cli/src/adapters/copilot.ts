@@ -80,6 +80,23 @@ export class CopilotAdapter implements AgentAdapter {
       }
     }
 
+    const copilotNames = new Set(results.map(r => `${r.name}:${r.scope}`));
+
+    for (const scope of ['global', 'project'] as const) {
+      const base = scope === 'global'
+        ? path.join(this.homeDir, '.claude')
+        : path.join(this.projectDir, '.claude');
+      const skillsDir = path.join(base, 'skills');
+      if (!fs.existsSync(skillsDir)) continue;
+      for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const skillFile = path.join(skillsDir, entry.name, 'SKILL.md');
+        if (!fs.existsSync(skillFile)) continue;
+        if (copilotNames.has(`${entry.name}:${scope}`)) continue;
+        results.push({ type: 'skill', name: entry.name, scope, path: skillFile });
+      }
+    }
+
     return results;
   }
 

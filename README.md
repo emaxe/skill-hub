@@ -27,7 +27,7 @@ After restarting Claude Code, the MCP tools are available automatically.
 
 ```bash
 mkdir -p ~/.claude/skills/skill-hub
-cp client/SKILL.md ~/.claude/skills/skill-hub/SKILL.md
+cp "$(npm root -g)/@emaxe/skill-hub/base-skills/claude-code/SKILL.md" ~/.claude/skills/skill-hub/SKILL.md
 ```
 
 ### Using extensions
@@ -66,6 +66,10 @@ skill-hub
 | `u` | Update extension |
 | `/` | Focus search |
 | `q` | Quit |
+
+### Settings tab
+
+The Settings tab lets you configure the agent, default scope, and registry URL. It also shows the setup status for the selected agent — whether the MCP server is registered and the base skill is installed. If either is missing, you can install it directly from the TUI by navigating to the corresponding field and pressing `Enter`.
 
 ## Commands
 
@@ -128,8 +132,9 @@ Analyze the current project and recommend relevant extensions from the catalog.
 
 ```
 skill-hub (this repo)
-|-- client/SKILL.md          # Bootstrap client skill
 +-- cli/                     # CLI tool + MCP server (npm: @emaxe/skill-hub)
+    |-- src/                 # TypeScript source
+    +-- base-skills/         # Bundled base skills (claude-code, cursor, copilot) — installed by setup
 
 skill-hub-catalog (separate repo)
 |-- skills/                  # Published skills

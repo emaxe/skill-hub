@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Skill-Hub is an open-source extension manager for Claude Code. It provides a CLI tool and MCP server for searching, installing, and managing reusable extensions — **skills**, **agents**, and **commands**.
 
-- **This repo** (`skill-hub`) — CLI tool (`cli/`) and bootstrap client skill (`client/`)
+- **This repo** (`skill-hub`) — CLI tool (`cli/`)
 - **Catalog repo** (`skill-hub-catalog`) — all published extensions (skills, agents, commands), schemas, and docs
 
 ## Key Commands
@@ -25,7 +25,7 @@ npm unlink -g @emaxe/skill-hub  # remove global link
 
 | Repo | Contents |
 |------|----------|
-| `skill-hub` (this repo) | `cli/` — TypeScript CLI + MCP server; `client/` — bootstrap skill |
+| `skill-hub` (this repo) | `cli/` — TypeScript CLI + MCP server; `cli/base-skills/` — bootstrap skills per agent |
 | `skill-hub-catalog` | `skills/`, `agents/`, `commands/`, `schema/`, `scripts/`, `docs/`, `catalog.json` |
 
 ### Delivery Flow
@@ -44,10 +44,6 @@ npm unlink -g @emaxe/skill-hub  # remove global link
 
 - **Global:** `~/.claude/skills/{name}/SKILL.md`, `~/.claude/agents/{name}.md`
 - **Project:** `./.claude/skills/{name}/SKILL.md`, `.claude/agents/{name}.md`, `.claude/commands/{name}.md`
-
-### Client Skill
-
-`client/SKILL.md` is the bootstrap skill — installed to global skills, it guides users through CLI installation (`npm install -g @emaxe/skill-hub`) and MCP server setup. After setup, the CLI/MCP handles `/skill-hub search|install|remove|list|update|init` with `type:name` syntax, manages `~/.skill-hub/installed.json` registry, and supports dependency resolution.
 
 ### CLI Package
 

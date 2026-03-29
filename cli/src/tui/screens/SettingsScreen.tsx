@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { AgentName } from '../../catalog';
 import { SkillHubConfig } from '../../config';
@@ -6,12 +6,13 @@ import { useStatus } from '../contexts/StatusContext';
 import { getCachePath, isCloned, resetCache } from '../../git';
 import { HintBar } from '../components/HintBar';
 import { theme } from '../theme';
+import { useBaseSetup } from '../hooks/useBaseSetup';
 
 const AGENTS: AgentName[] = ['claude-code', 'cursor', 'copilot'];
 const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
 
-type Field = 'agent' | 'scope' | 'registryUrl';
-const FIELDS: Field[] = ['agent', 'scope', 'registryUrl'];
+type Field = 'agent' | 'scope' | 'registryUrl' | 'installMcp' | 'installBaseSkill';
+const BASE_FIELDS: Field[] = ['agent', 'scope', 'registryUrl'];
 
 export interface SettingsScreenProps {
   config: SkillHubConfig;
@@ -29,14 +30,29 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   const cachePath = getCachePath();
   const cacheInstalled = isCloned(cachePath);
 
+  const setup = useBaseSetup(localAgent);
+
+  const fields = useMemo<Field[]>(() => {
+    const extra: Field[] = [];
+    if (setup.status?.mcpInstalled === false) extra.push('installMcp');
+    if (setup.status?.baseSkillInstalled === false) extra.push('installBaseSkill');
+    return [...BASE_FIELDS, ...extra];
+  }, [setup.status]);
+
+  useEffect(() => {
+    if (!fields.includes(activeField)) {
+      setActiveField('agent');
+    }
+  }, [fields, activeField]);
+
   useInput((input, key) => {
     if (key.upArrow || key.downArrow) {
       setActiveField(f => {
-        const idx = FIELDS.indexOf(f);
+        const idx = fields.indexOf(f);
         const next = key.downArrow
-          ? (idx + 1) % FIELDS.length
-          : (idx - 1 + FIELDS.length) % FIELDS.length;
-        return FIELDS[next];
+          ? (idx + 1) % fields.length
+          : (idx - 1 + fields.length) % fields.length;
+        return fields[next];
       });
       return;
     }
@@ -70,6 +86,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     }
 
     if (key.return) {
+      if (activeField === 'installMcp') {
+        setup.doInstallMcp()
+          .then(() => setStatus('MCP зарегистрирован. Перезапустите агента.', 'success'))
+          .catch(() => setStatus('Ошибка регистрации MCP', 'error'));
+        return;
+      }
+      if (activeField === 'installBaseSkill') {
+        setup.doInstallBaseSkill()
+          .then(() => setStatus('Базовый скил установлен', 'success'))
+          .catch(() => setStatus('Ошибка установки скила', 'error'));
+        return;
+      }
       const urlChanged = localRegistryUrl !== config.registryUrl;
       updateConfig({ agent: localAgent, defaultScope: localScope, registryUrl: localRegistryUrl });
       if (urlChanged) {
@@ -81,12 +109,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     }
   });
 
+  const isInstallField = activeField === 'installMcp' || activeField === 'installBaseSkill';
+
   return (
     <Box flexDirection="column" padding={2}>
       {/* Поле Агент */}
       <Box marginBottom={1}>
         <Text color={activeField === 'agent' ? theme.selected : theme.secondary}>
-          {activeField === 'agent' ? '▶ ' : '  '}{'Агент:       '}
+          {activeField === 'agent' ? '▶ ' : '  '}{'Агент:        '}
         </Text>
         <Text color={theme.warning}>[{localAgent}]</Text>
         <Text dimColor> ←→</Text>
@@ -95,7 +125,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
       {/* Поле Scope */}
       <Box marginBottom={1}>
         <Text color={activeField === 'scope' ? theme.selected : theme.secondary}>
-          {activeField === 'scope' ? '▶ ' : '  '}{'Scope:       '}
+          {activeField === 'scope' ? '▶ ' : '  '}{'Scope:        '}
         </Text>
         <Text color={theme.warning}>[{localScope}]</Text>
         <Text dimColor> ←→</Text>
@@ -121,10 +151,73 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         </Text>
       </Box>
 
+      {/* Настройка агента */}
+      <Box flexDirection="column" marginBottom={2}>
+        <Box marginBottom={1}>
+          <Text dimColor>{'  — Настройка ('}{localAgent}{') —'}</Text>
+        </Box>
+
+        {/* MCP */}
+        {setup.checking ? (
+          <Box>
+            <Text dimColor>{'  '}{'MCP:          '}</Text>
+            <Text dimColor>проверяем...</Text>
+          </Box>
+        ) : setup.status?.mcpInstalled === null ? (
+          <Box>
+            <Text dimColor>{'  '}{'MCP:          '}</Text>
+            <Text dimColor>не поддерживается</Text>
+          </Box>
+        ) : setup.status?.mcpInstalled === true ? (
+          <Box>
+            <Text dimColor>{'  '}{'MCP:          '}</Text>
+            <Text color={theme.success}>✓ установлен</Text>
+          </Box>
+        ) : (
+          <Box>
+            <Text color={activeField === 'installMcp' ? theme.selected : theme.secondary}>
+              {activeField === 'installMcp' ? '▶ ' : '  '}{'MCP:          '}
+            </Text>
+            <Text color={theme.error}>✗ не установлен  </Text>
+            {setup.mcpInstallState === 'loading' && <Text color={theme.warning}>устанавливаем...</Text>}
+            {setup.mcpInstallState === 'idle' && <Text dimColor>[Enter — установить]</Text>}
+            {setup.mcpInstallState === 'error' && <Text color={theme.error}>ошибка</Text>}
+          </Box>
+        )}
+
+        {/* Базовый скил */}
+        {setup.checking ? (
+          <Box>
+            <Text dimColor>{'  '}{'Базовый скил: '}</Text>
+            <Text dimColor>проверяем...</Text>
+          </Box>
+        ) : setup.status?.baseSkillInstalled === null ? (
+          <Box>
+            <Text dimColor>{'  '}{'Базовый скил: '}</Text>
+            <Text dimColor>не поддерживается</Text>
+          </Box>
+        ) : setup.status?.baseSkillInstalled === true ? (
+          <Box>
+            <Text dimColor>{'  '}{'Базовый скил: '}</Text>
+            <Text color={theme.success}>✓ установлен</Text>
+          </Box>
+        ) : (
+          <Box>
+            <Text color={activeField === 'installBaseSkill' ? theme.selected : theme.secondary}>
+              {activeField === 'installBaseSkill' ? '▶ ' : '  '}{'Базовый скил: '}
+            </Text>
+            <Text color={theme.error}>✗ не установлен  </Text>
+            {setup.baseSkillInstallState === 'loading' && <Text color={theme.warning}>устанавливаем...</Text>}
+            {setup.baseSkillInstallState === 'idle' && <Text dimColor>[Enter — установить]</Text>}
+            {setup.baseSkillInstallState === 'error' && <Text color={theme.error}>ошибка</Text>}
+          </Box>
+        )}
+      </Box>
+
       <HintBar hints={[
         { key: '↑↓', description: 'выбор поля' },
         { key: '←→', description: 'изменить значение' },
-        { key: 'Enter', description: 'сохранить' },
+        { key: 'Enter', description: isInstallField ? 'установить' : 'сохранить' },
       ]} />
     </Box>
   );
