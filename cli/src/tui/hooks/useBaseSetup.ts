@@ -5,6 +5,7 @@ import {
   checkSetupStatus,
   installMcp,
   installBaseSkill,
+  updateSelf,
 } from '../../base-setup';
 
 export type InstallState = 'idle' | 'loading' | 'success' | 'error';
@@ -14,8 +15,10 @@ export interface UseBaseSetupResult {
   checking: boolean;
   mcpInstallState: InstallState;
   baseSkillInstallState: InstallState;
+  updateSelfState: InstallState;
   doInstallMcp: () => Promise<void>;
   doInstallBaseSkill: () => Promise<void>;
+  doUpdateSelf: () => Promise<void>;
 }
 
 export function useBaseSetup(agent: AgentName): UseBaseSetupResult {
@@ -23,6 +26,7 @@ export function useBaseSetup(agent: AgentName): UseBaseSetupResult {
   const [checking, setChecking] = useState(false);
   const [mcpInstallState, setMcpInstallState] = useState<InstallState>('idle');
   const [baseSkillInstallState, setBaseSkillInstallState] = useState<InstallState>('idle');
+  const [updateSelfState, setUpdateSelfState] = useState<InstallState>('idle');
   const [recheckKey, setRecheckKey] = useState(0);
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
@@ -33,6 +37,7 @@ export function useBaseSetup(agent: AgentName): UseBaseSetupResult {
     setStatus(null);
     setMcpInstallState('idle');
     setBaseSkillInstallState('idle');
+    setUpdateSelfState('idle');
     checkSetupStatus(agent).then(result => {
       if (cancelled || !mountedRef.current) return;
       setStatus(result);
@@ -69,12 +74,27 @@ export function useBaseSetup(agent: AgentName): UseBaseSetupResult {
     }
   }, [agent, recheck]);
 
+  const doUpdateSelf = useCallback(async () => {
+    setUpdateSelfState('loading');
+    try {
+      await updateSelf(agent);
+      if (!mountedRef.current) return;
+      setUpdateSelfState('success');
+      recheck();
+    } catch {
+      if (!mountedRef.current) return;
+      setUpdateSelfState('error');
+    }
+  }, [agent, recheck]);
+
   return {
     status,
     checking,
     mcpInstallState,
     baseSkillInstallState,
+    updateSelfState,
     doInstallMcp,
     doInstallBaseSkill,
+    doUpdateSelf,
   };
 }
