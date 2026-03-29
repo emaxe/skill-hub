@@ -102,6 +102,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         return;
       }
       if (activeField === 'updateCache') {
+        if (cacheUpdateState === 'loading') return;
         setCacheUpdateState('loading');
         updateCache()
           .then(() => {
@@ -115,6 +116,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         return;
       }
       if (activeField === 'updateAgent') {
+        if (setup.updateSelfState === 'loading') return;
         setup.doUpdateSelf()
           .then(() => setStatus('Агент обновлён', 'success'))
           .catch(() => setStatus('Ошибка обновления агента', 'error'));
@@ -131,7 +133,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     }
   });
 
-  const isInstallField = activeField === 'installMcp' || activeField === 'installBaseSkill';
+  const isActionField = activeField === 'installMcp'
+    || activeField === 'installBaseSkill'
+    || activeField === 'updateCache'
+    || activeField === 'updateAgent';
 
   return (
     <Box flexDirection="column" padding={2}>
@@ -175,7 +180,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
 
       {/* Обновить кэш */}
       {cacheInstalled && (
-        <Box marginBottom={2}>
+        <Box marginBottom={1}>
           <Text color={activeField === 'updateCache' ? theme.selected : theme.secondary}>
             {activeField === 'updateCache' ? '▶ ' : '  '}{'Обновить кэш: '}
           </Text>
@@ -265,7 +270,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
       <HintBar hints={[
         { key: '↑↓', description: 'выбор поля' },
         { key: '←→', description: 'изменить значение' },
-        { key: 'Enter', description: isInstallField ? 'установить' : 'сохранить' },
+        { key: 'Enter', description: isActionField ? 'установить' : 'сохранить' },
       ]} />
     </Box>
   );
