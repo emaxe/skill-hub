@@ -1,15 +1,17 @@
 ---
 name: skill-hub
-description: Use when the user invokes /skill-hub or asks to search, install, remove, move, update, list extensions, or set up the skill-hub CLI. Bootstrap skill that helps install skill-hub CLI and MCP server.
+description: Use when the user invokes /skill-hub or asks to search, install, remove, move, update, list extensions, or set up the skill-hub CLI. Bootstrap skill for Cursor Agent Skills (SKILL.md in .cursor/skills).
 tags: [workflow]
 version: "3.2.0"
 scope: global
-platforms: [claude-code]
+platforms: [cursor]
 ---
 
-# Skill-Hub
+# Skill-Hub (Cursor)
 
-Ты — AI-агент. Когда пользователь вызывает `/skill-hub`, ты выполняешь действие сам, а не показываешь пользователю команды для ввода.
+Ты — AI-агент в Cursor. Когда пользователь вызывает `/skill-hub`, ты выполняешь действие сам, а не показываешь пользователю команды для ввода.
+
+Ручная установка этого скила: положи содержимое в `SKILL.md` внутри папки скила — глобально `~/.cursor/skills/skill-hub/SKILL.md` или в проекте `.cursor/skills/skill-hub/SKILL.md`. Через CLI skill-hub с `--agent cursor` файл создаётся автоматически.
 
 ## Алгоритм действий
 
@@ -31,16 +33,16 @@ platforms: [claude-code]
 
 | Запрос пользователя | Вызов инструмента |
 |---------------------|-------------------|
-| `/skill-hub search X` | `search_extensions({query: "X", agent: "claude-code"})` |
-| `/skill-hub install X` | `install_extension({name: "X", scope: "project", agent: "claude-code"})` |
-| `/skill-hub install X --global` | `install_extension({name: "X", scope: "global", agent: "claude-code"})` |
-| `/skill-hub install X --local` | `install_extension({name: "X", scope: "project", agent: "claude-code"})` |
-| `/skill-hub remove X` | `remove_extension({name: "X", scope: "project", agent: "claude-code"})` |
-| `/skill-hub remove X --global` | `remove_extension({name: "X", scope: "global", agent: "claude-code"})` |
-| `/skill-hub move X --to-global` | `move_extension({name: "X", to: "global", agent: "claude-code"})` |
-| `/skill-hub move X --to-project` | `move_extension({name: "X", to: "project", agent: "claude-code"})` |
-| `/skill-hub list` | `list_extensions({agent: "claude-code"})` — показывает тип, имя, версию, scope и способ установки: `[skill-hub]` или `[manual]` |
-| `/skill-hub info X` | `search_extensions({query: "X", agent: "claude-code"})` |
+| `/skill-hub search X` | `search_extensions({query: "X", agent: "cursor"})` |
+| `/skill-hub install X` | `install_extension({name: "X", scope: "project", agent: "cursor"})` |
+| `/skill-hub install X --global` | `install_extension({name: "X", scope: "global", agent: "cursor"})` |
+| `/skill-hub install X --local` | `install_extension({name: "X", scope: "project", agent: "cursor"})` |
+| `/skill-hub remove X` | `remove_extension({name: "X", scope: "project", agent: "cursor"})` |
+| `/skill-hub remove X --global` | `remove_extension({name: "X", scope: "global", agent: "cursor"})` |
+| `/skill-hub move X --to-global` | `move_extension({name: "X", to: "global", agent: "cursor"})` |
+| `/skill-hub move X --to-project` | `move_extension({name: "X", to: "project", agent: "cursor"})` |
+| `/skill-hub list` | `list_extensions({agent: "cursor"})` — показывает тип, имя, версию, scope и способ установки: `[skill-hub]` или `[manual]` |
+| `/skill-hub info X` | `search_extensions({query: "X", agent: "cursor"})` |
 | `/skill-hub update` | `list_extensions(...)`, затем `install_extension(...)` для каждого |
 
 Не показывай CLI-команды пользователю — просто выполни действие и покажи результат.
@@ -50,7 +52,7 @@ platforms: [claude-code]
 Если MCP-инструментов нет, но `skill-hub` CLI доступен — выполни через Bash:
 
 ```
-skill-hub search <query> --agent claude-code
+skill-hub search <query> --agent cursor
 skill-hub install <name> --local  # в текущий проект (по умолчанию для этого скила)
 skill-hub install <name> --global # глобально
 skill-hub remove <name> --local   # удалить проектную установку
@@ -70,7 +72,7 @@ skill-hub update
 
 ```bash
 npm install -g @emaxe/skill-hub
-skill-hub setup-mcp --agent claude-code
+skill-hub setup-mcp --agent cursor
 ```
 
-После установки перезапусти Claude Code, чтобы MCP-инструменты стали доступны.
+После установки перезапусти Cursor, чтобы MCP-инструменты стали доступны.

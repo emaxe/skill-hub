@@ -10,41 +10,53 @@ import { createRegistry } from '../registry';
 import { AgentAdapter } from '../adapters/types';
 import { getAdapter } from '../adapters/get-adapter';
 
-async function installExtension(
+export async function moveExtension(
   ext: Extension,
   adapter: AgentAdapter,
-  scope: 'global' | 'project',
+  from: 'global' | 'project',
+  to: 'global' | 'project',
   cachePath: string,
   reg: ReturnType<typeof createRegistry>
 ): Promise<void> {
   if (!ext.platforms[adapter.agentName]) {
     throw new Error(`Расширение "${ext.name}" не поддерживает агента ${adapter.agentName}`);
   }
-  await adapter.install(ext, scope, cachePath);
+  if (!adapter.isInstalled(ext, from)) {
+    throw new Error(`Расширение "${ext.name}" не установлено в scope "${from}"`);
+  }
+  await adapter.install(ext, to, cachePath);
+  await adapter.remove(ext, from);
   reg.add({
     type: ext.type, name: ext.name,
     version: ext.version || '0.0.0',
-    agent: adapter.agentName, scope,
-    path: adapter.getInstallPath(ext, scope),
+    agent: adapter.agentName, scope: to,
+    path: adapter.getInstallPath(ext, to),
   });
 }
 
-export function makeInstallCommand(): Command {
-  return new Command('install')
-    .description('Установить расширение')
+export function makeMoveCommand(): Command {
+  return new Command('move')
+    .description('Перенести расширение между scope (global ↔ project)')
     .argument('<name>', 'Имя расширения (или type:name)')
     .option('--agent <agent>', 'Агент: claude-code, cursor, copilot')
-    .option('--global', 'Глобальная установка')
-    .option('--project', 'Установка в текущий проект (по умолчанию)')
-    .option('--local', 'Установка в текущий проект (alias для --project)')
-    .action(async (nameArg: string, opts: { agent?: string; global?: boolean; project?: boolean; local?: boolean }) => {
+    .option('--to-global', 'Перенести в глобальный scope')
+    .option('--to-project', 'Перенести в проектный scope')
+    .option('--to-local', 'Перенести в проектный scope (alias для --to-project)')
+    .action(async (nameArg: string, opts: { agent?: string; toGlobal?: boolean; toProject?: boolean; toLocal?: boolean }) => {
       const spinner = ora('Обновление каталога...').start();
       try {
+        const toProject = opts.toProject || opts.toLocal;
+        if (!opts.toGlobal && !toProject) {
+          spinner.fail(chalk.red('Укажите направление: --to-global или --to-project'));
+          process.exit(1);
+        }
+        const to: 'global' | 'project' = opts.toGlobal ? 'global' : 'project';
+        const from: 'global' | 'project' = to === 'global' ? 'project' : 'global';
+
         await ensureCache();
         const cachePath = getCachePath();
         const catalog = loadCatalog(cachePath);
         const agent = (opts.agent || detectAgent()) as AgentName;
-        const scope = opts.global ? 'global' : 'project';
 
         let type: ExtensionType | undefined;
         let name = nameArg;
@@ -61,21 +73,9 @@ export function makeInstallCommand(): Command {
         const adapter = getAdapter(agent);
         const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
 
-        // Установить зависимости
-        for (const dep of ext.dependencies) {
-          let depType: ExtensionType | undefined;
-          let depName = dep;
-          if (dep.includes(':')) [depType, depName] = dep.split(':') as [ExtensionType, string];
-          const depExt = catalog.extensions.find(e => e.name === depName && (!depType || e.type === depType));
-          if (depExt && !reg.isInstalled(depExt.name, depExt.type, agent)) {
-            spinner.text = `Устанавливаю зависимость: ${dep}`;
-            await installExtension(depExt, adapter, scope, cachePath, reg);
-          }
-        }
-
-        spinner.text = `Устанавливаю ${ext.type}:${ext.name}...`;
-        await installExtension(ext, adapter, scope, cachePath, reg);
-        spinner.succeed(chalk.green(`Установлен ${ext.type}:${ext.name} v${ext.version || '?'} (${agent}, ${scope})`));
+        spinner.text = `Переношу ${ext.type}:${ext.name} из ${from} в ${to}...`;
+        await moveExtension(ext, adapter, from, to, cachePath, reg);
+        spinner.succeed(chalk.green(`Перенесён ${ext.type}:${ext.name} из ${from} в ${to} (${agent})`));
       } catch (err) {
         spinner.fail(chalk.red(String(err)));
         process.exit(1);

@@ -45,8 +45,11 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "chalk": "^4.1.2",
     "commander": "^12.0.0",
+    "ink": "^3.2.0",
     "js-yaml": "^4.1.0",
     "ora": "^5.4.1",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
     "simple-git": "^3.22.0",
     "zod": "^3.22.0"
   },
@@ -54,6 +57,8 @@
     "@types/jest": "^29.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
+    "@types/react": "^17.0.80",
+    "ink-testing-library": "^2.1.0",
     "jest": "^29.0.0",
     "ts-jest": "^29.0.0",
     "ts-node": "^10.9.2",
@@ -63,7 +68,8 @@
     "preset": "ts-jest",
     "testEnvironment": "node",
     "testMatch": [
-      "**/*.test.ts"
+      "**/*.test.ts",
+      "**/*.test.tsx"
     ]
   }
 }

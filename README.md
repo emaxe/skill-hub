@@ -47,6 +47,26 @@ Once installed, you can use the following commands in Claude Code:
 /skill-hub init                        Recommend extensions for project
 ```
 
+## Interactive TUI
+
+Run `skill-hub` without arguments to launch the fullscreen interactive UI:
+
+```bash
+skill-hub
+```
+
+| Key | Action |
+|-----|--------|
+| `Tab` / `1-3` | Switch tabs (Catalog / Installed / Settings) |
+| `↑↓` | Navigate list |
+| `Enter` | Open extension details |
+| `i` | Install selected extension |
+| `d` | Delete (with confirmation) |
+| `m` | Move scope (global ↔ project) |
+| `u` | Update extension |
+| `/` | Focus search |
+| `q` | Quit |
+
 ## Commands
 
 ### search
