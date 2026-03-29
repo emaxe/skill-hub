@@ -6,7 +6,7 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { loadCatalog, searchExtensions, AgentName, ExtensionType } from './catalog';
+import { loadCatalog, searchExtensions, filterByAgent, scoreExtensions, AgentName, ExtensionType } from './catalog';
 import { detectAgent } from './detect-agent';
 import { getCachePath, ensureCache } from './git';
 import { createRegistry } from './registry';
@@ -90,6 +90,48 @@ export async function startMcpServer(): Promise<void> {
               limit: { type: 'number', description: 'Макс. количество результатов (по умолчанию 10)' },
               offset: { type: 'number', description: 'Пропустить первые N результатов (по умолчанию 0)' },
             },
+          },
+        },
+        {
+          name: 'suggest_extensions',
+          description: 'Порекомендовать расширения для проекта на основе его контекста. Агент сам читает package.json, README.md (первые 50 строк), список файлов корня и CLAUDE.md/.cursorrules (если есть), затем передаёт как context.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              context: {
+                type: 'string',
+                description: 'Контекст проекта: содержимое package.json, первые строки README, список файлов — всё в одной строке',
+              },
+              agent: {
+                type: 'string',
+                enum: ['claude-code', 'cursor', 'copilot'],
+                description: 'Фильтр по агенту (по умолчанию: автодетект)',
+              },
+              limit: {
+                type: 'number',
+                description: 'Максимум рекомендаций (по умолчанию: 5)',
+              },
+            },
+            required: ['context'],
+          },
+        },
+        {
+          name: 'get_extension_info',
+          description: 'Получить полную информацию о расширении, включая статус установки',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: {
+                type: 'string',
+                description: 'Имя расширения (или type:name, например skill:git-helper)',
+              },
+              agent: {
+                type: 'string',
+                enum: ['claude-code', 'cursor', 'copilot'],
+                description: 'Агент для проверки статуса установки (по умолчанию: автодетект)',
+              },
+            },
+            required: ['name'],
           },
         },
       ],
@@ -349,6 +391,108 @@ export async function startMcpServer(): Promise<void> {
         const entries = allEntries.slice(offset, offset + limit);
         return {
           content: [{ type: 'text', text: JSON.stringify({ results: entries, total, limit, offset }, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Ошибка: ${String(err)}` }],
+          isError: true,
+        };
+      }
+    }
+
+    if (name === 'suggest_extensions') {
+      try {
+        await ensureCache();
+        const cachePath = getCachePath();
+        const catalog = loadCatalog(cachePath);
+        const agent = (str(a.agent) || detectAgent()) as AgentName;
+        const limit = typeof a.limit === 'number' && a.limit > 0 ? a.limit : 5;
+        const context = str(a.context) || '';
+
+        const agentExtensions = filterByAgent(catalog.extensions, agent);
+
+        const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
+        const installedNames = new Set(reg.list(agent).map(r => r.name));
+        const notInstalled = agentExtensions.filter(ext => !installedNames.has(ext.name));
+
+        const scored = scoreExtensions(notInstalled, context);
+        const top = scored.slice(0, limit);
+
+        const suggestions = top.map(s => ({
+          type: s.extension.type,
+          name: s.extension.name,
+          description: s.extension.description,
+          tags: s.extension.tags,
+          scope: s.extension.scope,
+          version: s.extension.version || '?',
+          score: s.score,
+          matchReasons: s.matchReasons,
+        }));
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              suggestions,
+              total_candidates: notInstalled.length,
+              agent,
+              note: 'Чтобы установить все: вызови install_extension для каждого name из suggestions со scope: "project"',
+            }, null, 2),
+          }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Ошибка: ${String(err)}` }],
+          isError: true,
+        };
+      }
+    }
+
+    if (name === 'get_extension_info') {
+      try {
+        await ensureCache();
+        const cachePath = getCachePath();
+        const catalog = loadCatalog(cachePath);
+        const agent = (str(a.agent) || detectAgent()) as AgentName;
+        const nameArg = str(a.name) || '';
+
+        let type: ExtensionType | undefined;
+        let extName = nameArg;
+        if (nameArg.includes(':')) {
+          const parts = nameArg.split(':');
+          type = parts[0] as ExtensionType;
+          extName = parts[1];
+        }
+
+        const ext = catalog.extensions.find(e => e.name === extName && (!type || e.type === type));
+        if (!ext) {
+          return {
+            content: [{ type: 'text', text: `Расширение "${nameArg}" не найдено в каталоге` }],
+            isError: true,
+          };
+        }
+
+        const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
+        const installed = reg.isInstalled(ext.name, ext.type, agent);
+        const record = installed ? reg.get(ext.name, ext.type, agent) : undefined;
+
+        const result = {
+          type: ext.type,
+          name: ext.name,
+          description: ext.description,
+          tags: ext.tags,
+          author: ext.author || null,
+          version: ext.version || '?',
+          scope: ext.scope,
+          platforms: ext.platforms,
+          dependencies: ext.dependencies,
+          installed,
+          installed_scope: record?.scope || null,
+          installed_at: record?.installed_at || null,
+        };
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         return {
