@@ -4,7 +4,7 @@ description: Use when the user invokes /skill-hub or asks to search, install, re
 tags: [workflow]
 version: "3.3.0"
 scope: global
-platforms: [claude-code]
+platforms: [copilot]
 ---
 
 # Skill-Hub
@@ -31,17 +31,17 @@ platforms: [claude-code]
 
 | Запрос пользователя | Вызов инструмента |
 |---------------------|-------------------|
-| `/skill-hub search X` | `search_extensions({query: "X", agent: "claude-code"})` |
-| `/skill-hub install X` | `install_extension({name: "X", scope: "project", agent: "claude-code"})` |
-| `/skill-hub install X --global` | `install_extension({name: "X", scope: "global", agent: "claude-code"})` |
-| `/skill-hub install X --local` | `install_extension({name: "X", scope: "project", agent: "claude-code"})` |
-| `/skill-hub remove X` | `remove_extension({name: "X", scope: "project", agent: "claude-code"})` |
-| `/skill-hub remove X --global` | `remove_extension({name: "X", scope: "global", agent: "claude-code"})` |
-| `/skill-hub move X --to-global` | `move_extension({name: "X", to: "global", agent: "claude-code"})` |
-| `/skill-hub move X --to-project` | `move_extension({name: "X", to: "project", agent: "claude-code"})` |
-| `/skill-hub list` | `list_extensions({agent: "claude-code"})` — показывает тип, имя, версию, scope и способ установки: `[skill-hub]` или `[manual]` |
-| `/skill-hub info X` | `get_extension_info({name: "X", agent: "claude-code"})` |
-| `/skill-hub suggest` | собери контекст (см. ниже), затем `suggest_extensions({context: "...", agent: "claude-code", limit: 5})` |
+| `/skill-hub search X` | `search_extensions({query: "X", agent: "copilot"})` |
+| `/skill-hub install X` | `install_extension({name: "X", scope: "project", agent: "copilot"})` |
+| `/skill-hub install X --global` | `install_extension({name: "X", scope: "global", agent: "copilot"})` |
+| `/skill-hub install X --local` | `install_extension({name: "X", scope: "project", agent: "copilot"})` |
+| `/skill-hub remove X` | `remove_extension({name: "X", scope: "project", agent: "copilot"})` |
+| `/skill-hub remove X --global` | `remove_extension({name: "X", scope: "global", agent: "copilot"})` |
+| `/skill-hub move X --to-global` | `move_extension({name: "X", to: "global", agent: "copilot"})` |
+| `/skill-hub move X --to-project` | `move_extension({name: "X", to: "project", agent: "copilot"})` |
+| `/skill-hub list` | `list_extensions({agent: "copilot"})` — показывает тип, имя, версию, scope и способ установки: `[skill-hub]` или `[manual]` |
+| `/skill-hub info X` | `get_extension_info({name: "X", agent: "copilot"})` |
+| `/skill-hub suggest` | собери контекст (см. ниже), затем `suggest_extensions({context: "...", agent: "copilot", limit: 5})` |
 | `/skill-hub update` | `list_extensions(...)`, затем `install_extension(...)` для каждого |
 | `/skill-hub config [key] [value]` | только через CLI: `skill-hub config set <key> <value>` |
 
@@ -51,13 +51,13 @@ platforms: [claude-code]
 - `package.json`: поля `name`, `description`, `keywords`, ключи `dependencies` и `devDependencies`
 - `README.md`: первые 50 строк
 - Список файлов и папок в корне проекта (1 уровень)
-- `CLAUDE.md` (если есть): первые 30 строк
+- `.github/copilot-instructions.md` (если есть): первые 30 строк
 
 Объедини всё в одну строку текста (ключевые слова и фразы через пробел).
 
 **Шаг 2.** Вызови инструмент:
 ```
-suggest_extensions({context: "<собранный текст>", agent: "claude-code", limit: 5})
+suggest_extensions({context: "<собранный текст>", agent: "copilot", limit: 5})
 ```
 
 **Шаг 3.** Покажи результат пользователю:
@@ -82,7 +82,7 @@ suggest_extensions({context: "<собранный текст>", agent: "claude-c
 Если MCP-инструментов нет, но `skill-hub` CLI доступен — выполни через Bash:
 
 ```
-skill-hub search <query> --agent claude-code
+skill-hub search <query> --agent copilot
 skill-hub install <name> --local  # в текущий проект (по умолчанию для этого скила)
 skill-hub install <name> --global # глобально
 skill-hub remove <name> --local   # удалить проектную установку
@@ -107,7 +107,7 @@ skill-hub config set <key> <value>
 
 ```bash
 npm install -g @emaxe/skill-hub
-skill-hub setup-mcp --agent claude-code
+skill-hub setup-mcp --agent copilot
 ```
 
-После установки перезапусти Claude Code, чтобы MCP-инструменты стали доступны.
+После установки перезапусти Copilot CLI, чтобы MCP-инструменты стали доступны.
