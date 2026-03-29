@@ -94,3 +94,76 @@ export function searchExtensions(
   );
   return results;
 }
+
+export interface ScoredExtension {
+  extension: Extension;
+  score: number;
+  matchReasons: string[];
+}
+
+export function scoreExtensions(extensions: Extension[], context: string): ScoredExtension[] {
+  const STOP_WORDS = new Set([
+    'the','a','an','is','are','in','on','at','to','for','of','and','or',
+    'with','this','that','it','be','as','from','by','not',
+    'но','и','в','на','с','для','по','из','не','что','это','как',
+  ]);
+
+  const tokens = context.toLowerCase()
+    .split(/\W+/)
+    .filter(t => t.length > 2 && !STOP_WORDS.has(t));
+  const tokenSet = new Set(tokens);
+  const scored: ScoredExtension[] = [];
+
+  for (const ext of extensions) {
+    let score = 0;
+    const reasons: string[] = [];
+
+    const nameTokens = ext.name.toLowerCase().split(/[-_\s]+/);
+    // Имя: точное совпадение токена x3
+    for (const nt of nameTokens) {
+      if (tokenSet.has(nt)) {
+        score += 3;
+        reasons.push(`name:${nt}`);
+      }
+    }
+    // Имя: частичное x2
+    for (const token of tokenSet) {
+      if (ext.name.toLowerCase().includes(token) && !reasons.some(r => r === `name:${token}`)) {
+        score += 2;
+        reasons.push(`name~${token}`);
+      }
+    }
+
+    // Теги: точное x2, частичное x1
+    for (const tag of ext.tags.map(t => t.toLowerCase())) {
+      if (tokenSet.has(tag)) {
+        score += 2;
+        reasons.push(`tag:${tag}`);
+      } else {
+        for (const token of tokenSet) {
+          if (tag.includes(token) && !reasons.some(r => r === `tag~${token}` || r === `tag:${token}`)) {
+            score += 1;
+            reasons.push(`tag~${token}`);
+          }
+        }
+      }
+    }
+
+    // Описание: x1
+    const descTokens = ext.description.toLowerCase().split(/\W+/).filter(t => t.length > 2);
+    for (const dt of descTokens) {
+      if (tokenSet.has(dt) && !reasons.some(r => r.endsWith(`:${dt}`))) {
+        score += 1;
+        reasons.push(`desc:${dt}`);
+      }
+    }
+
+    if (score > 0) {
+      scored.push({ extension: ext, score, matchReasons: [...new Set(reasons)] });
+    }
+  }
+
+  return scored.sort(
+    (a, b) => b.score - a.score || a.extension.name.localeCompare(b.extension.name)
+  );
+}
