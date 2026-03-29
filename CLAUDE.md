@@ -52,9 +52,11 @@ npm unlink -g @emaxe/skill-hub  # remove global link
 ### CLI Package
 
 `cli/` contains the TypeScript source for the `@emaxe/skill-hub` npm package. Provides:
-- CLI commands: `search`, `install`, `remove`, `list`, `info`, `update`, `setup-mcp`
+- CLI commands: `search`, `install`, `remove`, `list`, `info`, `update`, `setup-mcp`, `config`
+- Interactive TUI: `skill-hub` with no arguments launches fullscreen UI (Ink/React)
 - MCP server with tools: `search_extensions`, `install_extension`, `remove_extension`, `list_extensions`
 - Agent adapters for Claude Code, Cursor, and Copilot
+- Config file at `~/.skill-hub/config.json` — fields: `agent`, `defaultScope`, `registryUrl`
 
 ## Contributing Extensions
 
