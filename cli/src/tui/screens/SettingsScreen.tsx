@@ -255,7 +255,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
 
         {/* Переустановить MCP + base-skill */}
         {(setup.status?.mcpInstalled === true || setup.status?.baseSkillInstalled === true) && (
-          <Box>
+          <Box marginBottom={1}>
             <Text color={activeField === 'updateAgent' ? theme.selected : theme.secondary}>
               {activeField === 'updateAgent' ? '▶ ' : '  '}{'Переустановить: '}
             </Text>
