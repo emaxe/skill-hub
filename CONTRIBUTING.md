@@ -58,17 +58,29 @@ cli/
 ├── src/
 │   ├── commands/        # CLI commands (search, install, remove, etc.)
 │   ├── adapters/        # Agent adapters (claude-code, cursor, copilot)
+│   │   ├── types.ts     # AgentAdapter interface
+│   │   ├── get-adapter.ts # Adapter factory
+│   │   ├── claude-code.ts
+│   │   ├── cursor.ts
+│   │   └── copilot.ts
 │   ├── tui/             # Interactive TUI (Ink/React)
 │   ├── base-setup.ts    # MCP + base skill setup logic
-│   ├── catalog.ts       # Catalog types and loading
-│   ├── config.ts        # Config file management
+│   ├── catalog.ts       # Catalog types, platform filtering
+│   ├── config.ts        # Config file management (~/.skill-hub/config.json)
+│   ├── detect-agent.ts  # Auto-detection of active agent
+│   ├── registry.ts      # Per-agent installation tracking
 │   ├── git.ts           # Cache (git clone/pull) management
 │   ├── mcp.ts           # MCP server
 │   └── index.ts         # CLI entry point
 └── base-skills/         # Bundled base skills shipped with the npm package
     ├── claude-code/SKILL.md
+    ├── cursor/SKILL.md
     └── copilot/SKILL.md
 ```
+
+### Agent Adapters
+
+Each supported agent (Claude Code, Cursor, Copilot) has its own adapter implementing the `AgentAdapter` interface. Adapters handle platform-specific logic: file paths, extension format conversion (e.g., `.mdc` for Cursor rules), and scope directory resolution. When adding a new agent, create a new adapter in `cli/src/adapters/` and register it in `get-adapter.ts`.
 
 ## Questions?
 

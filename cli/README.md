@@ -1,8 +1,8 @@
 # skill-hub
 
-Extension manager for AI coding agents — Claude Code, Cursor, Copilot.
+Менеджер расширений для AI coding-агентов — **Claude Code**, **Cursor**, **Copilot**.
 
-Центральный репозиторий переиспользуемых расширений: **skills**, **agents** и **commands**, расширяющих возможности AI-ассистентов.
+Единый CLI и MCP-сервер для поиска, установки и управления переиспользуемыми расширениями: **skills**, **agents** и **commands**.
 
 ## Установка
 
@@ -10,10 +10,20 @@ Extension manager for AI coding agents — Claude Code, Cursor, Copilot.
 npm install -g @emaxe/skill-hub
 ```
 
+## Поддерживаемые агенты
+
+| Агент | Автодетект | MCP-конфиг |
+|-------|-----------|------------|
+| **Claude Code** | по умолчанию | `~/.claude/claude_desktop_config.json` |
+| **Cursor** | `CURSOR_TRACE` / `.cursor/` | `~/.cursor/mcp.json` |
+| **Copilot** | `GITHUB_COPILOT` | `~/.copilot/mcp-config.json` |
+
+Агент определяется автоматически или задаётся через конфиг: `skill-hub config set agent cursor`.
+
 ## Быстрый старт
 
 ```bash
-# Настроить MCP-сервер для Claude Code
+# Настроить MCP-сервер (claude-code | cursor | copilot)
 skill-hub setup-mcp --agent claude-code
 
 # Поиск расширений
@@ -40,12 +50,14 @@ skill-hub list
 
 ## MCP-сервер
 
-Пакет включает MCP-сервер с инструментами:
+Пакет включает MCP-сервер с инструментами (все поддерживают параметр `agent`):
 
-- `search_extensions` — поиск по каталогу
-- `install_extension` — установка расширения
+- `search_extensions` — поиск по каталогу (фильтр по агенту)
+- `install_extension` — установка расширения для выбранного агента
 - `remove_extension` — удаление расширения
+- `move_extension` — перемещение между scope (global ↔ project)
 - `list_extensions` — список установленных
+- `suggest_extensions` — рекомендации расширений для проекта
 
 ## Локальная разработка
 

@@ -1,16 +1,32 @@
 # Skill-Hub
 
-Open-source extension manager for Claude Code. Search, install, and manage reusable skills, agents, and commands from a central repository.
+Open-source extension manager for AI coding agents. Search, install, and manage reusable skills, agents, and commands from a central repository.
+
+## Supported AI Agents
+
+| Agent | Status | Scope directories |
+|-------|--------|-------------------|
+| **Claude Code** | Full support | `~/.claude/` / `.claude/` |
+| **Cursor** | Full support | `~/.cursor/` / `.cursor/` |
+| **Copilot** (VS Code) | Full support | `~/.config/Code/User/` / `.github/` |
+
+Skill-Hub auto-detects the active agent, but you can set it explicitly:
+
+```bash
+skill-hub config set agent cursor
+```
 
 ## What are Extensions?
 
-Skill-Hub manages three types of Claude Code extensions:
+Skill-Hub manages three types of extensions:
 
-| Type | Description | Install location |
+| Type | Description | Example install location (Claude Code) |
 |------|-------------|-----------------|
-| **Skill** (`SKILL.md`) | AI behavior instructions activated by context | `~/.claude/skills/{name}/` or `.claude/skills/{name}/` |
-| **Agent** (`AGENT.md`) | Specialized AI assistants spawned as subprocesses | `~/.claude/agents/{name}.md` or `.claude/agents/{name}.md` |
+| **Skill** (`SKILL.md`) | AI behavior instructions activated by context | `~/.claude/skills/{name}/SKILL.md` |
+| **Agent** (`AGENT.md`) | Specialized AI assistants spawned as subprocesses | `~/.claude/agents/{name}.md` |
 | **Command** (`COMMAND.md`) | User-invocable slash commands | `.claude/commands/{name}.md` |
+
+Each agent stores extensions in its own directory structure. Extensions can declare per-agent platform support via the `platforms` field — unsupported combinations are filtered out automatically.
 
 ## Quick Start
 
@@ -18,21 +34,28 @@ Skill-Hub manages three types of Claude Code extensions:
 
 ```bash
 npm install -g @emaxe/skill-hub
+
+# Set up for your agent (claude-code | cursor | copilot)
 skill-hub setup-mcp --agent claude-code
 ```
 
-After restarting Claude Code, the MCP tools are available automatically.
+After restarting your agent, the MCP tools are available automatically.
 
 ### Option B: Bootstrap skill (manual)
 
 ```bash
+# For Claude Code:
 mkdir -p ~/.claude/skills/skill-hub
 cp "$(npm root -g)/@emaxe/skill-hub/base-skills/claude-code/SKILL.md" ~/.claude/skills/skill-hub/SKILL.md
+
+# For Cursor:
+mkdir -p ~/.cursor/skills/skill-hub
+cp "$(npm root -g)/@emaxe/skill-hub/base-skills/cursor/SKILL.md" ~/.cursor/skills/skill-hub/SKILL.md
 ```
 
 ### Using extensions
 
-Once installed, you can use the following commands in Claude Code:
+Once installed, you can use the following commands in your agent:
 
 ```
 /skill-hub search <query>              Search by name, tag, or keyword
@@ -69,7 +92,7 @@ skill-hub
 
 ### Settings tab
 
-The Settings tab lets you configure the agent, default scope, and registry URL. It also shows the setup status for the selected agent — whether the MCP server is registered and the base skill is installed. If either is missing, you can install it directly from the TUI by navigating to the corresponding field and pressing `Enter`.
+The Settings tab lets you switch between agents (Claude Code, Cursor, Copilot), configure the default scope and registry URL. It also shows the setup status for the selected agent — whether the MCP server is registered and the base skill is installed. If either is missing, you can install it directly from the TUI by navigating to the corresponding field and pressing `Enter`.
 
 ## Commands
 
@@ -133,8 +156,11 @@ Analyze the current project and recommend relevant extensions from the catalog.
 ```
 skill-hub (this repo)
 +-- cli/                     # CLI tool + MCP server (npm: @emaxe/skill-hub)
-    |-- src/                 # TypeScript source
-    +-- base-skills/         # Bundled base skills (claude-code, cursor, copilot) — installed by setup
+    |-- src/
+    |   |-- adapters/        # Agent adapters (claude-code, cursor, copilot)
+    |   |-- commands/        # CLI commands
+    |   +-- tui/             # Interactive TUI (Ink/React)
+    +-- base-skills/         # Bundled base skills per agent — installed by setup
 
 skill-hub-catalog (separate repo)
 |-- skills/                  # Published skills
@@ -147,13 +173,13 @@ skill-hub-catalog (separate repo)
 
 Delivery flow:
 1. git clone --depth 1 skill-hub-catalog => ~/.skill-hub/  (local cache)
-2. Install = copy extension to target scope directory
+2. Install = agent adapter copies extension to target scope directory
 3. Update = git pull in cache, re-copy installed extensions
 
-Install paths by type:
-  Skill:   ~/.claude/skills/{name}/    or .claude/skills/{name}/
-  Agent:   ~/.claude/agents/{name}.md  or .claude/agents/{name}.md
-  Command: .claude/commands/{name}.md
+Agent adapter handles platform-specific paths and formats:
+  Claude Code: ~/.claude/skills/{name}/SKILL.md, ~/.claude/agents/{name}.md
+  Cursor:      ~/.cursor/skills/{name}/SKILL.md, ~/.cursor/rules/{name}.mdc
+  Copilot:     .github/copilot-instructions.md (merged via markers)
 ```
 
 ## Локальная разработка CLI

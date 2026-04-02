@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Skill-Hub is an open-source extension manager for Claude Code. It provides a CLI tool and MCP server for searching, installing, and managing reusable extensions — **skills**, **agents**, and **commands**.
+Skill-Hub is an open-source extension manager for AI coding agents (Claude Code, Cursor, Copilot). It provides a CLI tool and MCP server for searching, installing, and managing reusable extensions — **skills**, **agents**, and **commands**.
 
 - **This repo** (`skill-hub`) — CLI tool (`cli/`)
 - **Catalog repo** (`skill-hub-catalog`) — all published extensions (skills, agents, commands), schemas, and docs
@@ -40,7 +40,16 @@ npm unlink -g @emaxe/skill-hub  # remove global link
 2. Install = copy extension to target scope directory (agents/commands: single file renamed to `{name}.md`)
 3. Update = `git pull` in cache, re-copy installed extensions
 
-### Scope Directories
+### Agent Adapters
+
+Three agents supported via `AgentAdapter` interface (`cli/src/adapters/`):
+- **Claude Code** — `~/.claude/` / `.claude/`
+- **Cursor** — `~/.cursor/` / `.cursor/` (rules use `.mdc` format)
+- **Copilot** — `~/.config/Code/User/` / `.github/` (merges into `copilot-instructions.md`)
+
+Auto-detection in `detect-agent.ts`: checks env vars (`CURSOR_TRACE`, `GITHUB_COPILOT`), then `.cursor/` dir, defaults to `claude-code`.
+
+### Scope Directories (Claude Code example)
 
 - **Global:** `~/.claude/skills/{name}/SKILL.md`, `~/.claude/agents/{name}.md`
 - **Project:** `./.claude/skills/{name}/SKILL.md`, `.claude/agents/{name}.md`, `.claude/commands/{name}.md`
