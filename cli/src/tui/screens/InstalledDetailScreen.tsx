@@ -6,6 +6,7 @@ import { useCatalog } from '../hooks/useCatalog';
 import { Confirm } from '../components/Confirm';
 import { HintBar } from '../components/HintBar';
 import { normalizeInput } from '../keymap';
+import { readExtensionContent } from '../utils/readExtensionContent';
 import { useStatus } from '../contexts/StatusContext';
 import { theme } from '../theme';
 
@@ -18,6 +19,7 @@ export interface InstalledDetailScreenProps {
   update: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
   install: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
   defaultScope: 'global' | 'project';
+  onOpenContent: (title: string, content: string) => void;
 }
 
 type Action = 'delete' | 'move' | 'update' | 'register';
@@ -25,12 +27,14 @@ type Action = 'delete' | 'move' | 'update' | 'register';
 const SEP = <Text color={theme.muted} dimColor>{'─'.repeat(40)}</Text>;
 
 export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
-  entry, agent, onBack, remove, move, update, install, defaultScope,
+  entry, agent, onBack, remove, move, update, install, defaultScope, onOpenContent,
 }) => {
   const { catalog } = useCatalog();
   const { setStatus } = useStatus();
   const [actionIndex, setActionIndex] = useState(0);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  const contentResult = useMemo(() => readExtensionContent(entry.path), [entry.path]);
 
   const catalogExt = catalog?.extensions.find(e => e.name === entry.name && e.type === entry.type);
   const isManualWithCatalog = entry.source === 'manual' && catalogExt != null;
@@ -39,13 +43,15 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
     const list: { id: Action; label: string }[] = [
       { id: 'delete', label: 'Удалить' },
       { id: 'move',   label: `Переместить в ${entry.scope === 'global' ? 'project' : 'global'}` },
-      { id: 'update', label: 'Обновить' },
     ];
+    if (catalogExt && entry.source === 'registry') {
+      list.push({ id: 'update', label: 'Обновить' });
+    }
     if (isManualWithCatalog) {
       list.push({ id: 'register', label: 'Установить из skill-hub (зарегистрировать)' });
     }
     return list;
-  }, [entry.scope, isManualWithCatalog]);
+  }, [entry.scope, entry.source, isManualWithCatalog, catalogExt]);
 
   const makeExt = (): Extension => ({
     type: entry.type, name: entry.name,
@@ -66,6 +72,11 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
 
     if (key.upArrow)   { setActionIndex(i => Math.max(0, i - 1)); return; }
     if (key.downArrow) { setActionIndex(i => Math.min(actions.length - 1, i + 1)); return; }
+
+    if (ni === 'c' && contentResult) {
+      onOpenContent(entry.name, contentResult);
+      return;
+    }
 
     if (key.return || ni === ' ') {
       const action = actions[actionIndex].id;
@@ -197,6 +208,7 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
         <HintBar hints={[
           { key: '↑↓', description: 'выбор' },
           { key: 'Enter', description: 'выполнить' },
+          ...(contentResult ? [{ key: 'c', description: 'содержимое' }] : []),
           { key: 'Esc', description: 'назад' },
         ]} />
       </Box>

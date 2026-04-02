@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Box, useInput, useApp } from 'ink';
+import { Box, useInput, useApp, useStdout } from 'ink';
 import { normalizeInput, isCtrl } from './keymap';
 import { Header, TabName } from './components/Header';
 import { HintBar, Hint } from './components/HintBar';
@@ -17,6 +17,7 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { DetailScreen } from './screens/DetailScreen';
 import { MoveScreen } from './screens/MoveScreen';
 import { InstalledDetailScreen } from './screens/InstalledDetailScreen';
+import { ContentScreen } from './screens/ContentScreen';
 import { Extension } from '../catalog';
 import { InstalledEntry } from './hooks/useRegistry';
 
@@ -60,6 +61,7 @@ export const App: React.FC = () => {
   const [moveScope, setMoveScope] = useState<'global' | 'project'>('project');
   const [installedDetailEntry, setInstalledDetailEntry] = useState<InstalledEntry | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [contentData, setContentData] = useState<{ title: string; content: string } | null>(null);
 
   const handleOpenDetail = useCallback((ext: Extension) => {
     setDetailExt(ext);
@@ -77,11 +79,21 @@ export const App: React.FC = () => {
     nav.pushScreen('move');
   }, [nav]);
 
+  const handleOpenContent = useCallback((title: string, content: string) => {
+    setContentData({ title, content });
+    nav.pushScreen('contentView');
+  }, [nav]);
+
   const handleBack = useCallback(() => {
+    const leaving = nav.currentScreen;
     nav.popScreen();
-    setDetailExt(null);
-    setMoveExt(null);
-    setInstalledDetailEntry(null);
+    if (leaving === 'contentView') {
+      setContentData(null);
+    } else {
+      setDetailExt(null);
+      setMoveExt(null);
+      setInstalledDetailEntry(null);
+    }
   }, [nav]);
 
   useInput((input, key) => {
@@ -122,6 +134,15 @@ export const App: React.FC = () => {
   const projectCount = registry.installed.filter(e => e.scope === 'project').length;
 
   const renderScreen = () => {
+    if (screen === 'contentView' && contentData) {
+      return (
+        <ContentScreen
+          title={contentData.title}
+          content={contentData.content}
+          onBack={handleBack}
+        />
+      );
+    }
     if (screen === 'detail' && detailExt) {
       return (
         <DetailScreen
@@ -132,6 +153,7 @@ export const App: React.FC = () => {
           remove={registry.remove}
           isInstalled={registry.isInstalled}
           defaultScope={config.defaultScope}
+          onOpenContent={handleOpenContent}
         />
       );
     }
@@ -157,6 +179,7 @@ export const App: React.FC = () => {
           update={registry.update}
           install={registry.install}
           defaultScope={config.defaultScope}
+          onOpenContent={handleOpenContent}
         />
       );
     }
@@ -195,7 +218,11 @@ export const App: React.FC = () => {
     );
   };
 
+  const { stdout } = useStdout();
+  const termHeight = stdout?.rows ?? 24;
+
   const isTopLevel = screen === 'catalog' || screen === 'installed' || screen === 'settings';
+  const isFullscreen = screen === 'contentView';
   const hints: Hint[] = isTopLevel
     ? (searchFocused ? GLOBAL_HINTS.filter(h => h.key === 'Tab') : GLOBAL_HINTS)
     : [{ key: 'Esc', description: 'назад' }, { key: 'Ctrl+Q', description: 'выход' }];
@@ -204,20 +231,24 @@ export const App: React.FC = () => {
     <StatusContext.Provider value={{ message: statusMessage, status: statusType, setStatus, clearStatus }}>
       <Box flexDirection="column" height="100%">
         <Header activeTab={nav.activeTab} />
-        <Box flexGrow={1} flexDirection="column">
+        <Box height={isFullscreen ? termHeight - 3 : termHeight - 8} flexDirection="column">
           {renderScreen()}
         </Box>
-        <Separator />
-        <InfoBar
-          totalCount={registry.installed.length}
-          globalCount={globalCount}
-          projectCount={projectCount}
-          agent={agent}
-          defaultScope={config.defaultScope}
-        />
-        <Separator />
-        <StatusBar message={statusMessage} status={statusType} />
-        <HintBar hints={hints} />
+        {!isFullscreen && (
+          <>
+            <Separator />
+            <InfoBar
+              totalCount={registry.installed.length}
+              globalCount={globalCount}
+              projectCount={projectCount}
+              agent={agent}
+              defaultScope={config.defaultScope}
+            />
+            <Separator />
+            <StatusBar message={statusMessage} status={statusType} />
+            <HintBar hints={hints} />
+          </>
+        )}
       </Box>
     </StatusContext.Provider>
   );

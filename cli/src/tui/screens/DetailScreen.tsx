@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import path from 'path';
 import { Box, Text, useInput } from 'ink';
 import { Extension, AgentName, ExtensionType } from '../../catalog';
+import { getCachePath } from '../../git';
 import { useStatus } from '../contexts/StatusContext';
 import { Confirm } from '../components/Confirm';
 import { HintBar, Hint } from '../components/HintBar';
 import { normalizeInput } from '../keymap';
+import { readExtensionContent } from '../utils/readExtensionContent';
 import { theme } from '../theme';
+
 
 export interface DetailScreenProps {
   extension: Extension;
@@ -15,15 +19,23 @@ export interface DetailScreenProps {
   remove: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
   isInstalled: (name: string, type: ExtensionType, agent: AgentName) => boolean;
   defaultScope: 'global' | 'project';
+  onOpenContent: (title: string, content: string) => void;
 }
 
 export const DetailScreen: React.FC<DetailScreenProps> = ({
-  extension, agent, onBack, install, remove, isInstalled, defaultScope,
+  extension, agent, onBack, install, remove, isInstalled, defaultScope, onOpenContent,
 }) => {
   const { setStatus } = useStatus();
   const [showConfirm, setShowConfirm] = useState(false);
 
   const installed = isInstalled(extension.name, extension.type, agent);
+
+  const contentResult = useMemo(() => {
+    const sourceFile = extension.platforms[agent] ||
+      (extension.type === 'agent' ? 'AGENT.md' : extension.type === 'command' ? 'COMMAND.md' : 'SKILL.md');
+    const filePath = path.join(getCachePath(), extension.path, sourceFile);
+    return readExtensionContent(filePath);
+  }, [extension, agent]);
 
   useInput((input, key) => {
     if (showConfirm) return;
@@ -39,6 +51,9 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
     }
     if (ni === 'd' && installed) {
       setShowConfirm(true);
+    }
+    if (ni === 'c' && contentResult) {
+      onOpenContent(extension.name, contentResult);
     }
   });
 
@@ -57,6 +72,7 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
   const hints: Hint[] = [
     ...(installed ? [] : [{ key: 'i', description: 'установить' }]),
     ...(installed ? [{ key: 'd', description: 'удалить' }] : []),
+    ...(contentResult ? [{ key: 'c', description: 'содержимое' }] : []),
   ];
 
   return (
