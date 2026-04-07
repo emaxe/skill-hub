@@ -22,12 +22,15 @@ export interface InstalledScreenProps {
   remove: (ext: Extension, agent: AgentName, scope: 'global' | 'project', deleteFromDisk?: boolean) => Promise<void>;
   update: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
   updateSelf: () => Promise<void>;
+  viewHeight: number;
 }
 
 type ScopeFilter = 'all' | 'global' | 'project' | 'parent';
 type AgentFilter = 'all' | 'claude-code' | 'cursor' | 'copilot';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE_MIN = 3;
+// Fixed rows: title(1) + header(1) + separator(1) + HintBar(1) + pagination(2) + search/filter(~2 in conventions mode)
+const FIXED_ROWS = 6;
 
 const CONVENTIONS_SCOPE_FILTERS: ScopeFilter[] = ['global', 'project'];
 const STANDARD_SCOPE_FILTERS: ScopeFilter[] = ['all', 'global', 'project', 'parent'];
@@ -57,7 +60,7 @@ function nextInList<T>(current: T, list: T[]): T {
 }
 
 export const InstalledScreen: React.FC<InstalledScreenProps> = ({
-  agent, onMoveExt, onOpenDetail, onSearchFocusChange, installed, loading, error, remove, update, updateSelf,
+  agent, onMoveExt, onOpenDetail, onSearchFocusChange, installed, loading, error, remove, update, updateSelf, viewHeight,
 }) => {
   const { setStatus } = useStatus();
   const isConventions = agent === 'agents-conventions';
@@ -78,6 +81,11 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
 
   const filtered = useMemo(() => {
     let list = installed;
+
+    // Hide rules in agents-conventions mode (they are project descriptions, not AI extensions)
+    if (isConventions) {
+      list = list.filter(e => e.type !== 'rule');
+    }
 
     // Scope filter
     if (scopeFilter !== 'all') {
@@ -103,11 +111,14 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
     return list;
   }, [installed, scopeFilter, typeFilter, agentFilter, searchQuery, isConventions]);
 
+  const extraRows = isConventions ? 4 : 0; // search + filter + agent filter rows
+  const pageSize = Math.max(PAGE_SIZE_MIN, viewHeight - FIXED_ROWS - extraRows);
+
   const safeIndex = Math.min(selectedIndex, Math.max(0, filtered.length - 1));
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.floor(safeIndex / PAGE_SIZE);
-  const pageStart = currentPage * PAGE_SIZE;
-  const pageItems = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.floor(safeIndex / pageSize);
+  const pageStart = currentPage * pageSize;
+  const pageItems = filtered.slice(pageStart, pageStart + pageSize);
 
   useInput((input, key) => {
     if (confirmTarget || confirmDiskDelete) return;
@@ -140,7 +151,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
       setScopeFilter(f => nextInList(f, scopeList));
       setSelectedIndex(0);
     } else if (isConventions && ni === 't') {
-      const types: (ExtensionType | 'all')[] = ['all', 'skill', 'agent', 'command', 'rule'];
+      const types: (ExtensionType | 'all')[] = ['all', 'skill', 'agent', 'command'];
       setTypeFilter(f => nextInList(f, types));
       setSelectedIndex(0);
     } else if (isConventions && ni === 'a' && scopeFilter === 'global') {
@@ -212,9 +223,6 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
           { key: '/', description: 'поиск' },
           { key: '↑↓', description: 'навигация' },
           { key: 'Enter', description: 'детали' },
-          { key: 's', description: `scope: ${scopeFilter}` },
-          { key: 't', description: `тип: ${typeFilter}` },
-          ...(scopeFilter === 'global' ? [{ key: 'a', description: `агент: ${agentFilter}` }] : []),
           { key: 'd', description: 'удалить' },
           { key: 'u', description: 'обновить' },
           { key: 'U', description: 'обновить все' },
@@ -230,7 +238,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
         ];
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" flexGrow={1}>
       {/* Search input (conventions mode only) */}
       {isConventions && (
         <SearchInput value={searchQuery} onChange={setSearchQuery} focused={searchFocused} />
@@ -244,7 +252,9 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
       {/* Agent filter bar (conventions mode, global scope only) */}
       {isConventions && scopeFilter === 'global' && (
         <Box paddingX={1}>
-          <Text color={theme.muted}>Агент: </Text>
+          <Text color={theme.muted}>Агент </Text>
+          <Text color={theme.warning}>[a]</Text>
+          <Text color={theme.muted}>: </Text>
           {AGENT_FILTERS.map(af => (
             <React.Fragment key={af}>
               <Text color={theme.muted}>  </Text>
@@ -261,121 +271,117 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
 
       <Box paddingX={1} paddingY={0}>
         <Text color={theme.primary} bold>Установленные расширения </Text>
+        <Text color={theme.warning}>[s]</Text>
+        <Text color={theme.primary} bold>: </Text>
         <Text color={theme.muted}>
-          [{scopeFilter === 'all' ? 'все' : scopeFilter}] {filtered.length} шт.
+          {`[${scopeFilter === 'all' ? 'все' : scopeFilter}] ${filtered.length} шт.`}
         </Text>
       </Box>
 
-      {loading && (
-        <Box paddingX={1}>
-          <Text color={theme.muted}>Загрузка...</Text>
-        </Box>
-      )}
-
-      {error && (
-        <Box paddingX={1}>
-          <Text color={theme.error}>{error}</Text>
-        </Box>
-      )}
-
-      {!loading && filtered.length === 0 && (
-        <Box paddingX={1}>
-          <Text color={theme.muted}>Нет установленных расширений</Text>
-        </Box>
-      )}
-
-      {!loading && filtered.length > 0 && (
-        <Box flexDirection="column" paddingX={1} marginTop={1}>
-          {/* Table header */}
-          <Box flexDirection="row">
-            <Box minWidth={2}><Text> </Text></Box>
-            <Box minWidth={9}><Text dimColor>TYPE</Text></Box>
-            <Box minWidth={24}><Text dimColor>NAME</Text></Box>
-            <Box minWidth={8}><Text dimColor>VER</Text></Box>
-            <Box minWidth={8}><Text dimColor>SCOPE</Text></Box>
-            <Box minWidth={10}><Text dimColor>SOURCE</Text></Box>
-            <Text dimColor>AGENT</Text>
+      <Box flexDirection="column" flexGrow={1}>
+        {loading && (
+          <Box paddingX={1}>
+            <Text color={theme.muted}>Загрузка...</Text>
           </Box>
-          {/* Separator */}
-          <Box flexDirection="row">
-            <Box minWidth={2}><Text> </Text></Box>
-            <Box minWidth={9}><Text dimColor>{'────────'}</Text></Box>
-            <Box minWidth={24}><Text dimColor>{'──────────────────────'}</Text></Box>
-            <Box minWidth={8}><Text dimColor>{'──────'}</Text></Box>
-            <Box minWidth={8}><Text dimColor>{'───────'}</Text></Box>
-            <Box minWidth={10}><Text dimColor>{'────────'}</Text></Box>
-            <Text dimColor>{'────────'}</Text>
+        )}
+        {error && (
+          <Box paddingX={1}>
+            <Text color={theme.error}>{error}</Text>
           </Box>
-          {/* Rows */}
-          {pageItems.map((entry, localIdx) => {
-            const isSelected = pageStart + localIdx === safeIndex;
-            const displayAgent = isConventions
-              ? (entry.sourceAgent === 'agents-conventions' ? 'all agents' : (entry.sourceAgent || entry.agent))
-              : (entry.agent === 'agents-conventions' ? 'all agents' : entry.agent);
-            return (
-              <Box key={`${entry.type}:${entry.name}:${entry.scope}:${entry.sourceAgent || entry.agent}`} flexDirection="row">
-                <Box minWidth={2}>
-                  <Text color={isSelected ? theme.selected : theme.muted}>
-                    {isSelected ? '▶' : ' '}
+        )}
+        {!loading && filtered.length === 0 && (
+          <Box paddingX={1}>
+            <Text color={theme.muted}>Нет установленных расширений</Text>
+          </Box>
+        )}
+        {!loading && filtered.length > 0 && (
+          <Box flexDirection="column" paddingX={1} marginTop={1}>
+            {/* Table header */}
+            <Box flexDirection="row">
+              <Box minWidth={2}><Text> </Text></Box>
+              <Box minWidth={9}><Text dimColor>TYPE</Text></Box>
+              <Box minWidth={24}><Text dimColor>NAME</Text></Box>
+              <Box minWidth={8}><Text dimColor>VER</Text></Box>
+              <Box minWidth={8}><Text dimColor>SCOPE</Text></Box>
+              <Box minWidth={10}><Text dimColor>SOURCE</Text></Box>
+              <Text dimColor>AGENT</Text>
+            </Box>
+            {/* Separator */}
+            <Box flexDirection="row">
+              <Box minWidth={2}><Text> </Text></Box>
+              <Box minWidth={9}><Text dimColor>{'────────'}</Text></Box>
+              <Box minWidth={24}><Text dimColor>{'──────────────────────'}</Text></Box>
+              <Box minWidth={8}><Text dimColor>{'──────'}</Text></Box>
+              <Box minWidth={8}><Text dimColor>{'───────'}</Text></Box>
+              <Box minWidth={10}><Text dimColor>{'────────'}</Text></Box>
+              <Text dimColor>{'────────'}</Text>
+            </Box>
+            {/* Rows */}
+            {pageItems.map((entry, localIdx) => {
+              const isSelected = pageStart + localIdx === safeIndex;
+              const displayAgent = isConventions
+                ? (entry.sourceAgent === 'agents-conventions' ? 'all agents' : (entry.sourceAgent || entry.agent))
+                : (entry.agent === 'agents-conventions' ? 'all agents' : entry.agent);
+              return (
+                <Box key={`${entry.type}:${entry.name}:${entry.scope}:${entry.sourceAgent || entry.agent}`} flexDirection="row">
+                  <Box minWidth={2}>
+                    <Text color={isSelected ? theme.selected : theme.muted}>
+                      {isSelected ? '▶' : ' '}
+                    </Text>
+                  </Box>
+                  <Box minWidth={9}>
+                    <Text color={theme.accent}>{truncate(entry.type, 8)}</Text>
+                  </Box>
+                  <Box minWidth={24}>
+                    <Text color={isSelected ? theme.selected : theme.secondary} bold={isSelected}>
+                      {truncate(entry.name, 22)}
+                    </Text>
+                  </Box>
+                  <Box minWidth={8}>
+                    <Text color={theme.muted}>{truncate(entry.version || '?', 7)}</Text>
+                  </Box>
+                  <Box minWidth={8}>
+                    <Text color={entry.effectiveScope === 'global' ? theme.success : entry.effectiveScope === 'parent' ? theme.accent : theme.warning}>
+                      {entry.effectiveScope}
+                    </Text>
+                  </Box>
+                  <Box minWidth={10}>
+                    <Text color={entry.source === 'manual' ? theme.muted : theme.accent}>
+                      {entry.source}
+                    </Text>
+                  </Box>
+                  <Text color={displayAgent === 'all agents' ? theme.primary : theme.muted}>
+                    {displayAgent}
                   </Text>
                 </Box>
-                <Box minWidth={9}>
-                  <Text color={theme.accent}>{truncate(entry.type, 8)}</Text>
-                </Box>
-                <Box minWidth={24}>
-                  <Text color={isSelected ? theme.selected : theme.secondary} bold={isSelected}>
-                    {truncate(entry.name, 22)}
-                  </Text>
-                </Box>
-                <Box minWidth={8}>
-                  <Text color={theme.muted}>{truncate(entry.version || '?', 7)}</Text>
-                </Box>
-                <Box minWidth={8}>
-                  <Text color={entry.effectiveScope === 'global' ? theme.success : entry.effectiveScope === 'parent' ? theme.accent : theme.warning}>
-                    {entry.effectiveScope}
-                  </Text>
-                </Box>
-                <Box minWidth={10}>
-                  <Text color={entry.source === 'manual' ? theme.muted : theme.accent}>
-                    {entry.source}
-                  </Text>
-                </Box>
-                <Text color={displayAgent === 'all agents' ? theme.primary : theme.muted}>
-                  {displayAgent}
+              );
+            })}
+            {/* Pagination indicator */}
+            {totalPages > 1 && (
+              <Box marginTop={1}>
+                <Text dimColor>
+                  {`Стр. ${currentPage + 1} из ${totalPages}  (${filtered.length} шт.)`}
                 </Text>
               </Box>
-            );
-          })}
-          {/* Pagination indicator */}
-          {totalPages > 1 && (
-            <Box marginTop={1}>
-              <Text dimColor>
-                {`Стр. ${currentPage + 1} из ${totalPages}  (${filtered.length} шт.)`}
-              </Text>
-            </Box>
-          )}
-        </Box>
-      )}
-
-      {confirmTarget && (
-        <Confirm
-          message={`Удалить ${confirmTarget.name}?`}
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setConfirmTarget(null)}
-        />
-      )}
-
-      {confirmDiskDelete && (
-        <Confirm
-          message={`Удалить файлы ${confirmDiskDelete.name} с диска? (n = только из реестра)`}
-          onConfirm={() => { void handleDiskDeleteChoice(true); }}
-          onCancel={() => { void handleDiskDeleteChoice(false); }}
-        />
-      )}
-
-      <Box marginTop={1}>
-        <HintBar hints={hints} />
+            )}
+          </Box>
+        )}
+        {confirmTarget && (
+          <Confirm
+            message={`Удалить ${confirmTarget.name}?`}
+            onConfirm={handleConfirmDelete}
+            onCancel={() => setConfirmTarget(null)}
+          />
+        )}
+        {confirmDiskDelete && (
+          <Confirm
+            message={`Удалить файлы ${confirmDiskDelete.name} с диска? (n = только из реестра)`}
+            onConfirm={() => { void handleDiskDeleteChoice(true); }}
+            onCancel={() => { void handleDiskDeleteChoice(false); }}
+          />
+        )}
       </Box>
+      <HintBar hints={hints} />
     </Box>
   );
 };

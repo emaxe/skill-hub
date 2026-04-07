@@ -18,12 +18,15 @@ export interface CatalogScreenProps {
   install: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
   installed: InstalledEntry[];
   defaultScope: 'global' | 'project';
+  viewHeight: number;
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE_MIN = 3;
+// Fixed rows: SearchInput(1) + FilterBar(1) + header(1) + separator(1) + margin(1) + HintBar(1) + pagination(2)
+const FIXED_ROWS = 8;
 
 export const CatalogScreen: React.FC<CatalogScreenProps> = ({
-  agent, onOpenDetail, onSearchFocusChange, install, installed, defaultScope,
+  agent, onOpenDetail, onSearchFocusChange, install, installed, defaultScope, viewHeight,
 }) => {
   const catalogAgent = agent === 'agents-conventions' ? 'claude-code' : agent;
   const { results, query, typeFilter, loading, error, setQuery, setTypeFilter } = useCatalog(catalogAgent);
@@ -32,16 +35,18 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [searchFocused, setSearchFocused] = useState(false);
 
+  const pageSize = Math.max(PAGE_SIZE_MIN, viewHeight - FIXED_ROWS);
+
   useEffect(() => {
     if (results.length > 0 && selectedIndex >= results.length) {
       setSelectedIndex(Math.max(0, results.length - 1));
     }
   }, [results.length, selectedIndex]);
 
-  const totalPages = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
-  const currentPage = Math.floor(selectedIndex / PAGE_SIZE);
-  const pageStart = currentPage * PAGE_SIZE;
-  const pageItems = results.slice(pageStart, pageStart + PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(results.length / pageSize));
+  const currentPage = Math.floor(selectedIndex / pageSize);
+  const pageStart = currentPage * pageSize;
+  const pageItems = results.slice(pageStart, pageStart + pageSize);
   const localIndex = selectedIndex - pageStart;
 
   const installedNames = useMemo(() => {
@@ -115,7 +120,6 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
         { key: '↑↓', description: 'навигация' },
         { key: 'Enter', description: 'детали' },
         { key: 'i', description: 'установить' },
-        { key: 't', description: 'фильтр типа' },
       ];
 
   return (

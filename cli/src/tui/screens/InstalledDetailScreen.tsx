@@ -7,6 +7,7 @@ import { Confirm } from '../components/Confirm';
 import { HintBar } from '../components/HintBar';
 import { normalizeInput } from '../keymap';
 import { readExtensionContent } from '../utils/readExtensionContent';
+import { ScrollableBox } from '../components/ScrollableBox';
 import { useStatus } from '../contexts/StatusContext';
 import { theme } from '../theme';
 
@@ -20,6 +21,7 @@ export interface InstalledDetailScreenProps {
   install: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
   defaultScope: 'global' | 'project';
   onOpenContent: (title: string, content: string) => void;
+  viewHeight: number;
 }
 
 type Action = 'delete' | 'move' | 'update' | 'register';
@@ -27,7 +29,7 @@ type Action = 'delete' | 'move' | 'update' | 'register';
 const SEP = <Text color={theme.muted} dimColor>{'─'.repeat(40)}</Text>;
 
 export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
-  entry, agent, onBack, remove, move, update, install, defaultScope, onOpenContent,
+  entry, agent, onBack, remove, move, update, install, defaultScope, onOpenContent, viewHeight,
 }) => {
   const { catalog } = useCatalog();
   const { setStatus } = useStatus();
@@ -135,6 +137,9 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
         .join(', ')
     : null;
 
+  // padding(1+1) + title(1) + author(1) + separator(1) + hintbar(1) = 6 fixed rows
+  const scrollHeight = Math.max(3, viewHeight - 6);
+
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold color={theme.primary}>{entry.name}</Text>
@@ -143,94 +148,96 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
       )}
       {SEP}
 
-      <Box marginTop={1} flexDirection="column">
-        <Row label="Тип:"        value={entry.type} />
-        <Row label="Версия:"     value={entry.version || '?'} />
-        <Row
-          label="Установлен:"
-          value={entry.effectiveScope}
-          valueColor={entry.effectiveScope === 'global' ? theme.success : entry.effectiveScope === 'parent' ? theme.accent : theme.warning}
-        />
-        <Row
-          label="Источник:"
-          value={entry.source}
-          valueColor={entry.source === 'registry' ? theme.accent : theme.muted}
-        />
-        {entry.installed_at && (
-          <Row label="Дата:"     value={new Date(entry.installed_at).toLocaleDateString('ru-RU')} />
-        )}
-        {catalogExt?.scope && (
-          <Row label="Scope:"    value={catalogExt.scope} />
-        )}
-        {platformList && (
-          <Row label="Платформы:" value={platformList} />
-        )}
-        {catalogExt?.tags && catalogExt.tags.length > 0 && (
-          <Row label="Теги:"     value={catalogExt.tags.join(', ')} />
-        )}
-        {catalogExt?.dependencies && catalogExt.dependencies.length > 0 && (
-          <Row label="Зависим.:" value={catalogExt.dependencies.join(', ')} />
-        )}
-        <Row label="Путь:"       value={entry.path} />
-      </Box>
-
-      {catalogExt?.description && (
-        <Box marginTop={1}>
-          <Text color={theme.muted}>{catalogExt.description}</Text>
+      <ScrollableBox height={scrollHeight} isActive={!showConfirm && !showDiskConfirm} activeIndex={actionIndex}>
+        <Box marginTop={1} flexDirection="column">
+          <Row label="Тип:"        value={entry.type} />
+          <Row label="Версия:"     value={entry.version || '?'} />
+          <Row
+            label="Установлен:"
+            value={entry.effectiveScope}
+            valueColor={entry.effectiveScope === 'global' ? theme.success : entry.effectiveScope === 'parent' ? theme.accent : theme.warning}
+          />
+          <Row
+            label="Источник:"
+            value={entry.source}
+            valueColor={entry.source === 'registry' ? theme.accent : theme.muted}
+          />
+          {entry.installed_at && (
+            <Row label="Дата:"     value={new Date(entry.installed_at).toLocaleDateString('ru-RU')} />
+          )}
+          {catalogExt?.scope && (
+            <Row label="Scope:"    value={catalogExt.scope} />
+          )}
+          {platformList && (
+            <Row label="Платформы:" value={platformList} />
+          )}
+          {catalogExt?.tags && catalogExt.tags.length > 0 && (
+            <Row label="Теги:"     value={catalogExt.tags.join(', ')} />
+          )}
+          {catalogExt?.dependencies && catalogExt.dependencies.length > 0 && (
+            <Row label="Зависим.:" value={catalogExt.dependencies.join(', ')} />
+          )}
+          <Row label="Путь:"       value={entry.path} />
         </Box>
-      )}
 
-      {SEP}
-
-      <Box marginTop={1} flexDirection="column">
-        <Text color={theme.muted} dimColor>Действия:</Text>
-        {isParent ? (
-          <Box>
-            <Text color={theme.accent}>  Управляется из родительского проекта</Text>
-          </Box>
-        ) : (
-          <Box flexDirection="column">
-            {actions.map((action, i) => {
-              const isSelected = i === actionIndex;
-              const isRegister = action.id === 'register';
-              return (
-                <Box key={action.id} flexDirection="row">
-                  <Text color={isSelected ? theme.selected : theme.muted}>
-                    {isSelected ? '▶ ' : '  '}
-                  </Text>
-                  <Text
-                    color={isSelected ? theme.selected : (isRegister ? theme.success : theme.secondary)}
-                    bold={isSelected}
-                  >
-                    {action.label}
-                  </Text>
-                </Box>
-              );
-            })}
+        {catalogExt?.description && (
+          <Box marginTop={1}>
+            <Text color={theme.muted}>{catalogExt.description}</Text>
           </Box>
         )}
-      </Box>
-      {SEP}
 
-      {showConfirm && (
-        <Box marginTop={1}>
-          <Confirm
-            message={`Удалить ${entry.name}?`}
-            onConfirm={handleConfirmDelete}
-            onCancel={() => setShowConfirm(false)}
-          />
-        </Box>
-      )}
+        {SEP}
 
-      {showDiskConfirm && (
-        <Box marginTop={1}>
-          <Confirm
-            message={`Удалить файлы ${entry.name} с диска? (n = только из реестра)`}
-            onConfirm={() => handleDiskDeleteChoice(true)}
-            onCancel={() => handleDiskDeleteChoice(false)}
-          />
+        <Box marginTop={1} flexDirection="column">
+          <Text color={theme.muted} dimColor>Действия:</Text>
+          {isParent ? (
+            <Box>
+              <Text color={theme.accent}>  Управляется из родительского проекта</Text>
+            </Box>
+          ) : (
+            <Box flexDirection="column">
+              {actions.map((action, i) => {
+                const isSelected = i === actionIndex;
+                const isRegister = action.id === 'register';
+                return (
+                  <Box key={action.id} flexDirection="row">
+                    <Text color={isSelected ? theme.selected : theme.muted}>
+                      {isSelected ? '▶ ' : '  '}
+                    </Text>
+                    <Text
+                      color={isSelected ? theme.selected : (isRegister ? theme.success : theme.secondary)}
+                      bold={isSelected}
+                    >
+                      {action.label}
+                    </Text>
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
         </Box>
-      )}
+        {SEP}
+
+        {showConfirm && (
+          <Box marginTop={1}>
+            <Confirm
+              message={`Удалить ${entry.name}?`}
+              onConfirm={handleConfirmDelete}
+              onCancel={() => setShowConfirm(false)}
+            />
+          </Box>
+        )}
+
+        {showDiskConfirm && (
+          <Box marginTop={1}>
+            <Confirm
+              message={`Удалить файлы ${entry.name} с диска? (n = только из реестра)`}
+              onConfirm={() => handleDiskDeleteChoice(true)}
+              onCancel={() => handleDiskDeleteChoice(false)}
+            />
+          </Box>
+        )}
+      </ScrollableBox>
 
       <Box marginTop={1}>
         <HintBar hints={[

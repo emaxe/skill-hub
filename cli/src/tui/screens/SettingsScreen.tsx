@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { AgentName } from '../../catalog';
-import { SkillHubConfig, AiAgentsConfig, ConfigSource } from '../../config';
+import { SkillHubConfig, AiAgentsConfig, ConfigSource, pushHistory } from '../../config';
 import { useStatus } from '../contexts/StatusContext';
 import { getCachePath, isCloned, resetCache, updateCache } from '../../git';
 import { HintBar } from '../components/HintBar';
@@ -10,8 +10,10 @@ import { theme } from '../theme';
 import { useBaseSetup, InstallState } from '../hooks/useBaseSetup';
 import { InitConventionsModal } from '../components/InitConventionsModal';
 import { ExitConventionsModal } from '../components/ExitConventionsModal';
+import { TextEditModal } from '../components/TextEditModal';
 import { getConventionsStatus, ConventionsStatus, disableConventions } from '../../conventions';
 import { GeneralTab, AiAgentsTab, SetupTab } from './settings';
+import { ScrollableBox } from '../components/ScrollableBox';
 
 const AGENTS: AgentName[] = ['claude-code', 'cursor', 'copilot', 'agents-conventions'];
 const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
@@ -46,9 +48,10 @@ export interface SettingsScreenProps {
   onSaveAsGlobal: () => boolean;
   onResetToGlobal: () => SkillHubConfig | null;
   onCreateProjectConfig: () => boolean;
+  viewHeight: number;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateConfig, onEditingChange, configSource, hasProjectRoot, onSaveAsGlobal, onResetToGlobal, onCreateProjectConfig }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateConfig, onEditingChange, configSource, hasProjectRoot, onSaveAsGlobal, onResetToGlobal, onCreateProjectConfig, viewHeight }) => {
   const { setStatus } = useStatus();
 
   const [localAgent, setLocalAgent] = useState<AgentName>(config.agent);
@@ -60,6 +63,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   const [localAiAgents, setLocalAiAgents] = useState<AiAgentsConfig>(config.aiAgents);
   const [activeField, setActiveField] = useState<Field>('agent');
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>('general');
+  const [editModal, setEditModal] = useState<'registryUrl' | 'aiProxy' | null>(null);
 
   const cachePath = getCachePath();
   const cacheInstalled = isCloned(cachePath);
@@ -110,11 +114,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   }, [fields, activeField]);
 
   useEffect(() => {
-    onEditingChange?.(activeField === 'registryUrl' || activeField === 'aiProxy');
-  }, [activeField, onEditingChange]);
+    onEditingChange?.(editModal !== null);
+  }, [editModal, onEditingChange]);
 
   useInput((input, key) => {
-    if (showModal) return;
+    if (showModal || editModal) return;
 
     if (key.tab) {
       const idx = SETTINGS_SUBTABS.indexOf(activeSubTab);
@@ -135,25 +139,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         return fields[next];
       });
       return;
-    }
-
-    if (activeField === 'registryUrl' || activeField === 'aiProxy') {
-      if (key.backspace || key.delete) {
-        if (activeField === 'aiProxy') {
-          setLocalAiAgents(prev => ({ ...prev, proxy: prev.proxy.slice(0, -1) }));
-        } else {
-          setLocalRegistryUrl(prev => prev.slice(0, -1));
-        }
-        return;
-      }
-      if (input && !key.return && !key.escape && !key.leftArrow && !key.rightArrow) {
-        if (activeField === 'aiProxy') {
-          setLocalAiAgents(prev => ({ ...prev, proxy: prev.proxy + input }));
-        } else {
-          setLocalRegistryUrl(prev => prev + input);
-        }
-        return;
-      }
     }
 
     if (key.leftArrow || key.rightArrow) {
@@ -198,6 +183,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     }
 
     if (key.return) {
+      if (activeField === 'registryUrl') {
+        setEditModal('registryUrl');
+        return;
+      }
+      if (activeField === 'aiProxy') {
+        setEditModal('aiProxy');
+        return;
+      }
       if (activeField === 'createProjectConfig') {
         if (onCreateProjectConfig()) {
           setStatus('Проектный конфиг создан (.skill-hub.json)', 'success');
@@ -349,50 +342,96 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     );
   }
 
-  return (
-    <Box flexDirection="column" padding={2}>
-      <SubTabBar tabs={SUBTAB_ITEMS} activeTab={activeSubTab} />
-
-      {activeSubTab === 'general' && (
-        <>
-          <GeneralTab
-            localAgent={localAgent}
-            localScope={localScope}
-            localRegistryUrl={localRegistryUrl}
-            cachePath={cachePath}
-            cacheInstalled={cacheInstalled}
-            cacheUpdateState={cacheUpdateState}
-            activeField={activeField}
-            configSource={configSource}
-            hasProjectRoot={hasProjectRoot}
-          />
-          <Box flexDirection="column" borderStyle="round" borderColor={theme.border} paddingX={1} marginTop={1}>
-            <SetupTab
-              localAgent={localAgent}
-              setup={setup}
-              conventionsStatus={conventionsStatus}
-              isConventionsInitialized={isConventionsInitialized}
-              isConventionsHealthy={isConventionsHealthy}
-              activeField={activeField}
-            />
-          </Box>
-        </>
-      )}
-      {activeSubTab === 'aiAgents' && (
-        <AiAgentsTab
-          localAiAgents={localAiAgents}
-          activeField={activeField}
+  if (editModal) {
+    const isProxy = editModal === 'aiProxy';
+    const currentValue = isProxy ? localAiAgents.proxy : localRegistryUrl;
+    const historyList = isProxy
+      ? (config.history?.proxy ?? [])
+      : (config.history?.registryUrl ?? []);
+    return (
+      <Box flexDirection="column" padding={2}>
+        <TextEditModal
+          title={isProxy ? 'Редактирование прокси' : 'Редактирование Registry URL'}
+          value={currentValue}
+          history={historyList}
+          onConfirm={(newValue) => {
+            if (isProxy) {
+              setLocalAiAgents(prev => ({ ...prev, proxy: newValue }));
+              const newHistory = {
+                ...config.history,
+                proxy: pushHistory(config.history?.proxy, currentValue),
+              };
+              updateConfig({ ...config, agent: localAgent, defaultScope: localScope, registryUrl: localRegistryUrl, aiAgents: { ...localAiAgents, proxy: newValue }, history: newHistory });
+              setStatus('Прокси обновлён', 'success');
+            } else {
+              setLocalRegistryUrl(newValue);
+              const urlChanged = newValue !== config.registryUrl;
+              const newHistory = {
+                ...config.history,
+                registryUrl: pushHistory(config.history?.registryUrl, currentValue),
+              };
+              updateConfig({ ...config, agent: localAgent, defaultScope: localScope, registryUrl: newValue, aiAgents: localAiAgents, history: newHistory });
+              if (urlChanged) {
+                resetCache();
+                setStatus('Registry URL обновлён. Кэш сброшен.', 'success');
+              } else {
+                setStatus('Registry URL сохранён', 'success');
+              }
+            }
+            setEditModal(null);
+          }}
+          onCancel={() => setEditModal(null)}
         />
-      )}
-
-      <Box marginTop={1}>
-        <HintBar hints={[
-          { key: 'Tab', description: 'подвкладка' },
-          { key: '↑↓', description: 'выбор поля' },
-          { key: '←→', description: 'изменить значение' },
-          { key: 'Enter', description: isActionField ? 'установить' : 'сохранить' },
-        ]} />
       </Box>
+    );
+  }
+
+  // padding(2+2) + SubTabBar(2) + HintBar(1) = 7 fixed rows
+  const scrollHeight = Math.max(3, viewHeight - 7);
+  const activeFieldIndex = fields.indexOf(activeField);
+
+  return (
+    <Box flexDirection="column" flexGrow={1} padding={2}>
+      <SubTabBar tabs={SUBTAB_ITEMS} activeTab={activeSubTab} />
+      <ScrollableBox height={scrollHeight} isActive={!showModal && !editModal} activeIndex={activeFieldIndex >= 0 ? activeFieldIndex : undefined}>
+        {activeSubTab === 'general' && (
+          <>
+            <GeneralTab
+              localAgent={localAgent}
+              localScope={localScope}
+              localRegistryUrl={localRegistryUrl}
+              cachePath={cachePath}
+              cacheInstalled={cacheInstalled}
+              cacheUpdateState={cacheUpdateState}
+              activeField={activeField}
+              configSource={configSource}
+              hasProjectRoot={hasProjectRoot}
+            />
+            <Box flexDirection="column" borderStyle="round" borderColor={theme.border} paddingX={1} marginTop={1}>
+              <SetupTab
+                localAgent={localAgent}
+                setup={setup}
+                conventionsStatus={conventionsStatus}
+                isConventionsInitialized={isConventionsInitialized}
+                isConventionsHealthy={isConventionsHealthy}
+                activeField={activeField}
+              />
+            </Box>
+          </>
+        )}
+        {activeSubTab === 'aiAgents' && (
+          <AiAgentsTab
+            localAiAgents={localAiAgents}
+            activeField={activeField}
+          />
+        )}
+      </ScrollableBox>
+      <HintBar hints={[
+        { key: 'Tab', description: 'подвкладка' },
+        { key: '↑↓', description: 'выбор поля' },
+        { key: '←→', description: 'изменить значение' },
+        { key: 'Enter', description: isActionField ? 'установить' : (activeField === 'registryUrl' || activeField === 'aiProxy') ? 'редактировать' : 'сохранить' },
+      ]} />
     </Box>
   );
 };

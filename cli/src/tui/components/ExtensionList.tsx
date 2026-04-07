@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useStdout } from 'ink';
 import { Extension } from '../../catalog';
 import { theme } from '../theme';
 
@@ -22,6 +22,11 @@ function truncate(s: string, max: number): string {
 }
 
 export const ExtensionList: React.FC<Props> = ({ extensions, selectedIndex, installedNames, installedScopes }) => {
+  const { stdout } = useStdout();
+  const termWidth = stdout?.columns ?? 80;
+  // Fixed columns: selector(2) + type(7) + name(24) + ver(10) + scope(9) = 52
+  const descWidth = Math.max(10, termWidth - 52 - 2); // 2 for paddingX
+
   if (extensions.length === 0) {
     return <Box paddingX={2}><Text color={theme.muted}>Ничего не найдено</Text></Box>;
   }
@@ -81,7 +86,7 @@ export const ExtensionList: React.FC<Props> = ({ extensions, selectedIndex, inst
               )}
             </Box>
             <Text color={theme.muted} dimColor>
-              {truncate(ext.description, 42)}
+              {truncate(ext.description, descWidth)}
             </Text>
           </Box>
         );

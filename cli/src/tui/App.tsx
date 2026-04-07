@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Box, useInput, useApp, useStdout } from 'ink';
+import { Box, Text, useInput, useApp } from 'ink';
 import { normalizeInput, isCtrl } from './keymap';
 import { Header, TabName } from './components/Header';
 import { HintBar, Hint } from './components/HintBar';
@@ -10,6 +10,7 @@ import { useNavigation } from './hooks/useNavigation';
 import { useRegistry } from './hooks/useRegistry';
 import { useSettings } from './hooks/useSettings';
 import { useBaseSetup } from './hooks/useBaseSetup';
+import { useTerminalSize } from './hooks/useTerminalSize';
 import { StatusContext } from './contexts/StatusContext';
 import { CatalogScreen } from './screens/CatalogScreen';
 import { InstalledScreen } from './screens/InstalledScreen';
@@ -164,19 +165,21 @@ export const App: React.FC = () => {
 
   const screen = nav.currentScreen;
 
+  const { rows: termHeight, columns: termWidth } = useTerminalSize();
+  const contentAreaHeight = termHeight - 8; // Header(1+border) + Separator(1) + InfoBar(1) + Separator(1) + StatusBar(1) + HintBar(1)
+
   const globalCount = registry.installed.filter(e => e.effectiveScope === 'global').length;
   const projectCount = registry.installed.filter(e => e.effectiveScope === 'project').length;
   const parentCount = registry.installed.filter(e => e.effectiveScope === 'parent').length;
 
   const renderScreen = () => {
     if (screen === 'contentView' && contentData) {
-      const contentHeight = termHeight - 8; // Header(3) + InfoBar(3) + Separator(2)
       return (
         <ContentScreen
           title={contentData.title}
           content={contentData.content}
           onBack={handleBack}
-          viewHeight={contentHeight}
+          viewHeight={contentAreaHeight}
         />
       );
     }
@@ -191,6 +194,7 @@ export const App: React.FC = () => {
           isInstalled={registry.isInstalled}
           defaultScope={config.defaultScope}
           onOpenContent={handleOpenContent}
+          viewHeight={contentAreaHeight}
         />
       );
     }
@@ -217,6 +221,7 @@ export const App: React.FC = () => {
           install={registry.install}
           defaultScope={config.defaultScope}
           onOpenContent={handleOpenContent}
+          viewHeight={contentAreaHeight}
         />
       );
     }
@@ -233,6 +238,7 @@ export const App: React.FC = () => {
           remove={registry.remove}
           update={registry.update}
           updateSelf={setup.doUpdateSelf}
+          viewHeight={contentAreaHeight}
         />
       );
     }
@@ -247,6 +253,7 @@ export const App: React.FC = () => {
           onSaveAsGlobal={doSaveAsGlobal}
           onResetToGlobal={doResetToGlobal}
           onCreateProjectConfig={doCreateProjectConfig}
+          viewHeight={contentAreaHeight}
         />
       );
     }
@@ -258,12 +265,10 @@ export const App: React.FC = () => {
         install={registry.install}
         installed={registry.installed}
         defaultScope={config.defaultScope}
+        viewHeight={contentAreaHeight}
       />
     );
   };
-
-  const { stdout } = useStdout();
-  const termHeight = stdout?.rows ?? 24;
 
   const isTopLevel = screen === 'catalog' || screen === 'installed' || screen === 'settings';
   const isFullscreen = screen === 'contentView';
@@ -275,11 +280,24 @@ export const App: React.FC = () => {
         : GLOBAL_HINTS)
     : [{ key: 'Esc', description: 'назад' }, { key: 'Ctrl+Q', description: 'выход' }];
 
+  const MIN_COLS = 60;
+  const MIN_ROWS = 10;
+
+  if (termWidth < MIN_COLS || termHeight < MIN_ROWS) {
+    return (
+      <Box flexDirection="column" justifyContent="center" alignItems="center" height={termHeight}>
+        <Text color="yellow" bold>⚠ Терминал слишком мал</Text>
+        <Text color="gray">Минимум: {MIN_COLS}×{MIN_ROWS} | Текущий: {termWidth}×{termHeight}</Text>
+        <Text color="gray" dimColor>Увеличьте окно терминала</Text>
+      </Box>
+    );
+  }
+
   return (
     <StatusContext.Provider value={{ message: statusMessage, status: statusType, setStatus, clearStatus }}>
       <Box flexDirection="column" height="100%">
         <Header activeTab={nav.activeTab} />
-        <Box height={termHeight - 8} flexDirection="column">
+        <Box height={contentAreaHeight} flexDirection="column">
           {renderScreen()}
           {showConventionsWarning && (
             <Box position="absolute" marginTop={2} marginLeft={2}>
