@@ -2,10 +2,10 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import simpleGit from 'simple-git';
-import { loadConfig } from './config';
+import { resolveConfig } from './config';
 
 export function getRegistryUrl(): string {
-  return loadConfig().registryUrl;
+  return resolveConfig().config.registryUrl;
 }
 
 export function getCachePath(): string {

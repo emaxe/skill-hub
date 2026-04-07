@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { HintBar } from '../components/HintBar';
 import { theme } from '../theme';
+import { normalizeInput } from '../keymap';
 
 export interface ContentScreenProps {
   title: string;
@@ -16,7 +17,8 @@ export const ContentScreen: React.FC<ContentScreenProps> = ({ title, content, on
 
   const maxOffset = Math.max(0, lines.length - viewHeight);
 
-  useInput((input, key) => {
+  useInput((rawInput, key) => {
+    const input = normalizeInput(rawInput);
     if (key.escape) { onBack(); return; }
     if (key.upArrow || input === 'k') { setOffset(o => Math.max(0, o - 1)); return; }
     if (key.downArrow || input === 'j') { setOffset(o => Math.min(maxOffset, o + 1)); return; }

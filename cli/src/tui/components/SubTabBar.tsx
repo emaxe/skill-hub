@@ -13,17 +13,22 @@ interface Props {
 }
 
 export const SubTabBar: React.FC<Props> = ({ tabs, activeTab }) => (
-  <Box paddingX={2} marginBottom={1}>
-    {tabs.map((tab, i) => (
-      <React.Fragment key={tab.id}>
-        {i > 0 && <Text color={theme.muted}>  │  </Text>}
-        <Text
-          color={activeTab === tab.id ? theme.selected : theme.muted}
-          bold={activeTab === tab.id}
-        >
-          [{tab.label}]
-        </Text>
-      </React.Fragment>
-    ))}
+  <Box flexDirection="column" marginBottom={1}>
+    <Box paddingX={2}>
+      {tabs.map((tab, i) => (
+        <React.Fragment key={tab.id}>
+          {i > 0 && <Text color={theme.muted}>  │  </Text>}
+          <Text
+            color={activeTab === tab.id ? theme.selected : theme.muted}
+            bold={activeTab === tab.id}
+          >
+            [{tab.label}]
+          </Text>
+        </React.Fragment>
+      ))}
+    </Box>
+    <Box paddingX={1}>
+      <Text color={theme.border}>{'─'.repeat(60)}</Text>
+    </Box>
   </Box>
 );

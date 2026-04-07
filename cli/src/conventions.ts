@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { loadConfig, saveConfig } from './config';
+import { resolveConfig, saveResolvedConfig } from './config';
 import { createRegistry } from './registry';
 import { getAdapter } from './adapters/get-adapter';
 import { AgentName, Extension } from './catalog';
@@ -39,11 +39,11 @@ export interface ConventionsStatus {
 }
 
 export function isConventionsActive(): boolean {
-  return loadConfig().agent === 'agents-conventions';
+  return resolveConfig().config.agent === 'agents-conventions';
 }
 
 export function getConventionsStatus(projectDir: string = process.cwd()): ConventionsStatus {
-  const config = loadConfig();
+  const { config } = resolveConfig();
   const active = config.agent === 'agents-conventions';
   const agentsDir = path.join(projectDir, '.agents');
   const hasAgentsDir = fs.existsSync(agentsDir);
@@ -87,7 +87,7 @@ export function getConventionsStatus(projectDir: string = process.cwd()): Conven
 }
 
 export async function enableConventions(projectDir: string = process.cwd()): Promise<void> {
-  const config = loadConfig();
+  const { config, source, projectRoot } = resolveConfig();
 
   // При повторном вызове (переинициализация) используем claude-code как previousAgent
   const previousAgent = config.agent === 'agents-conventions' ? 'claude-code' : config.agent;
@@ -202,7 +202,7 @@ export async function enableConventions(projectDir: string = process.cwd()): Pro
 
   // 5. Обновление конфига
   config.agent = 'agents-conventions';
-  saveConfig(config);
+  saveResolvedConfig(config, source, projectRoot);
 
   // 6. Установка скиллов agents-conventions и init-agents из бандла CLI
   const bundleDir = path.join(__dirname, '..', 'base-skills', 'agents-conventions');
@@ -247,7 +247,7 @@ export async function disableConventions(
   projectDir: string = process.cwd(),
   confirmDelete?: () => Promise<boolean>,
 ): Promise<void> {
-  const config = loadConfig();
+  const { config, source, projectRoot } = resolveConfig();
 
   if (config.agent !== 'agents-conventions') {
     throw new Error('Режим agents-conventions не активен');
@@ -338,7 +338,7 @@ export async function disableConventions(
 
   // 5. Обновление конфига
   config.agent = targetAgent;
-  saveConfig(config);
+  saveResolvedConfig(config, source, projectRoot);
 
   // 6. Предложить удаление .agents/ и AGENTS.md
   if (confirmDelete) {

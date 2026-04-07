@@ -19,6 +19,7 @@ import { MoveScreen } from './screens/MoveScreen';
 import { InstalledDetailScreen } from './screens/InstalledDetailScreen';
 import { ContentScreen } from './screens/ContentScreen';
 import { ConventionsWarningDialog } from './components/ConventionsWarningDialog';
+import { ProjectConfigDialog } from './components/ProjectConfigDialog';
 import { Extension } from '../catalog';
 import { InstalledEntry } from './hooks/useRegistry';
 import { getConventionsStatus } from '../conventions';
@@ -34,7 +35,7 @@ const GLOBAL_HINTS: Hint[] = [
 export const App: React.FC = () => {
   const { exit } = useApp();
   const nav = useNavigation();
-  const { config, updateConfig } = useSettings();
+  const { config, updateConfig, source, hasProjectRoot, doSaveAsGlobal, doResetToGlobal, doCreateProjectConfig } = useSettings();
   const agent = config.agent;
   const registry = useRegistry(agent);
   const setup = useBaseSetup(agent);
@@ -66,10 +67,13 @@ export const App: React.FC = () => {
   const [settingsEditing, setSettingsEditing] = useState(false);
   const [contentData, setContentData] = useState<{ title: string; content: string } | null>(null);
   const [showConventionsWarning, setShowConventionsWarning] = useState(false);
+  const [showProjectConfigDialog, setShowProjectConfigDialog] = useState(false);
 
   useEffect(() => {
     if (config.agent === 'agents-conventions' && !getConventionsStatus().hasAgentsDir) {
       setShowConventionsWarning(true);
+    } else if (source === 'global' && hasProjectRoot) {
+      setShowProjectConfigDialog(true);
     }
   }, []);
 
@@ -103,6 +107,16 @@ export const App: React.FC = () => {
     setShowConventionsWarning(false);
   }, []);
 
+  const handleCreateProjectConfig = useCallback(() => {
+    doCreateProjectConfig();
+    setShowProjectConfigDialog(false);
+    setStatus('Проектный конфиг создан (.skill-hub.json)', 'success');
+  }, [doCreateProjectConfig, setStatus]);
+
+  const handleDismissProjectConfigDialog = useCallback(() => {
+    setShowProjectConfigDialog(false);
+  }, []);
+
   const handleBack = useCallback(() => {
     const leaving = nav.currentScreen;
     nav.popScreen();
@@ -119,7 +133,7 @@ export const App: React.FC = () => {
     const screen = nav.currentScreen;
     const isTopLevel = screen === 'catalog' || screen === 'installed' || screen === 'settings';
 
-    if (showConventionsWarning) return;
+    if (showConventionsWarning || showProjectConfigDialog) return;
     if (searchFocused || settingsEditing) return;
 
     if (isCtrl(key) && normalizeInput(input) === 'q') {
@@ -212,6 +226,7 @@ export const App: React.FC = () => {
           agent={agent}
           onMoveExt={handleOpenMove}
           onOpenDetail={handleOpenInstalledDetail}
+          onSearchFocusChange={setSearchFocused}
           installed={registry.installed}
           loading={registry.loading}
           error={registry.error}
@@ -227,6 +242,11 @@ export const App: React.FC = () => {
           config={config}
           updateConfig={updateConfig}
           onEditingChange={setSettingsEditing}
+          configSource={source}
+          hasProjectRoot={hasProjectRoot}
+          onSaveAsGlobal={doSaveAsGlobal}
+          onResetToGlobal={doResetToGlobal}
+          onCreateProjectConfig={doCreateProjectConfig}
         />
       );
     }
@@ -266,6 +286,14 @@ export const App: React.FC = () => {
               <ConventionsWarningDialog
                 onGoToSettings={handleGoToSettings}
                 onDismiss={handleDismissWarning}
+              />
+            </Box>
+          )}
+          {showProjectConfigDialog && (
+            <Box position="absolute" marginTop={2} marginLeft={2}>
+              <ProjectConfigDialog
+                onCreate={handleCreateProjectConfig}
+                onDismiss={handleDismissProjectConfigDialog}
               />
             </Box>
           )}

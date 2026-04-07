@@ -13,6 +13,8 @@ const REGISTRY_DIR = path.join(os.homedir(), '.skill-hub');
 export interface InstalledEntry extends InstallRecord {
   source: 'registry' | 'manual';
   effectiveScope: EffectiveScope;
+  /** ИИ-агент-владелец (актуально для agents-conventions, где глобальные расширения берутся от разных агентов) */
+  sourceAgent?: AgentName;
 }
 
 export interface UseRegistryState {
@@ -46,38 +48,87 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
   useEffect(() => {
     const cwd = process.cwd();
     const homeDir = os.homedir();
-    const records = registryRef.current.list(agent);
+    const isConventions = agent === 'agents-conventions';
 
-    // Фильтруем записи реестра по текущей директории
-    const filtered = filterRecordsByDirectory(records, cwd, homeDir);
-    const entries: InstalledEntry[] = filtered.map(({ record, effectiveScope }) => ({
-      ...record,
-      source: 'registry' as const,
-      effectiveScope,
-    }));
+    const entries: InstalledEntry[] = [];
 
-    // Добавляем manual installs из filesystem scan для текущего агента
-    // (scanInstalled сканирует только cwd — effectiveScope = scope)
-    try {
-      const adapter = getAdapter(agent);
-      const scanned: ScanResult[] = adapter.scanInstalled();
-      for (const scan of scanned) {
-        const alreadyInRegistry = entries.some(e => e.name === scan.name && e.type === scan.type);
-        if (!alreadyInRegistry) {
-          entries.push({
-            type: scan.type,
-            name: scan.name,
-            version: '?',
-            agent,
-            scope: scan.scope,
-            path: scan.path,
-            source: 'manual',
-            effectiveScope: scan.scope,
-          });
-        }
+    if (isConventions) {
+      // --- agents-conventions: проектные из .agents/ + глобальные от всех ИИ-агентов ---
+
+      // 1) Проектные расширения из .agents/ (через AgentsConventionsAdapter)
+      const acRecords = registryRef.current.list(agent);
+      const acFiltered = filterRecordsByDirectory(acRecords, cwd, homeDir);
+      for (const { record, effectiveScope } of acFiltered) {
+        entries.push({ ...record, source: 'registry', effectiveScope, sourceAgent: agent });
       }
-    } catch {
-      // scan failed — ignore
+
+      try {
+        const acAdapter = getAdapter(agent);
+        const acScanned = acAdapter.scanInstalled();
+        for (const scan of acScanned) {
+          const alreadyInRegistry = entries.some(e => e.name === scan.name && e.type === scan.type && e.effectiveScope === scan.scope);
+          if (!alreadyInRegistry) {
+            entries.push({
+              type: scan.type, name: scan.name, version: '?',
+              agent, scope: scan.scope, path: scan.path,
+              source: 'manual', effectiveScope: scan.scope, sourceAgent: agent,
+            });
+          }
+        }
+      } catch { /* ignore */ }
+
+      // 2) Глобальные расширения от всех ИИ-агентов
+      const realAgents: AgentName[] = ['claude-code', 'cursor', 'copilot'];
+      for (const realAgent of realAgents) {
+        // Из реестра — только global
+        const agentRecords = registryRef.current.list(realAgent);
+        for (const record of agentRecords) {
+          if (record.scope !== 'global') continue;
+          const already = entries.some(e => e.name === record.name && e.type === record.type && e.effectiveScope === 'global' && e.sourceAgent === realAgent);
+          if (!already) {
+            entries.push({ ...record, source: 'registry', effectiveScope: 'global', sourceAgent: realAgent });
+          }
+        }
+
+        // Filesystem scan — только global
+        try {
+          const realAdapter = getAdapter(realAgent);
+          const scanned = realAdapter.scanInstalled();
+          for (const scan of scanned) {
+            if (scan.scope !== 'global') continue;
+            const already = entries.some(e => e.name === scan.name && e.type === scan.type && e.effectiveScope === 'global' && e.sourceAgent === realAgent);
+            if (!already) {
+              entries.push({
+                type: scan.type, name: scan.name, version: '?',
+                agent: realAgent, scope: 'global', path: scan.path,
+                source: 'manual', effectiveScope: 'global', sourceAgent: realAgent,
+              });
+            }
+          }
+        } catch { /* ignore */ }
+      }
+    } else {
+      // --- Стандартный режим (claude-code, cursor, copilot) ---
+      const records = registryRef.current.list(agent);
+      const filtered = filterRecordsByDirectory(records, cwd, homeDir);
+      for (const { record, effectiveScope } of filtered) {
+        entries.push({ ...record, source: 'registry', effectiveScope });
+      }
+
+      try {
+        const adapter = getAdapter(agent);
+        const scanned: ScanResult[] = adapter.scanInstalled();
+        for (const scan of scanned) {
+          const alreadyInRegistry = entries.some(e => e.name === scan.name && e.type === scan.type);
+          if (!alreadyInRegistry) {
+            entries.push({
+              type: scan.type, name: scan.name, version: '?',
+              agent, scope: scan.scope, path: scan.path,
+              source: 'manual', effectiveScope: scan.scope,
+            });
+          }
+        }
+      } catch { /* ignore */ }
     }
 
     setInstalled(entries);

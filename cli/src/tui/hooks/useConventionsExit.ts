@@ -22,9 +22,9 @@ const AGENT_BINARIES: Record<string, string> = {
 };
 
 const AGENT_ARGS: Record<string, (targetAgent: AgentName) => string[]> = {
-  'claude-code': (target) => ['--dangerously-skip-permissions', '-p', `run exit-agents skill. Target agent: ${target}`, '--allowedTools', 'shell(*), write'],
-  'cursor': (target) => ['-p', '--force', `run exit-agents skill. Target agent: ${target}`],
-  'copilot': (target) => ['-p', `run exit-agents skill. Target agent: ${target}`, '--no-ask-user', "--allow-tool=shell(*), write"],
+  'claude-code': (target) => ['--dangerously-skip-permissions', '-p', `Обязательно: прочитай и полностью выполни скилл exit-agents из файла .claude/skills/exit-agents/SKILL.md (следуй алгоритму по шагам, идемпотентно). Target agent: ${target}. Не выдавай только план — внеси все нужные изменения в файловую систему. После выполнения кратко перечисли, что создано/изменено.`, '--model', 'sonnet'],
+  'cursor': (target) => ['-p', `Обязательно: прочитай и полностью выполни скилл exit-agents из файла .claude/skills/exit-agents/SKILL.md (следуй алгоритму по шагам, идемпотентно). Target agent: ${target}. Не выдавай только план — внеси все нужные изменения в файловую систему. После выполнения кратко перечисли, что создано/изменено.`, '--model', 'composer-2', '--force', '--output-format', 'stream-json'],
+  'copilot': (target) => ['-p', `Обязательно: прочитай и полностью выполни скилл exit-agents из файла .claude/skills/exit-agents/SKILL.md (следуй алгоритму по шагам, идемпотентно). Target agent: ${target}. Не выдавай только план — внеси все нужные изменения в файловую систему. После выполнения кратко перечисли, что создано/изменено.`, '--model', 'claude-sonnet-4.6', '--allow-all', '--no-ask-user'],
 };
 
 const MAX_OUTPUT_LINES = 20;

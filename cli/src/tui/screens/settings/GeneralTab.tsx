@@ -1,10 +1,11 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { AgentName } from '../../../catalog';
+import { ConfigSource } from '../../../config';
 import { InstallState } from '../../hooks/useBaseSetup';
 import { theme } from '../../theme';
 
-type Field = 'agent' | 'scope' | 'registryUrl' | 'updateCache';
+type Field = 'agent' | 'scope' | 'registryUrl' | 'updateCache' | 'saveAsGlobal' | 'resetToGlobal' | 'createProjectConfig';
 
 interface Props {
   localAgent: AgentName;
@@ -14,6 +15,8 @@ interface Props {
   cacheInstalled: boolean;
   cacheUpdateState: InstallState;
   activeField: string;
+  configSource: ConfigSource;
+  hasProjectRoot: boolean;
 }
 
 export const GeneralTab: React.FC<Props> = ({
@@ -24,8 +27,18 @@ export const GeneralTab: React.FC<Props> = ({
   cacheInstalled,
   cacheUpdateState,
   activeField,
+  configSource,
+  hasProjectRoot,
 }) => (
   <Box flexDirection="column">
+    {/* Источник настроек */}
+    <Box marginBottom={1}>
+      <Text dimColor>{'  '}{'Источник:     '}</Text>
+      <Text color={configSource === 'project' ? theme.success : theme.warning}>
+        {configSource === 'project' ? '📁 проектные (.skill-hub.json)' : '🌐 глобальные (~/.skill-hub/config.json)'}
+      </Text>
+    </Box>
+
     {/* Агент */}
     <Box marginBottom={1}>
       <Text color={activeField === 'agent' ? theme.selected : theme.secondary}>
@@ -76,6 +89,36 @@ export const GeneralTab: React.FC<Props> = ({
         {cacheUpdateState === 'idle' && <Text dimColor>[Enter]</Text>}
         {cacheUpdateState === 'success' && <Text color={theme.success}>✓ обновлён</Text>}
         {cacheUpdateState === 'error' && <Text color={theme.error}>ошибка</Text>}
+      </Box>
+    )}
+
+    {/* Сохранить как глобальные (только для проектных настроек) */}
+    {configSource === 'project' && (
+      <Box marginBottom={1}>
+        <Text color={activeField === 'saveAsGlobal' ? theme.selected : theme.secondary}>
+          {activeField === 'saveAsGlobal' ? '▶ ' : '  '}{'Сохранить как глобальные '}
+        </Text>
+        <Text dimColor>[Enter]</Text>
+      </Box>
+    )}
+
+    {/* Сбросить на глобальные (только для проектных настроек) */}
+    {configSource === 'project' && (
+      <Box marginBottom={1}>
+        <Text color={activeField === 'resetToGlobal' ? theme.selected : theme.secondary}>
+          {activeField === 'resetToGlobal' ? '▶ ' : '  '}{'Сбросить на глобальные '}
+        </Text>
+        <Text dimColor>[Enter]</Text>
+      </Box>
+    )}
+
+    {/* Создать проектный конфиг (только для глобальных настроек в git-проекте) */}
+    {configSource === 'global' && hasProjectRoot && (
+      <Box marginBottom={1}>
+        <Text color={activeField === 'createProjectConfig' ? theme.selected : theme.secondary}>
+          {activeField === 'createProjectConfig' ? '▶ ' : '  '}{'Создать проектный конфиг '}
+        </Text>
+        <Text dimColor>[Enter]</Text>
       </Box>
     )}
   </Box>

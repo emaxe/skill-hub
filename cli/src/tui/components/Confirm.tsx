@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import { theme } from '../theme';
+import { normalizeInput } from '../keymap';
 
 interface Props {
   message: string;
@@ -9,7 +10,8 @@ interface Props {
 }
 
 export const Confirm: React.FC<Props> = ({ message, onConfirm, onCancel }) => {
-  useInput((input, key) => {
+  useInput((rawInput, key) => {
+    const input = normalizeInput(rawInput);
     if (input === 'y' || input === 'Y') onConfirm();
     if (input === 'n' || input === 'N' || key.escape) onCancel();
   });

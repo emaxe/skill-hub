@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useStdout } from 'ink';
 import { AiAgentsConfig } from '../../config';
 import { theme } from '../theme';
 import { useConventionsInit } from '../hooks/useConventionsInit';
+import { normalizeInput } from '../keymap';
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -24,6 +25,8 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [chosenAgent, setChosenAgent] = useState<string>('');
   const [spinnerIdx, setSpinnerIdx] = useState(0);
+  const { stdout } = useStdout();
+  const maxOutputHeight = Math.max(5, (stdout?.rows ?? 24) - 12);
   const init = useConventionsInit();
 
   useEffect(() => {
@@ -34,7 +37,8 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
     return () => clearInterval(timer);
   }, [init.step]);
 
-  useInput((input, key) => {
+  useInput((rawInput, key) => {
+    const input = normalizeInput(rawInput);
     if (init.step === 'enabling') return;
 
     if (init.step === 'running') {
@@ -129,11 +133,13 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
             <Text color={theme.warning}>{SPINNER_FRAMES[spinnerIdx]} </Text>
             <Text color={theme.warning}>Запуск {chosenAgent}...</Text>
           </Box>
-          {init.outputLines.map((line, idx) => (
-            <Box key={idx}>
-              <Text dimColor>{'  '}{line}</Text>
-            </Box>
-          ))}
+          <Box flexDirection="column" height={maxOutputHeight}>
+            {init.outputLines.slice(-maxOutputHeight).map((line, idx) => (
+              <Box key={idx}>
+                <Text dimColor wrap="truncate-end">{'  '}{line}</Text>
+              </Box>
+            ))}
+          </Box>
           {init.outputLines.length === 0 && (
             <Text dimColor>  ожидание вывода...</Text>
           )}
@@ -148,11 +154,13 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
           <Box marginBottom={1}>
             <Text color={theme.success}>✓ Инициализация завершена!</Text>
           </Box>
-          {init.outputLines.slice(-5).map((line, idx) => (
-            <Box key={idx}>
-              <Text dimColor>{'  '}{line}</Text>
-            </Box>
-          ))}
+          <Box flexDirection="column" height={Math.min(5, maxOutputHeight)}>
+            {init.outputLines.slice(-5).map((line, idx) => (
+              <Box key={idx}>
+                <Text dimColor wrap="truncate-end">{'  '}{line}</Text>
+              </Box>
+            ))}
+          </Box>
           <Box marginTop={1}>
             <Text dimColor>[Esc] закрыть</Text>
           </Box>
@@ -164,11 +172,13 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
           <Box marginBottom={1}>
             <Text color={theme.error}>✗ Ошибка: {init.errorMessage}</Text>
           </Box>
-          {init.outputLines.slice(-5).map((line, idx) => (
-            <Box key={idx}>
-              <Text dimColor>{'  '}{line}</Text>
-            </Box>
-          ))}
+          <Box flexDirection="column" height={Math.min(5, maxOutputHeight)}>
+            {init.outputLines.slice(-5).map((line, idx) => (
+              <Box key={idx}>
+                <Text dimColor wrap="truncate-end">{'  '}{line}</Text>
+              </Box>
+            ))}
+          </Box>
           <Box marginTop={1}>
             <Text dimColor>[R] повторить  [Esc] отмена</Text>
           </Box>

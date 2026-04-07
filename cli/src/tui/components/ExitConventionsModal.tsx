@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useStdout } from 'ink';
 import { AgentName } from '../../catalog';
 import { AiAgentsConfig } from '../../config';
 import { theme } from '../theme';
 import { useConventionsExit } from '../hooks/useConventionsExit';
 import { deleteConventionsArtifacts } from '../../conventions';
+import { normalizeInput } from '../keymap';
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -33,6 +34,8 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
   const [deleteArtifacts, setDeleteArtifacts] = useState(false);
   const [deletingArtifacts, setDeletingArtifacts] = useState(false);
   const exit = useConventionsExit();
+  const { stdout } = useStdout();
+  const maxOutputHeight = Math.max(5, (stdout?.rows ?? 24) - 12);
 
   useEffect(() => {
     if (exit.step !== 'running' && exit.step !== 'disabling') return;
@@ -42,7 +45,8 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
     return () => clearInterval(timer);
   }, [exit.step]);
 
-  useInput((input, key) => {
+  useInput((rawInput, key) => {
+    const input = normalizeInput(rawInput);
     if (exit.step === 'running') {
       if (key.escape) {
         exit.cancel();
@@ -174,11 +178,13 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
             <Text color={theme.warning}>{SPINNER_FRAMES[spinnerIdx]} </Text>
             <Text color={theme.warning}>Миграция через AI-агент...</Text>
           </Box>
-          {exit.outputLines.map((line, idx) => (
-            <Box key={idx}>
-              <Text dimColor>{'  '}{line}</Text>
-            </Box>
-          ))}
+          <Box flexDirection="column" height={maxOutputHeight}>
+            {exit.outputLines.slice(-maxOutputHeight).map((line, idx) => (
+              <Box key={idx}>
+                <Text dimColor wrap="truncate-end">{'  '}{line}</Text>
+              </Box>
+            ))}
+          </Box>
           {exit.outputLines.length === 0 && (
             <Text dimColor>  ожидание вывода...</Text>
           )}
@@ -200,11 +206,13 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
           <Box marginBottom={1}>
             <Text color={theme.success}>✓ Выход из agents-conventions завершён!</Text>
           </Box>
-          {exit.outputLines.slice(-3).map((line, idx) => (
-            <Box key={idx}>
-              <Text dimColor>{'  '}{line}</Text>
-            </Box>
-          ))}
+          <Box flexDirection="column" height={Math.min(3, maxOutputHeight)}>
+            {exit.outputLines.slice(-3).map((line, idx) => (
+              <Box key={idx}>
+                <Text dimColor wrap="truncate-end">{'  '}{line}</Text>
+              </Box>
+            ))}
+          </Box>
           <Box marginTop={1} marginBottom={1}>
             <Text>Удалить .agents/ и AGENTS.md? </Text>
             <Text color={deleteArtifacts ? theme.error : theme.secondary}>
@@ -228,11 +236,13 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
           <Box marginBottom={1}>
             <Text color={theme.error}>✗ Ошибка: {exit.errorMessage}</Text>
           </Box>
-          {exit.outputLines.slice(-5).map((line, idx) => (
-            <Box key={idx}>
-              <Text dimColor>{'  '}{line}</Text>
-            </Box>
-          ))}
+          <Box flexDirection="column" height={Math.min(5, maxOutputHeight)}>
+            {exit.outputLines.slice(-5).map((line, idx) => (
+              <Box key={idx}>
+                <Text dimColor wrap="truncate-end">{'  '}{line}</Text>
+              </Box>
+            ))}
+          </Box>
           <Box marginTop={1}>
             <Text dimColor>[R] повторить  [S] пропустить (без миграции)  [Esc] отмена</Text>
           </Box>

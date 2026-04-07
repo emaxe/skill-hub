@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { spawn } from 'child_process';
 import chalk from 'chalk';
-import { loadConfig } from '../config';
+import { resolveConfig } from '../config';
 
 const AGENT_BINARIES: Record<string, string> = {
   'claude-code': 'claude',
@@ -22,7 +22,7 @@ export function makeLaunchCommand(): Command {
         process.exit(1);
       }
 
-      const config = loadConfig();
+      const { config } = resolveConfig();
       const aiAgents = config.aiAgents;
       const agentCfg = aiAgents.agents[agentName as keyof typeof aiAgents.agents];
 

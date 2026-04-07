@@ -10,7 +10,11 @@ const RU_TO_EN: Record<string, string> = {
 
 /** Normalizes input: maps Russian chars to Latin equivalents */
 export function normalizeInput(input: string): string {
-  return RU_TO_EN[input] ?? input;
+  const lower = input.toLowerCase();
+  const mapped = RU_TO_EN[lower];
+  if (!mapped) return input;
+  // Preserve case
+  return input === lower ? mapped : mapped.toUpperCase();
 }
 
 /** Returns true if Ctrl or Cmd (Meta) is held */

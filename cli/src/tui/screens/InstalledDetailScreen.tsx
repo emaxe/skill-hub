@@ -44,10 +44,13 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
 
   const actions = useMemo<{ id: Action; label: string }[]>(() => {
     if (isParent) return [];
+    const isConventions = agent === 'agents-conventions';
     const list: { id: Action; label: string }[] = [
       { id: 'delete', label: 'Удалить' },
-      { id: 'move',   label: `Переместить в ${entry.scope === 'global' ? 'project' : 'global'}` },
     ];
+    if (!isConventions) {
+      list.push({ id: 'move', label: `Переместить в ${entry.scope === 'global' ? 'project' : 'global'}` });
+    }
     if (catalogExt && entry.source === 'registry') {
       list.push({ id: 'update', label: 'Обновить' });
     }
@@ -55,7 +58,7 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
       list.push({ id: 'register', label: 'Установить из skill-hub (зарегистрировать)' });
     }
     return list;
-  }, [entry.scope, entry.source, isManualWithCatalog, catalogExt, isParent]);
+  }, [entry.scope, entry.source, isManualWithCatalog, catalogExt, isParent, agent]);
 
   const makeExt = (): Extension => ({
     type: entry.type, name: entry.name,

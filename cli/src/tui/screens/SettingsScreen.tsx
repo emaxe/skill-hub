@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { AgentName } from '../../catalog';
-import { SkillHubConfig, AiAgentsConfig } from '../../config';
+import { SkillHubConfig, AiAgentsConfig, ConfigSource } from '../../config';
 import { useStatus } from '../contexts/StatusContext';
 import { getCachePath, isCloned, resetCache, updateCache } from '../../git';
 import { HintBar } from '../components/HintBar';
@@ -18,6 +18,7 @@ const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
 
 type Field = 'agent' | 'scope' | 'registryUrl' | 'installMcp' | 'installBaseSkill' | 'updateCache' | 'updateAgent'
   | 'initConventions'
+  | 'saveAsGlobal' | 'resetToGlobal' | 'createProjectConfig'
   | `aiAgent:${AgentName}`
   | 'aiProxy'
   | `aiAgentProxy:${AgentName}`;
@@ -40,17 +41,20 @@ export interface SettingsScreenProps {
   config: SkillHubConfig;
   updateConfig: (updates: Partial<SkillHubConfig>) => void;
   onEditingChange?: (editing: boolean) => void;
+  configSource: ConfigSource;
+  hasProjectRoot: boolean;
+  onSaveAsGlobal: () => boolean;
+  onResetToGlobal: () => SkillHubConfig | null;
+  onCreateProjectConfig: () => boolean;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateConfig, onEditingChange }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateConfig, onEditingChange, configSource, hasProjectRoot, onSaveAsGlobal, onResetToGlobal, onCreateProjectConfig }) => {
   const { setStatus } = useStatus();
 
   const [localAgent, setLocalAgent] = useState<AgentName>(config.agent);
-  const [prevAgent, setPrevAgent] = useState<AgentName>(config.agent);
   const [showModal, setShowModal] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
   const [exitTargetAgent, setExitTargetAgent] = useState<AgentName>('claude-code');
-  const userSwitchedAgent = useRef(false);
   const [localScope, setLocalScope] = useState<'global' | 'project'>(config.defaultScope);
   const [localRegistryUrl, setLocalRegistryUrl] = useState<string>(config.registryUrl);
   const [localAiAgents, setLocalAiAgents] = useState<AiAgentsConfig>(config.aiAgents);
@@ -66,13 +70,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   const isConventionsInitialized = conventionsStatus?.hasAgentsDir ?? false;
   const isConventionsHealthy = conventionsStatus?.isHealthy ?? false;
 
-  useEffect(() => {
-    if (userSwitchedAgent.current && localAgent === 'agents-conventions' && !isConventionsInitialized) {
-      setShowModal(true);
-    }
-    userSwitchedAgent.current = false;
-  }, [localAgent]);
-
   const setup = useBaseSetup(localAgent);
   const [cacheUpdateState, setCacheUpdateState] = useState<InstallState>('idle');
 
@@ -81,6 +78,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
       case 'general': {
         const f: Field[] = ['agent', 'scope', 'registryUrl'];
         if (cacheInstalled) f.push('updateCache');
+        if (configSource === 'project') {
+          f.push('saveAsGlobal', 'resetToGlobal');
+        } else if (hasProjectRoot) {
+          f.push('createProjectConfig');
+        }
         if (localAgent === 'agents-conventions') {
           f.push('initConventions');
         } else {
@@ -93,7 +95,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
       case 'aiAgents':
         return [...AI_AGENT_FIELDS];
     }
-  }, [activeSubTab, localAgent, setup.status, cacheInstalled]);
+  }, [activeSubTab, localAgent, setup.status, cacheInstalled, configSource, hasProjectRoot]);
 
   useEffect(() => {
     if (fields.length > 0) {
@@ -161,17 +163,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
           ? (idx - 1 + AGENTS.length) % AGENTS.length
           : (idx + 1) % AGENTS.length;
         const newAgent = AGENTS[newIdx];
-        if (localAgent === 'agents-conventions' && newAgent !== 'agents-conventions') {
-          // Переключение ИЗ agents-conventions — требуется exit-flow
-          setExitTargetAgent(newAgent);
-          setShowExitModal(true);
-          return;
-        }
         if (newAgent === 'agents-conventions') {
-          setPrevAgent(localAgent);
           setLocalScope('project');
         }
-        userSwitchedAgent.current = true;
         setLocalAgent(newAgent);
       } else if (activeField === 'scope') {
         if (localAgent === 'agents-conventions') return;
@@ -204,6 +198,35 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     }
 
     if (key.return) {
+      if (activeField === 'createProjectConfig') {
+        if (onCreateProjectConfig()) {
+          setStatus('Проектный конфиг создан (.skill-hub.json)', 'success');
+        } else {
+          setStatus('Не удалось создать проектный конфиг', 'error');
+        }
+        return;
+      }
+      if (activeField === 'saveAsGlobal') {
+        if (onSaveAsGlobal()) {
+          setStatus('Проектные настройки сохранены как глобальные', 'success');
+        } else {
+          setStatus('Не удалось сохранить', 'error');
+        }
+        return;
+      }
+      if (activeField === 'resetToGlobal') {
+        const fresh = onResetToGlobal();
+        if (fresh) {
+          setLocalAgent(fresh.agent);
+          setLocalScope(fresh.defaultScope);
+          setLocalRegistryUrl(fresh.registryUrl);
+          setLocalAiAgents(fresh.aiAgents);
+          setStatus('Проектные настройки сброшены на глобальные', 'success');
+        } else {
+          setStatus('Не удалось сбросить', 'error');
+        }
+        return;
+      }
       if (activeField === 'initConventions') {
         setShowModal(true);
         return;
@@ -241,6 +264,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
           .catch(() => setStatus('Ошибка обновления агента', 'error'));
         return;
       }
+      // Если переключаемся НА agents-conventions и не инициализировано — показать модалку
+      if (localAgent === 'agents-conventions' && !isConventionsInitialized && config.agent !== 'agents-conventions') {
+        setShowModal(true);
+        return;
+      }
+      // Если уходим из agents-conventions — показать exit-flow
+      if (config.agent === 'agents-conventions' && localAgent !== 'agents-conventions') {
+        setExitTargetAgent(localAgent);
+        setShowExitModal(true);
+        return;
+      }
       const urlChanged = localRegistryUrl !== config.registryUrl;
       updateConfig({ agent: localAgent, defaultScope: localScope, registryUrl: localRegistryUrl, aiAgents: localAiAgents });
       if (urlChanged) {
@@ -256,7 +290,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     || activeField === 'installBaseSkill'
     || activeField === 'updateCache'
     || activeField === 'updateAgent'
-    || activeField === 'initConventions';
+    || activeField === 'initConventions'
+    || activeField === 'saveAsGlobal'
+    || activeField === 'resetToGlobal'
+    || activeField === 'createProjectConfig';
 
   if (showModal) {
     const enabledAgents = (['claude-code', 'cursor', 'copilot'] as const)
@@ -273,7 +310,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
           }}
           onCancel={() => {
             setShowModal(false);
-            setLocalAgent(prevAgent);
           }}
         />
       </Box>
@@ -327,15 +363,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
             cacheInstalled={cacheInstalled}
             cacheUpdateState={cacheUpdateState}
             activeField={activeField}
+            configSource={configSource}
+            hasProjectRoot={hasProjectRoot}
           />
-          <SetupTab
-            localAgent={localAgent}
-            setup={setup}
-            conventionsStatus={conventionsStatus}
-            isConventionsInitialized={isConventionsInitialized}
-            isConventionsHealthy={isConventionsHealthy}
-            activeField={activeField}
-          />
+          <Box flexDirection="column" borderStyle="round" borderColor={theme.border} paddingX={1} marginTop={1}>
+            <SetupTab
+              localAgent={localAgent}
+              setup={setup}
+              conventionsStatus={conventionsStatus}
+              isConventionsInitialized={isConventionsInitialized}
+              isConventionsHealthy={isConventionsHealthy}
+              activeField={activeField}
+            />
+          </Box>
         </>
       )}
       {activeSubTab === 'aiAgents' && (
@@ -345,12 +385,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         />
       )}
 
-      <HintBar hints={[
-        { key: 'Tab', description: 'подвкладка' },
-        { key: '↑↓', description: 'выбор поля' },
-        { key: '←→', description: 'изменить значение' },
-        { key: 'Enter', description: isActionField ? 'установить' : 'сохранить' },
-      ]} />
+      <Box marginTop={1}>
+        <HintBar hints={[
+          { key: 'Tab', description: 'подвкладка' },
+          { key: '↑↓', description: 'выбор поля' },
+          { key: '←→', description: 'изменить значение' },
+          { key: 'Enter', description: isActionField ? 'установить' : 'сохранить' },
+        ]} />
+      </Box>
     </Box>
   );
 };

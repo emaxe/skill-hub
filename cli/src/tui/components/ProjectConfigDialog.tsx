@@ -3,19 +3,19 @@ import { Box, Text, useInput, useStdout } from 'ink';
 import { theme } from '../theme';
 
 interface Props {
-  onGoToSettings: () => void;
+  onCreate: () => void;
   onDismiss: () => void;
 }
 
 const BG = '#1e1e2e';
-const BORDER_COLOR = theme.warning;
+const BORDER_COLOR = theme.primary;
 
-export const ConventionsWarningDialog: React.FC<Props> = ({ onGoToSettings, onDismiss }) => {
+export const ProjectConfigDialog: React.FC<Props> = ({ onCreate, onDismiss }) => {
   const { stdout } = useStdout();
   const innerWidth = Math.min(58, (stdout?.columns ?? 80) - 12);
 
   useInput((_input, key) => {
-    if (key.return) onGoToSettings();
+    if (key.return) onCreate();
     if (key.escape) onDismiss();
   });
 
@@ -30,20 +30,20 @@ export const ConventionsWarningDialog: React.FC<Props> = ({ onGoToSettings, onDi
   const bot = '╰' + '─'.repeat(innerWidth + 2) + '╯';
 
   const lines: Array<{ text: React.ReactNode }> = [
-    { text: <Text backgroundColor={BG} color={theme.warning}>{fill('Режим agents-conventions не инициализирован')}</Text> },
+    { text: <Text backgroundColor={BG} color={theme.primary}>{fill('Проектный конфиг не найден')}</Text> },
     { text: <Text backgroundColor={BG}>{emptyLine}</Text> },
-    { text: <Text backgroundColor={BG} color={theme.secondary}>{fill('Директория .agents/ не найдена.')}</Text> },
-    { text: <Text backgroundColor={BG} color={theme.secondary}>{fill('Необходима инициализация.')}</Text> },
+    { text: <Text backgroundColor={BG} color={theme.secondary}>{fill('В этом проекте нет .skill-hub.json.')}</Text> },
+    { text: <Text backgroundColor={BG} color={theme.secondary}>{fill('Создать из глобальных настроек?')}</Text> },
     { text: <Text backgroundColor={BG}>{emptyLine}</Text> },
     {
       text: (
         <Text backgroundColor={BG} color={theme.muted}>
           {'Нажми '}
           <Text backgroundColor={BG} color={theme.success}>Enter</Text>
-          {' → настройки, '}
+          {' → создать, '}
           <Text backgroundColor={BG} color={theme.error}>Esc</Text>
-          {' → закрыть'}
-          {' '.repeat(Math.max(0, innerWidth - 39))}
+          {' → пропустить'}
+          {' '.repeat(Math.max(0, innerWidth - 40))}
         </Text>
       ),
     },

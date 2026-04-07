@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { normalizeInput } from '../keymap';
-import { Extension, AgentName } from '../../catalog';
+import { Extension, AgentName, ExtensionType } from '../../catalog';
 import { InstallRecord } from '../../registry';
 import { InstalledEntry } from '../hooks/useRegistry';
 import { Confirm } from '../components/Confirm';
 import { HintBar, Hint } from '../components/HintBar';
+import { SearchInput } from '../components/SearchInput';
+import { FilterBar } from '../components/FilterBar';
 import { useStatus } from '../contexts/StatusContext';
 import { theme } from '../theme';
 
@@ -13,6 +15,7 @@ export interface InstalledScreenProps {
   agent: AgentName;
   onMoveExt: (ext: Extension, scope: 'global' | 'project') => void;
   onOpenDetail: (entry: InstalledEntry) => void;
+  onSearchFocusChange?: (focused: boolean) => void;
   installed: InstalledEntry[];
   loading: boolean;
   error: string | null;
@@ -22,8 +25,13 @@ export interface InstalledScreenProps {
 }
 
 type ScopeFilter = 'all' | 'global' | 'project' | 'parent';
+type AgentFilter = 'all' | 'claude-code' | 'cursor' | 'copilot';
 
 const PAGE_SIZE = 10;
+
+const CONVENTIONS_SCOPE_FILTERS: ScopeFilter[] = ['global', 'project'];
+const STANDARD_SCOPE_FILTERS: ScopeFilter[] = ['all', 'global', 'project', 'parent'];
+const AGENT_FILTERS: AgentFilter[] = ['all', 'claude-code', 'cursor', 'copilot'];
 
 function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s;
@@ -43,27 +51,57 @@ function recordToExtension(record: InstallRecord): Extension {
   };
 }
 
-function nextScopeFilter(current: ScopeFilter): ScopeFilter {
-  if (current === 'all') return 'global';
-  if (current === 'global') return 'project';
-  if (current === 'project') return 'parent';
-  return 'all';
+function nextInList<T>(current: T, list: T[]): T {
+  const idx = list.indexOf(current);
+  return list[(idx + 1) % list.length];
 }
 
 export const InstalledScreen: React.FC<InstalledScreenProps> = ({
-  agent, onMoveExt, onOpenDetail, installed, loading, error, remove, update, updateSelf,
+  agent, onMoveExt, onOpenDetail, onSearchFocusChange, installed, loading, error, remove, update, updateSelf,
 }) => {
   const { setStatus } = useStatus();
+  const isConventions = agent === 'agents-conventions';
 
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(isConventions ? 'project' : 'all');
+  const [typeFilter, setTypeFilter] = useState<ExtensionType | 'all'>('all');
+  const [agentFilter, setAgentFilter] = useState<AgentFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<InstalledEntry | null>(null);
   const [confirmDiskDelete, setConfirmDiskDelete] = useState<InstalledEntry | null>(null);
 
+  const setSearch = (focused: boolean) => {
+    setSearchFocused(focused);
+    onSearchFocusChange?.(focused);
+  };
+
   const filtered = useMemo(() => {
-    if (scopeFilter === 'all') return installed;
-    return installed.filter(e => e.effectiveScope === scopeFilter);
-  }, [installed, scopeFilter]);
+    let list = installed;
+
+    // Scope filter
+    if (scopeFilter !== 'all') {
+      list = list.filter(e => e.effectiveScope === scopeFilter);
+    }
+
+    // Type filter (conventions mode)
+    if (isConventions && typeFilter !== 'all') {
+      list = list.filter(e => e.type === typeFilter);
+    }
+
+    // Agent filter (conventions mode, only for global scope)
+    if (isConventions && scopeFilter === 'global' && agentFilter !== 'all') {
+      list = list.filter(e => (e.sourceAgent || e.agent) === agentFilter);
+    }
+
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(e => e.name.toLowerCase().includes(q));
+    }
+
+    return list;
+  }, [installed, scopeFilter, typeFilter, agentFilter, searchQuery, isConventions]);
 
   const safeIndex = Math.min(selectedIndex, Math.max(0, filtered.length - 1));
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -74,7 +112,20 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
   useInput((input, key) => {
     if (confirmTarget || confirmDiskDelete) return;
 
+    // Search mode
+    if (searchFocused) {
+      if (key.escape || key.return) {
+        setSearch(false);
+      }
+      return;
+    }
+
     const ni = normalizeInput(input);
+
+    if (isConventions && ni === '/') {
+      setSearch(true);
+      return;
+    }
 
     if (key.upArrow) {
       setSelectedIndex(i => Math.max(0, i - 1));
@@ -85,13 +136,21 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
         onOpenDetail(filtered[safeIndex]);
       }
     } else if (ni === 's') {
-      setScopeFilter(f => nextScopeFilter(f));
+      const scopeList = isConventions ? CONVENTIONS_SCOPE_FILTERS : STANDARD_SCOPE_FILTERS;
+      setScopeFilter(f => nextInList(f, scopeList));
+      setSelectedIndex(0);
+    } else if (isConventions && ni === 't') {
+      const types: (ExtensionType | 'all')[] = ['all', 'skill', 'agent', 'command', 'rule'];
+      setTypeFilter(f => nextInList(f, types));
+      setSelectedIndex(0);
+    } else if (isConventions && ni === 'a' && scopeFilter === 'global') {
+      setAgentFilter(f => nextInList(f, AGENT_FILTERS));
       setSelectedIndex(0);
     } else if (ni === 'd') {
       if (filtered.length > 0) {
         setConfirmTarget(filtered[safeIndex]);
       }
-    } else if (ni === 'm') {
+    } else if (ni === 'm' && !isConventions) {
       if (filtered.length > 0) {
         const entry = filtered[safeIndex];
         if (entry.effectiveScope === 'parent') return;
@@ -110,7 +169,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
           setStatus(`Ошибка обновления: ${String(err)}`, 'error');
         });
       }
-    } else if (input === 'U' || input === 'Г') {
+    } else if (ni === 'U') {
       setStatus('Обновляю все расширения и систему...', 'loading');
       void (async () => {
         try {
@@ -146,18 +205,60 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
     }
   };
 
-  const hints: Hint[] = [
-    { key: '↑↓', description: 'навигация' },
-    { key: 'Enter', description: 'детали' },
-    { key: 's', description: `scope: ${scopeFilter}` },
-    { key: 'd', description: 'удалить' },
-    { key: 'm', description: 'переместить' },
-    { key: 'u', description: 'обновить' },
-    { key: 'U', description: 'обновить все' },
-  ];
+  const hints: Hint[] = searchFocused
+    ? [{ key: 'Esc', description: 'закрыть поиск' }]
+    : isConventions
+      ? [
+          { key: '/', description: 'поиск' },
+          { key: '↑↓', description: 'навигация' },
+          { key: 'Enter', description: 'детали' },
+          { key: 's', description: `scope: ${scopeFilter}` },
+          { key: 't', description: `тип: ${typeFilter}` },
+          ...(scopeFilter === 'global' ? [{ key: 'a', description: `агент: ${agentFilter}` }] : []),
+          { key: 'd', description: 'удалить' },
+          { key: 'u', description: 'обновить' },
+          { key: 'U', description: 'обновить все' },
+        ]
+      : [
+          { key: '↑↓', description: 'навигация' },
+          { key: 'Enter', description: 'детали' },
+          { key: 's', description: `scope: ${scopeFilter}` },
+          { key: 'd', description: 'удалить' },
+          { key: 'm', description: 'переместить' },
+          { key: 'u', description: 'обновить' },
+          { key: 'U', description: 'обновить все' },
+        ];
 
   return (
     <Box flexDirection="column">
+      {/* Search input (conventions mode only) */}
+      {isConventions && (
+        <SearchInput value={searchQuery} onChange={setSearchQuery} focused={searchFocused} />
+      )}
+
+      {/* Type filter bar (conventions mode only) */}
+      {isConventions && (
+        <FilterBar activeType={typeFilter} onTypeChange={setTypeFilter} />
+      )}
+
+      {/* Agent filter bar (conventions mode, global scope only) */}
+      {isConventions && scopeFilter === 'global' && (
+        <Box paddingX={1}>
+          <Text color={theme.muted}>Агент: </Text>
+          {AGENT_FILTERS.map(af => (
+            <React.Fragment key={af}>
+              <Text color={theme.muted}>  </Text>
+              <Text
+                color={agentFilter === af ? theme.selected : theme.muted}
+                bold={agentFilter === af}
+              >
+                {af === 'all' ? 'Все' : af}
+              </Text>
+            </React.Fragment>
+          ))}
+        </Box>
+      )}
+
       <Box paddingX={1} paddingY={0}>
         <Text color={theme.primary} bold>Установленные расширения </Text>
         <Text color={theme.muted}>
@@ -208,8 +309,11 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
           {/* Rows */}
           {pageItems.map((entry, localIdx) => {
             const isSelected = pageStart + localIdx === safeIndex;
+            const displayAgent = isConventions
+              ? (entry.sourceAgent === 'agents-conventions' ? 'all agents' : (entry.sourceAgent || entry.agent))
+              : (entry.agent === 'agents-conventions' ? 'all agents' : entry.agent);
             return (
-              <Box key={`${entry.type}:${entry.name}:${entry.scope}`} flexDirection="row">
+              <Box key={`${entry.type}:${entry.name}:${entry.scope}:${entry.sourceAgent || entry.agent}`} flexDirection="row">
                 <Box minWidth={2}>
                   <Text color={isSelected ? theme.selected : theme.muted}>
                     {isSelected ? '▶' : ' '}
@@ -236,8 +340,8 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
                     {entry.source}
                   </Text>
                 </Box>
-                <Text color={entry.agent === 'agents-conventions' ? theme.primary : theme.muted}>
-                  {entry.agent === 'agents-conventions' ? 'all agents' : entry.agent}
+                <Text color={displayAgent === 'all agents' ? theme.primary : theme.muted}>
+                  {displayAgent}
                 </Text>
               </Box>
             );
