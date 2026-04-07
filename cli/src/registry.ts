@@ -7,7 +7,7 @@ export interface InstallRecord {
   name: string;
   version: string;
   agent: AgentName;
-  scope: 'global' | 'project';
+  scope: 'global' | 'project' | 'parent';
   installed_at?: string;
   path: string;
 }

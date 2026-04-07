@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import os from 'os';
 import path from 'path';
-import { loadCatalog, AgentName, ExtensionType, Extension } from '../catalog';
+import { loadCatalog, AgentName, ExtensionType, Extension, platformKey } from '../catalog';
 import { detectAgent } from '../detect-agent';
 import { getCachePath, ensureCache } from '../git';
 import { createRegistry } from '../registry';
@@ -17,7 +17,7 @@ async function installExtension(
   cachePath: string,
   reg: ReturnType<typeof createRegistry>
 ): Promise<void> {
-  if (!ext.platforms[adapter.agentName]) {
+  if (!ext.platforms[platformKey(adapter.agentName)]) {
     throw new Error(`Расширение "${ext.name}" не поддерживает агента ${adapter.agentName}`);
   }
   await adapter.install(ext, scope, cachePath);
@@ -45,6 +45,11 @@ export function makeInstallCommand(): Command {
         const catalog = loadCatalog(cachePath);
         const agent = (opts.agent || detectAgent()) as AgentName;
         const scope = opts.global ? 'global' : 'project';
+
+        if (agent === 'agents-conventions' && scope === 'global') {
+          spinner.fail(chalk.red('agents-conventions поддерживает только project scope'));
+          process.exit(1);
+        }
 
         let type: ExtensionType | undefined;
         let name = nameArg;

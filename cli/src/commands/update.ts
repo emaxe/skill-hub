@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import os from 'os';
 import path from 'path';
-import { loadCatalog, AgentName } from '../catalog';
+import { loadCatalog, AgentName, platformKey } from '../catalog';
 import { detectAgent } from '../detect-agent';
 import { getCachePath, updateCache } from '../git';
 import { createRegistry } from '../registry';
@@ -32,8 +32,9 @@ export function makeUpdateCommand(): Command {
 
         for (const record of installed) {
           if (name && record.name !== name) continue;
+          if (record.scope === 'parent') continue;
           const ext = catalog.extensions.find(e => e.name === record.name && e.type === record.type);
-          if (!ext || !ext.platforms[agent]) continue;
+          if (!ext || !ext.platforms[platformKey(agent)]) continue;
           try {
             await adapter.install(ext, record.scope, cachePath);
             reg.add({ ...record, version: ext.version || record.version });

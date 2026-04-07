@@ -3,7 +3,7 @@ import { AgentName, Extension, ExtensionType } from '../catalog';
 export interface ScanResult {
   type: ExtensionType;
   name: string;
-  scope: 'global' | 'project';
+  scope: 'global' | 'project' | 'parent';
   path: string;
 }
 

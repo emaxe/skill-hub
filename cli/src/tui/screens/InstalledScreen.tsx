@@ -16,12 +16,12 @@ export interface InstalledScreenProps {
   installed: InstalledEntry[];
   loading: boolean;
   error: string | null;
-  remove: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
+  remove: (ext: Extension, agent: AgentName, scope: 'global' | 'project', deleteFromDisk?: boolean) => Promise<void>;
   update: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
   updateSelf: () => Promise<void>;
 }
 
-type ScopeFilter = 'all' | 'global' | 'project';
+type ScopeFilter = 'all' | 'global' | 'project' | 'parent';
 
 const PAGE_SIZE = 10;
 
@@ -35,7 +35,7 @@ function recordToExtension(record: InstallRecord): Extension {
     name: record.name,
     description: '',
     tags: [],
-    scope: record.scope,
+    scope: record.scope === 'parent' ? 'project' : record.scope,
     platforms: {},
     path: record.path,
     dependencies: [],
@@ -46,6 +46,7 @@ function recordToExtension(record: InstallRecord): Extension {
 function nextScopeFilter(current: ScopeFilter): ScopeFilter {
   if (current === 'all') return 'global';
   if (current === 'global') return 'project';
+  if (current === 'project') return 'parent';
   return 'all';
 }
 
@@ -57,10 +58,11 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
   const [confirmTarget, setConfirmTarget] = useState<InstalledEntry | null>(null);
+  const [confirmDiskDelete, setConfirmDiskDelete] = useState<InstalledEntry | null>(null);
 
   const filtered = useMemo(() => {
     if (scopeFilter === 'all') return installed;
-    return installed.filter(e => e.scope === scopeFilter);
+    return installed.filter(e => e.effectiveScope === scopeFilter);
   }, [installed, scopeFilter]);
 
   const safeIndex = Math.min(selectedIndex, Math.max(0, filtered.length - 1));
@@ -70,7 +72,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
   const pageItems = filtered.slice(pageStart, pageStart + PAGE_SIZE);
 
   useInput((input, key) => {
-    if (confirmTarget) return;
+    if (confirmTarget || confirmDiskDelete) return;
 
     const ni = normalizeInput(input);
 
@@ -92,6 +94,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
     } else if (ni === 'm') {
       if (filtered.length > 0) {
         const entry = filtered[safeIndex];
+        if (entry.effectiveScope === 'parent') return;
         const ext = recordToExtension(entry);
         const toScope = entry.scope === 'global' ? 'project' : 'global';
         onMoveExt(ext, toScope);
@@ -99,8 +102,9 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
     } else if (ni === 'u') {
       if (filtered.length > 0) {
         const entry = filtered[safeIndex];
+        if (entry.effectiveScope === 'parent') return;
         const ext = recordToExtension(entry);
-        update(ext, agent, entry.scope).then(() => {
+        update(ext, agent, entry.scope as 'global' | 'project').then(() => {
           setStatus(`Обновлено: ${entry.name}`, 'success');
         }).catch((err: unknown) => {
           setStatus(`Ошибка обновления: ${String(err)}`, 'error');
@@ -111,7 +115,8 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
       void (async () => {
         try {
           for (const entry of filtered) {
-            await update(recordToExtension(entry), agent, entry.scope);
+            if (entry.effectiveScope === 'parent') continue;
+            await update(recordToExtension(entry), agent, entry.scope as 'global' | 'project');
           }
           await updateSelf();
           setStatus('Всё обновлено', 'success');
@@ -122,14 +127,20 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
     }
   });
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = () => {
     if (!confirmTarget) return;
-    const entry = confirmTarget;
+    setConfirmDiskDelete(confirmTarget);
     setConfirmTarget(null);
+  };
+
+  const handleDiskDeleteChoice = async (deleteFromDisk: boolean) => {
+    if (!confirmDiskDelete) return;
+    const entry = confirmDiskDelete;
+    setConfirmDiskDelete(null);
     const ext = recordToExtension(entry);
     try {
-      await remove(ext, agent, entry.scope);
-      setStatus(`Удалено: ${entry.name}`, 'success');
+      await remove(ext, agent, entry.scope as 'global' | 'project', deleteFromDisk);
+      setStatus(`Удалено: ${entry.name}${deleteFromDisk ? '' : ' (файлы сохранены)'}`, 'success');
     } catch (err) {
       setStatus(`Ошибка удаления: ${String(err)}`, 'error');
     }
@@ -181,7 +192,8 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
             <Box minWidth={24}><Text dimColor>NAME</Text></Box>
             <Box minWidth={8}><Text dimColor>VER</Text></Box>
             <Box minWidth={8}><Text dimColor>SCOPE</Text></Box>
-            <Text dimColor>SOURCE</Text>
+            <Box minWidth={10}><Text dimColor>SOURCE</Text></Box>
+            <Text dimColor>AGENT</Text>
           </Box>
           {/* Separator */}
           <Box flexDirection="row">
@@ -190,6 +202,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
             <Box minWidth={24}><Text dimColor>{'──────────────────────'}</Text></Box>
             <Box minWidth={8}><Text dimColor>{'──────'}</Text></Box>
             <Box minWidth={8}><Text dimColor>{'───────'}</Text></Box>
+            <Box minWidth={10}><Text dimColor>{'────────'}</Text></Box>
             <Text dimColor>{'────────'}</Text>
           </Box>
           {/* Rows */}
@@ -214,12 +227,17 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
                   <Text color={theme.muted}>{truncate(entry.version || '?', 7)}</Text>
                 </Box>
                 <Box minWidth={8}>
-                  <Text color={entry.scope === 'global' ? theme.success : theme.warning}>
-                    {entry.scope}
+                  <Text color={entry.effectiveScope === 'global' ? theme.success : entry.effectiveScope === 'parent' ? theme.accent : theme.warning}>
+                    {entry.effectiveScope}
                   </Text>
                 </Box>
-                <Text color={entry.source === 'manual' ? theme.muted : theme.accent}>
-                  {entry.source}
+                <Box minWidth={10}>
+                  <Text color={entry.source === 'manual' ? theme.muted : theme.accent}>
+                    {entry.source}
+                  </Text>
+                </Box>
+                <Text color={entry.agent === 'agents-conventions' ? theme.primary : theme.muted}>
+                  {entry.agent === 'agents-conventions' ? 'all agents' : entry.agent}
                 </Text>
               </Box>
             );
@@ -238,8 +256,16 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
       {confirmTarget && (
         <Confirm
           message={`Удалить ${confirmTarget.name}?`}
-          onConfirm={() => { void handleConfirmDelete(); }}
+          onConfirm={handleConfirmDelete}
           onCancel={() => setConfirmTarget(null)}
+        />
+      )}
+
+      {confirmDiskDelete && (
+        <Confirm
+          message={`Удалить файлы ${confirmDiskDelete.name} с диска? (n = только из реестра)`}
+          onConfirm={() => { void handleDiskDeleteChoice(true); }}
+          onCancel={() => { void handleDiskDeleteChoice(false); }}
         />
       )}
 

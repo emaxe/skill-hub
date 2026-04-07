@@ -6,11 +6,13 @@ import { createRegistry, InstallRecord } from '../../registry';
 import { getAdapter } from '../../adapters/get-adapter';
 import { ScanResult } from '../../adapters/types';
 import { getCachePath } from '../../git';
+import { EffectiveScope, filterRecordsByDirectory } from '../../path-filter';
 
 const REGISTRY_DIR = path.join(os.homedir(), '.skill-hub');
 
 export interface InstalledEntry extends InstallRecord {
   source: 'registry' | 'manual';
+  effectiveScope: EffectiveScope;
 }
 
 export interface UseRegistryState {
@@ -22,7 +24,7 @@ export interface UseRegistryState {
 
 export interface UseRegistryActions {
   install: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
-  remove: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
+  remove: (ext: Extension, agent: AgentName, scope: 'global' | 'project', deleteFromDisk?: boolean) => Promise<void>;
   move: (ext: Extension, agent: AgentName, fromScope: 'global' | 'project') => Promise<void>;
   update: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
   isInstalled: (name: string, type: ExtensionType, agent: AgentName) => boolean;
@@ -40,12 +42,22 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
 
   const registryRef = useRef(createRegistry(REGISTRY_DIR));
 
-  // Загрузка списка установленных (фильтруем по текущему агенту)
+  // Загрузка списка установленных (фильтруем по текущему агенту и директории)
   useEffect(() => {
+    const cwd = process.cwd();
+    const homeDir = os.homedir();
     const records = registryRef.current.list(agent);
-    const entries: InstalledEntry[] = records.map(r => ({ ...r, source: 'registry' as const }));
+
+    // Фильтруем записи реестра по текущей директории
+    const filtered = filterRecordsByDirectory(records, cwd, homeDir);
+    const entries: InstalledEntry[] = filtered.map(({ record, effectiveScope }) => ({
+      ...record,
+      source: 'registry' as const,
+      effectiveScope,
+    }));
 
     // Добавляем manual installs из filesystem scan для текущего агента
+    // (scanInstalled сканирует только cwd — effectiveScope = scope)
     try {
       const adapter = getAdapter(agent);
       const scanned: ScanResult[] = adapter.scanInstalled();
@@ -60,6 +72,7 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
             scope: scan.scope,
             path: scan.path,
             source: 'manual',
+            effectiveScope: scan.scope,
           });
         }
       }
@@ -106,10 +119,12 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
     });
   }, [withStatus]);
 
-  const remove = useCallback(async (ext: Extension, agent: AgentName, scope: 'global' | 'project') => {
+  const remove = useCallback(async (ext: Extension, agent: AgentName, scope: 'global' | 'project', deleteFromDisk = true) => {
     await withStatus(`Удаляю ${ext.name}...`, async () => {
-      const adapter = getAdapter(agent);
-      await adapter.remove(ext, scope);
+      if (deleteFromDisk) {
+        const adapter = getAdapter(agent);
+        await adapter.remove(ext, scope);
+      }
       registryRef.current.remove(ext.name, ext.type, agent);
     });
   }, [withStatus]);
@@ -147,9 +162,9 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
     });
   }, [withStatus]);
 
-  const isInstalled = useCallback((name: string, type: ExtensionType, agent: AgentName) => {
-    return registryRef.current.isInstalled(name, type, agent);
-  }, [refreshKey]);
+  const isInstalled = useCallback((name: string, type: ExtensionType, _agent: AgentName) => {
+    return installed.some(e => e.name === name && e.type === type);
+  }, [installed]);
 
   return {
     installed,

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-export type AgentName = 'claude-code' | 'cursor' | 'copilot';
+export type AgentName = 'claude-code' | 'cursor' | 'copilot' | 'agents-conventions';
 export type ExtensionType = 'skill' | 'agent' | 'command' | 'rule';
 
 export interface Extension {
@@ -59,9 +59,15 @@ export function parseExtension(raw: unknown): Extension {
   };
 }
 
+/** Platform key to check in catalog: agents-conventions reuses claude-code source files */
+export function platformKey(agent: AgentName): AgentName {
+  return agent === 'agents-conventions' ? 'claude-code' : agent;
+}
+
 export function filterByAgent(extensions: Extension[], agent: AgentName): Extension[] {
+  const key = platformKey(agent);
   return extensions.filter(ext => {
-    const file = ext.platforms[agent];
+    const file = ext.platforms[key];
     return file != null && file !== '';
   });
 }

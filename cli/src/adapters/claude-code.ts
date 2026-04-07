@@ -101,6 +101,62 @@ export class ClaudeCodeAdapter implements AgentAdapter {
       }
     }
 
+    // Parent directories scan: walk up from projectDir to homeDir (exclusive)
+    const homeNorm = path.resolve(this.homeDir);
+    const projectNorm = path.resolve(this.projectDir);
+    const seen = new Set(results.map(r => `${r.type}:${r.name}`));
+    let dir = path.dirname(projectNorm);
+
+    while (dir !== homeNorm && dir !== path.dirname(dir)) {
+      const base = path.join(dir, '.claude');
+
+      const skillsDir = path.join(base, 'skills');
+      if (fs.existsSync(skillsDir)) {
+        for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+          if (entry.isDirectory()) {
+            const key = `skill:${entry.name}`;
+            if (!seen.has(key)) {
+              const skillFile = path.join(skillsDir, entry.name, 'SKILL.md');
+              if (fs.existsSync(skillFile)) {
+                results.push({ type: 'skill', name: entry.name, scope: 'parent', path: skillFile });
+                seen.add(key);
+              }
+            }
+          }
+        }
+      }
+
+      const agentsDir = path.join(base, 'agents');
+      if (fs.existsSync(agentsDir)) {
+        for (const entry of fs.readdirSync(agentsDir, { withFileTypes: true })) {
+          if (entry.isFile() && entry.name.endsWith('.md')) {
+            const name = entry.name.slice(0, -3);
+            const key = `agent:${name}`;
+            if (!seen.has(key)) {
+              results.push({ type: 'agent', name, scope: 'parent', path: path.join(agentsDir, entry.name) });
+              seen.add(key);
+            }
+          }
+        }
+      }
+
+      const commandsDir = path.join(base, 'commands');
+      if (fs.existsSync(commandsDir)) {
+        for (const entry of fs.readdirSync(commandsDir, { withFileTypes: true })) {
+          if (entry.isFile() && entry.name.endsWith('.md')) {
+            const name = entry.name.slice(0, -3);
+            const key = `command:${name}`;
+            if (!seen.has(key)) {
+              results.push({ type: 'command', name, scope: 'parent', path: path.join(commandsDir, entry.name) });
+              seen.add(key);
+            }
+          }
+        }
+      }
+
+      dir = path.dirname(dir);
+    }
+
     return results;
   }
 }

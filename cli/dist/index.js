@@ -51,6 +51,8 @@ else {
     const { makeUpdateCommand } = require('./commands/update');
     const { makeSetupMcpCommand } = require('./commands/setup-mcp');
     const { makeConfigCommand } = require('./commands/config');
+    const { makeAgentsConventionsCommand } = require('./commands/agents-conventions');
+    const { makeLaunchCommand } = require('./commands/launch');
     const program = new Command();
     program
         .name('skill-hub')
@@ -65,6 +67,8 @@ else {
     program.addCommand(makeUpdateCommand());
     program.addCommand(makeSetupMcpCommand());
     program.addCommand(makeConfigCommand());
+    program.addCommand(makeAgentsConventionsCommand());
+    program.addCommand(makeLaunchCommand());
     program.parseAsync(process.argv).catch((err) => {
         console.error(`\nError: ${err.message}`);
         process.exit(1);

@@ -16,7 +16,7 @@ export interface DetailScreenProps {
   agent: AgentName;
   onBack: () => void;
   install: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
-  remove: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
+  remove: (ext: Extension, agent: AgentName, scope: 'global' | 'project', deleteFromDisk?: boolean) => Promise<void>;
   isInstalled: (name: string, type: ExtensionType, agent: AgentName) => boolean;
   defaultScope: 'global' | 'project';
   onOpenContent: (title: string, content: string) => void;
@@ -27,6 +27,7 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
 }) => {
   const { setStatus } = useStatus();
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showDiskConfirm, setShowDiskConfirm] = useState(false);
 
   const installed = isInstalled(extension.name, extension.type, agent);
 
@@ -38,7 +39,7 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
   }, [extension, agent]);
 
   useInput((input, key) => {
-    if (showConfirm) return;
+    if (showConfirm || showDiskConfirm) return;
     if (key.escape) {
       onBack();
       return;
@@ -101,14 +102,34 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
             message={`Удалить ${extension.name}?`}
             onConfirm={() => {
               setShowConfirm(false);
-              remove(extension, agent, defaultScope)
+              setShowDiskConfirm(true);
+            }}
+            onCancel={() => setShowConfirm(false)}
+          />
+        </Box>
+      )}
+      {showDiskConfirm && (
+        <Box marginTop={1}>
+          <Confirm
+            message={`Удалить файлы ${extension.name} с диска? (n = только из реестра)`}
+            onConfirm={() => {
+              setShowDiskConfirm(false);
+              remove(extension, agent, defaultScope, true)
                 .then(() => {
                   setStatus(`Удалён: ${extension.name}`, 'success');
                   onBack();
                 })
                 .catch((err: unknown) => setStatus(String(err), 'error'));
             }}
-            onCancel={() => setShowConfirm(false)}
+            onCancel={() => {
+              setShowDiskConfirm(false);
+              remove(extension, agent, defaultScope, false)
+                .then(() => {
+                  setStatus(`Удалён: ${extension.name} (файлы сохранены)`, 'success');
+                  onBack();
+                })
+                .catch((err: unknown) => setStatus(String(err), 'error'));
+            }}
           />
         </Box>
       )}

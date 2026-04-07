@@ -25,7 +25,8 @@ const PAGE_SIZE = 10;
 export const CatalogScreen: React.FC<CatalogScreenProps> = ({
   agent, onOpenDetail, onSearchFocusChange, install, installed, defaultScope,
 }) => {
-  const { results, query, typeFilter, loading, error, setQuery, setTypeFilter } = useCatalog(agent);
+  const catalogAgent = agent === 'agents-conventions' ? 'claude-code' : agent;
+  const { results, query, typeFilter, loading, error, setQuery, setTypeFilter } = useCatalog(catalogAgent);
   const { setStatus } = useStatus();
 
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -48,9 +49,9 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
   }, [installed]);
 
   const installedScopes = useMemo(() => {
-    const map = new Map<string, 'global' | 'project'>();
+    const map = new Map<string, 'global' | 'project' | 'parent'>();
     for (const e of installed) {
-      map.set(`${e.type}:${e.name}`, e.scope);
+      map.set(`${e.type}:${e.name}`, e.effectiveScope);
     }
     return map;
   }, [installed]);

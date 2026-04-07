@@ -1,0 +1,5 @@
+---
+applyTo: "src/ui/**"
+---
+Правила UI описаны в [src/ui/AGENTS.md](../../src/ui/AGENTS.md).
+Прочитай src/ui/AGENTS.md при работе с файлами в src/ui/.

@@ -14,7 +14,7 @@ export interface InstalledDetailScreenProps {
   entry: InstalledEntry;
   agent: AgentName;
   onBack: () => void;
-  remove: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
+  remove: (ext: Extension, agent: AgentName, scope: 'global' | 'project', deleteFromDisk?: boolean) => Promise<void>;
   move: (ext: Extension, agent: AgentName, fromScope: 'global' | 'project') => Promise<void>;
   update: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
   install: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
@@ -33,13 +33,17 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
   const { setStatus } = useStatus();
   const [actionIndex, setActionIndex] = useState(0);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showDiskConfirm, setShowDiskConfirm] = useState(false);
 
   const contentResult = useMemo(() => readExtensionContent(entry.path), [entry.path]);
 
   const catalogExt = catalog?.extensions.find(e => e.name === entry.name && e.type === entry.type);
   const isManualWithCatalog = entry.source === 'manual' && catalogExt != null;
 
+  const isParent = entry.effectiveScope === 'parent';
+
   const actions = useMemo<{ id: Action; label: string }[]>(() => {
+    if (isParent) return [];
     const list: { id: Action; label: string }[] = [
       { id: 'delete', label: 'Удалить' },
       { id: 'move',   label: `Переместить в ${entry.scope === 'global' ? 'project' : 'global'}` },
@@ -51,20 +55,20 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
       list.push({ id: 'register', label: 'Установить из skill-hub (зарегистрировать)' });
     }
     return list;
-  }, [entry.scope, entry.source, isManualWithCatalog, catalogExt]);
+  }, [entry.scope, entry.source, isManualWithCatalog, catalogExt, isParent]);
 
   const makeExt = (): Extension => ({
     type: entry.type, name: entry.name,
     description: catalogExt?.description ?? '',
     tags: catalogExt?.tags ?? [],
-    scope: entry.scope, platforms: catalogExt?.platforms ?? {},
+    scope: entry.scope === 'parent' ? 'project' : entry.scope, platforms: catalogExt?.platforms ?? {},
     path: entry.path, dependencies: catalogExt?.dependencies ?? [],
     version: entry.version,
     author: catalogExt?.author,
   });
 
   useInput((input, key) => {
-    if (showConfirm) return;
+    if (showConfirm || showDiskConfirm) return;
 
     if (key.escape) { onBack(); return; }
 
@@ -82,13 +86,13 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
       const action = actions[actionIndex].id;
       if (action === 'delete') { setShowConfirm(true); return; }
       if (action === 'move') {
-        move(makeExt(), agent, entry.scope)
+        move(makeExt(), agent, entry.scope as 'global' | 'project')
           .then(() => { setStatus(`Перемещено: ${entry.name}`, 'success'); onBack(); })
           .catch((err: unknown) => setStatus(String(err), 'error'));
         return;
       }
       if (action === 'update') {
-        update(makeExt(), agent, entry.scope)
+        update(makeExt(), agent, entry.scope as 'global' | 'project')
           .then(() => { setStatus(`Обновлено: ${entry.name}`, 'success'); onBack(); })
           .catch((err: unknown) => setStatus(String(err), 'error'));
         return;
@@ -104,8 +108,13 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
 
   const handleConfirmDelete = () => {
     setShowConfirm(false);
-    remove(makeExt(), agent, entry.scope)
-      .then(() => { setStatus(`Удалено: ${entry.name}`, 'success'); onBack(); })
+    setShowDiskConfirm(true);
+  };
+
+  const handleDiskDeleteChoice = (deleteFromDisk: boolean) => {
+    setShowDiskConfirm(false);
+    remove(makeExt(), agent, entry.scope as 'global' | 'project', deleteFromDisk)
+      .then(() => { setStatus(`Удалено: ${entry.name}${deleteFromDisk ? '' : ' (файлы сохранены)'}`, 'success'); onBack(); })
       .catch((err: unknown) => setStatus(String(err), 'error'));
   };
 
@@ -136,8 +145,8 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
         <Row label="Версия:"     value={entry.version || '?'} />
         <Row
           label="Установлен:"
-          value={entry.scope}
-          valueColor={entry.scope === 'global' ? theme.success : theme.warning}
+          value={entry.effectiveScope}
+          valueColor={entry.effectiveScope === 'global' ? theme.success : entry.effectiveScope === 'parent' ? theme.accent : theme.warning}
         />
         <Row
           label="Источник:"
@@ -172,25 +181,31 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
 
       <Box marginTop={1} flexDirection="column">
         <Text color={theme.muted} dimColor>Действия:</Text>
-        <Box flexDirection="column">
-          {actions.map((action, i) => {
-            const isSelected = i === actionIndex;
-            const isRegister = action.id === 'register';
-            return (
-              <Box key={action.id} flexDirection="row">
-                <Text color={isSelected ? theme.selected : theme.muted}>
-                  {isSelected ? '▶ ' : '  '}
-                </Text>
-                <Text
-                  color={isSelected ? theme.selected : (isRegister ? theme.success : theme.secondary)}
-                  bold={isSelected}
-                >
-                  {action.label}
-                </Text>
-              </Box>
-            );
-          })}
-        </Box>
+        {isParent ? (
+          <Box>
+            <Text color={theme.accent}>  Управляется из родительского проекта</Text>
+          </Box>
+        ) : (
+          <Box flexDirection="column">
+            {actions.map((action, i) => {
+              const isSelected = i === actionIndex;
+              const isRegister = action.id === 'register';
+              return (
+                <Box key={action.id} flexDirection="row">
+                  <Text color={isSelected ? theme.selected : theme.muted}>
+                    {isSelected ? '▶ ' : '  '}
+                  </Text>
+                  <Text
+                    color={isSelected ? theme.selected : (isRegister ? theme.success : theme.secondary)}
+                    bold={isSelected}
+                  >
+                    {action.label}
+                  </Text>
+                </Box>
+              );
+            })}
+          </Box>
+        )}
       </Box>
       {SEP}
 
@@ -200,6 +215,16 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
             message={`Удалить ${entry.name}?`}
             onConfirm={handleConfirmDelete}
             onCancel={() => setShowConfirm(false)}
+          />
+        </Box>
+      )}
+
+      {showDiskConfirm && (
+        <Box marginTop={1}>
+          <Confirm
+            message={`Удалить файлы ${entry.name} с диска? (n = только из реестра)`}
+            onConfirm={() => handleDiskDeleteChoice(true)}
+            onCancel={() => handleDiskDeleteChoice(false)}
           />
         </Box>
       )}

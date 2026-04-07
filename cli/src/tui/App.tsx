@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Box, useInput, useApp, useStdout } from 'ink';
 import { normalizeInput, isCtrl } from './keymap';
 import { Header, TabName } from './components/Header';
@@ -18,8 +18,10 @@ import { DetailScreen } from './screens/DetailScreen';
 import { MoveScreen } from './screens/MoveScreen';
 import { InstalledDetailScreen } from './screens/InstalledDetailScreen';
 import { ContentScreen } from './screens/ContentScreen';
+import { ConventionsWarningDialog } from './components/ConventionsWarningDialog';
 import { Extension } from '../catalog';
 import { InstalledEntry } from './hooks/useRegistry';
+import { getConventionsStatus } from '../conventions';
 
 const TABS: TabName[] = ['catalog', 'installed', 'settings'];
 
@@ -61,7 +63,15 @@ export const App: React.FC = () => {
   const [moveScope, setMoveScope] = useState<'global' | 'project'>('project');
   const [installedDetailEntry, setInstalledDetailEntry] = useState<InstalledEntry | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [settingsEditing, setSettingsEditing] = useState(false);
   const [contentData, setContentData] = useState<{ title: string; content: string } | null>(null);
+  const [showConventionsWarning, setShowConventionsWarning] = useState(false);
+
+  useEffect(() => {
+    if (config.agent === 'agents-conventions' && !getConventionsStatus().hasAgentsDir) {
+      setShowConventionsWarning(true);
+    }
+  }, []);
 
   const handleOpenDetail = useCallback((ext: Extension) => {
     setDetailExt(ext);
@@ -84,6 +94,15 @@ export const App: React.FC = () => {
     nav.pushScreen('contentView');
   }, [nav]);
 
+  const handleGoToSettings = useCallback(() => {
+    setShowConventionsWarning(false);
+    nav.setTab('settings');
+  }, [nav]);
+
+  const handleDismissWarning = useCallback(() => {
+    setShowConventionsWarning(false);
+  }, []);
+
   const handleBack = useCallback(() => {
     const leaving = nav.currentScreen;
     nav.popScreen();
@@ -100,21 +119,15 @@ export const App: React.FC = () => {
     const screen = nav.currentScreen;
     const isTopLevel = screen === 'catalog' || screen === 'installed' || screen === 'settings';
 
-    if (searchFocused) return;
+    if (showConventionsWarning) return;
+    if (searchFocused || settingsEditing) return;
 
     if (isCtrl(key) && normalizeInput(input) === 'q') {
       exit();
       return;
     }
 
-    if (key.escape && !isTopLevel) {
-      handleBack();
-      return;
-    }
-
-    if (!isTopLevel) return;
-
-    if (key.tab) {
+    if (key.tab && nav.activeTab !== 'settings') {
       const currentIdx = TABS.indexOf(nav.activeTab);
       const nextIdx = key.shift
         ? (currentIdx - 1 + TABS.length) % TABS.length
@@ -126,20 +139,30 @@ export const App: React.FC = () => {
     if (input === '1') { nav.setTab('catalog'); return; }
     if (input === '2') { nav.setTab('installed'); return; }
     if (input === '3') { nav.setTab('settings'); return; }
+
+    if (!isTopLevel) return;
+
+    if (key.escape && !isTopLevel) {
+      handleBack();
+      return;
+    }
   });
 
   const screen = nav.currentScreen;
 
-  const globalCount = registry.installed.filter(e => e.scope === 'global').length;
-  const projectCount = registry.installed.filter(e => e.scope === 'project').length;
+  const globalCount = registry.installed.filter(e => e.effectiveScope === 'global').length;
+  const projectCount = registry.installed.filter(e => e.effectiveScope === 'project').length;
+  const parentCount = registry.installed.filter(e => e.effectiveScope === 'parent').length;
 
   const renderScreen = () => {
     if (screen === 'contentView' && contentData) {
+      const contentHeight = termHeight - 8; // Header(3) + InfoBar(3) + Separator(2)
       return (
         <ContentScreen
           title={contentData.title}
           content={contentData.content}
           onBack={handleBack}
+          viewHeight={contentHeight}
         />
       );
     }
@@ -203,6 +226,7 @@ export const App: React.FC = () => {
         <SettingsScreen
           config={config}
           updateConfig={updateConfig}
+          onEditingChange={setSettingsEditing}
         />
       );
     }
@@ -224,15 +248,27 @@ export const App: React.FC = () => {
   const isTopLevel = screen === 'catalog' || screen === 'installed' || screen === 'settings';
   const isFullscreen = screen === 'contentView';
   const hints: Hint[] = isTopLevel
-    ? (searchFocused ? GLOBAL_HINTS.filter(h => h.key === 'Tab') : GLOBAL_HINTS)
+    ? (searchFocused
+      ? GLOBAL_HINTS.filter(h => h.key === 'Tab')
+      : nav.activeTab === 'settings'
+        ? GLOBAL_HINTS.filter(h => h.key !== 'Tab')
+        : GLOBAL_HINTS)
     : [{ key: 'Esc', description: 'назад' }, { key: 'Ctrl+Q', description: 'выход' }];
 
   return (
     <StatusContext.Provider value={{ message: statusMessage, status: statusType, setStatus, clearStatus }}>
       <Box flexDirection="column" height="100%">
         <Header activeTab={nav.activeTab} />
-        <Box height={isFullscreen ? termHeight - 3 : termHeight - 8} flexDirection="column">
+        <Box height={termHeight - 8} flexDirection="column">
           {renderScreen()}
+          {showConventionsWarning && (
+            <Box position="absolute" marginTop={2} marginLeft={2}>
+              <ConventionsWarningDialog
+                onGoToSettings={handleGoToSettings}
+                onDismiss={handleDismissWarning}
+              />
+            </Box>
+          )}
         </Box>
         {!isFullscreen && (
           <>
@@ -241,6 +277,7 @@ export const App: React.FC = () => {
               totalCount={registry.installed.length}
               globalCount={globalCount}
               projectCount={projectCount}
+              parentCount={parentCount}
               agent={agent}
               defaultScope={config.defaultScope}
             />

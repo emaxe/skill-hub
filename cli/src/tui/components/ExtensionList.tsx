@@ -7,7 +7,7 @@ interface Props {
   extensions: Extension[];
   selectedIndex: number;
   installedNames?: Set<string>;
-  installedScopes?: Map<string, 'global' | 'project'>;
+  installedScopes?: Map<string, 'global' | 'project' | 'parent'>;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -75,7 +75,7 @@ export const ExtensionList: React.FC<Props> = ({ extensions, selectedIndex, inst
             </Box>
             <Box minWidth={9}>
               {scope ? (
-                <Text color={scope === 'global' ? theme.success : theme.warning}>{scope}</Text>
+                <Text color={scope === 'global' ? theme.success : scope === 'parent' ? theme.accent : theme.warning}>{scope}</Text>
               ) : (
                 <Text dimColor>{'—'}</Text>
               )}

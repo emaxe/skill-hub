@@ -18,11 +18,17 @@ export function makeRemoveCommand(): Command {
     .option('--global', 'Удалить глобальную установку')
     .option('--project', 'Удалить проектную установку')
     .option('--local', 'Удалить проектную установку (alias для --project)')
-    .action(async (nameArg: string, opts: { agent?: string; global?: boolean; project?: boolean; local?: boolean }) => {
+    .option('--keep-files', 'Удалить только из реестра, оставить файлы на диске')
+    .action(async (nameArg: string, opts: { agent?: string; global?: boolean; project?: boolean; local?: boolean; keepFiles?: boolean }) => {
       const spinner = ora('Удаление...').start();
       try {
         const agent = (opts.agent || detectAgent()) as AgentName;
         const scope = opts.global ? 'global' : 'project';
+
+        if (agent === 'agents-conventions' && scope === 'global') {
+          spinner.fail(chalk.red('agents-conventions поддерживает только project scope'));
+          process.exit(1);
+        }
 
         let type: ExtensionType | undefined;
         let name = nameArg;
@@ -37,13 +43,16 @@ export function makeRemoveCommand(): Command {
           process.exit(1);
         }
 
-        const adapter = getAdapter(agent);
-        await adapter.remove(ext, scope);
+        if (!opts.keepFiles) {
+          const adapter = getAdapter(agent);
+          await adapter.remove(ext, scope);
+        }
 
         const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
         reg.remove(ext.name, ext.type, agent);
 
-        spinner.succeed(chalk.green(`Удалён ${ext.type}:${ext.name} (${agent}, ${scope})`));
+        const suffix = opts.keepFiles ? ', файлы сохранены' : '';
+        spinner.succeed(chalk.green(`Удалён ${ext.type}:${ext.name} (${agent}, ${scope}${suffix})`));
       } catch (err) {
         spinner.fail(chalk.red(String(err)));
         process.exit(1);

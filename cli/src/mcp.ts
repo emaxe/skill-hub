@@ -6,11 +6,12 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { loadCatalog, searchExtensions, filterByAgent, scoreExtensions, AgentName, ExtensionType } from './catalog';
+import { loadCatalog, searchExtensions, filterByAgent, scoreExtensions, platformKey, AgentName, ExtensionType } from './catalog';
 import { detectAgent } from './detect-agent';
 import { getCachePath, ensureCache } from './git';
 import { createRegistry } from './registry';
 import { getAdapter } from './adapters/get-adapter';
+import { filterRecordsByDirectory } from './path-filter';
 
 function str(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined;
@@ -33,7 +34,7 @@ export async function startMcpServer(): Promise<void> {
             type: 'object',
             properties: {
               query: { type: 'string', description: 'Поисковый запрос (имя, описание, тег)' },
-              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot'], description: 'Фильтр по агенту' },
+              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'], description: 'Фильтр по агенту' },
               type: { type: 'string', enum: ['skill', 'agent', 'command'], description: 'Фильтр по типу' },
               limit: { type: 'number', description: 'Макс. количество результатов (по умолчанию 10)' },
               offset: { type: 'number', description: 'Пропустить первые N результатов (по умолчанию 0)' },
@@ -47,7 +48,7 @@ export async function startMcpServer(): Promise<void> {
             type: 'object',
             properties: {
               name: { type: 'string', description: 'Имя расширения (или type:name, например skill:git-helper)' },
-              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot'], description: 'Агент' },
+              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'], description: 'Агент' },
               scope: { type: 'string', enum: ['global', 'project'], description: 'Область установки (по умолчанию: project)' },
             },
             required: ['name'],
@@ -60,8 +61,9 @@ export async function startMcpServer(): Promise<void> {
             type: 'object',
             properties: {
               name: { type: 'string', description: 'Имя расширения (или type:name)' },
-              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot'], description: 'Агент' },
+              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'], description: 'Агент' },
               scope: { type: 'string', enum: ['global', 'project'], description: 'Область установки (по умолчанию: project)' },
+              delete_from_disk: { type: 'boolean', description: 'Удалить файлы с диска (по умолчанию: true). false = только из реестра' },
             },
             required: ['name'],
           },
@@ -73,7 +75,7 @@ export async function startMcpServer(): Promise<void> {
             type: 'object',
             properties: {
               name: { type: 'string', description: 'Имя расширения (или type:name)' },
-              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot'], description: 'Агент' },
+              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'], description: 'Агент' },
               to: { type: 'string', enum: ['global', 'project'], description: 'Целевой scope' },
             },
             required: ['name', 'to'],
@@ -85,7 +87,7 @@ export async function startMcpServer(): Promise<void> {
           inputSchema: {
             type: 'object',
             properties: {
-              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot'], description: 'Фильтр по агенту' },
+              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'], description: 'Фильтр по агенту' },
               type: { type: 'string', enum: ['skill', 'agent', 'command'], description: 'Фильтр по типу' },
               limit: { type: 'number', description: 'Макс. количество результатов (по умолчанию 10)' },
               offset: { type: 'number', description: 'Пропустить первые N результатов (по умолчанию 0)' },
@@ -104,7 +106,7 @@ export async function startMcpServer(): Promise<void> {
               },
               agent: {
                 type: 'string',
-                enum: ['claude-code', 'cursor', 'copilot'],
+                enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'],
                 description: 'Фильтр по агенту (по умолчанию: автодетект)',
               },
               limit: {
@@ -127,7 +129,7 @@ export async function startMcpServer(): Promise<void> {
               },
               agent: {
                 type: 'string',
-                enum: ['claude-code', 'cursor', 'copilot'],
+                enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'],
                 description: 'Агент для проверки статуса установки (по умолчанию: автодетект)',
               },
             },
@@ -194,10 +196,17 @@ export async function startMcpServer(): Promise<void> {
           };
         }
 
-        const adapter = getAdapter(agent);
-        if (!ext.platforms[adapter.agentName]) {
+        if (agent === 'agents-conventions' && scope === 'global') {
           return {
-            content: [{ type: 'text', text: `Расширение "${ext.name}" не поддерживает агента ${adapter.agentName}` }],
+            content: [{ type: 'text', text: 'agents-conventions поддерживает только project scope' }],
+            isError: true,
+          };
+        }
+
+        const adapter = getAdapter(agent);
+        if (!ext.platforms[platformKey(agent)]) {
+          return {
+            content: [{ type: 'text', text: `Расширение "${ext.name}" не поддерживает агента ${agent}` }],
             isError: true,
           };
         }
@@ -267,14 +276,19 @@ export async function startMcpServer(): Promise<void> {
           };
         }
 
-        const adapter = getAdapter(agent);
-        await adapter.remove(ext, scope);
+        const deleteFromDisk = a.delete_from_disk !== false;
+
+        if (deleteFromDisk) {
+          const adapter = getAdapter(agent);
+          await adapter.remove(ext, scope);
+        }
 
         const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
         reg.remove(ext.name, ext.type, agent);
 
+        const suffix = deleteFromDisk ? '' : ' (файлы сохранены)';
         return {
-          content: [{ type: 'text', text: `Удалён ${ext.type}:${ext.name} (${agent})` }],
+          content: [{ type: 'text', text: `Удалён ${ext.type}:${ext.name} (${agent})${suffix}` }],
         };
       } catch (err) {
         return {
@@ -316,10 +330,17 @@ export async function startMcpServer(): Promise<void> {
           };
         }
 
-        const adapter = getAdapter(agent);
-        if (!ext.platforms[adapter.agentName]) {
+        if (agent === 'agents-conventions' && to === 'global') {
           return {
-            content: [{ type: 'text', text: `Расширение "${ext.name}" не поддерживает агента ${adapter.agentName}` }],
+            content: [{ type: 'text', text: 'agents-conventions поддерживает только project scope' }],
+            isError: true,
+          };
+        }
+
+        const adapter = getAdapter(agent);
+        if (!ext.platforms[platformKey(agent)]) {
+          return {
+            content: [{ type: 'text', text: `Расширение "${ext.name}" не поддерживает агента ${agent}` }],
             isError: true,
           };
         }
@@ -358,18 +379,23 @@ export async function startMcpServer(): Promise<void> {
         const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
         const registryItems = reg.list(agent, typeFilter);
 
+        const cwd = process.cwd();
+        const homeDir = os.homedir();
+        const filtered = filterRecordsByDirectory(registryItems, cwd, homeDir);
+
         interface ListEntry {
           type: ExtensionType;
           name: string;
           version: string;
-          scope: 'global' | 'project';
+          scope: 'global' | 'project' | 'parent';
+          effectiveScope: string;
           source: 'skill-hub' | 'manual';
         }
 
         const map = new Map<string, ListEntry>();
-        for (const r of registryItems) {
+        for (const { record: r, effectiveScope } of filtered) {
           map.set(`${r.name}:${r.scope}`, {
-            type: r.type, name: r.name, version: r.version, scope: r.scope, source: 'skill-hub',
+            type: r.type, name: r.name, version: r.version, scope: r.scope, effectiveScope, source: 'skill-hub',
           });
         }
 
@@ -379,7 +405,7 @@ export async function startMcpServer(): Promise<void> {
             if (typeFilter && s.type !== typeFilter) continue;
             const key = `${s.name}:${s.scope}`;
             if (!map.has(key)) {
-              map.set(key, { type: s.type, name: s.name, version: '?', scope: s.scope, source: 'manual' });
+              map.set(key, { type: s.type, name: s.name, version: '?', scope: s.scope, effectiveScope: s.scope, source: 'manual' });
             }
           }
         } catch { /* scan failure is silent — registry data is still shown */ }
@@ -412,7 +438,10 @@ export async function startMcpServer(): Promise<void> {
         const agentExtensions = filterByAgent(catalog.extensions, agent);
 
         const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
-        const installedNames = new Set(reg.list(agent).map(r => r.name));
+        const cwd = process.cwd();
+        const homeDir = os.homedir();
+        const filteredInstalled = filterRecordsByDirectory(reg.list(agent), cwd, homeDir);
+        const installedNames = new Set(filteredInstalled.map(({ record }) => record.name));
         const notInstalled = agentExtensions.filter(ext => !installedNames.has(ext.name));
 
         const scored = scoreExtensions(notInstalled, context);
@@ -473,8 +502,13 @@ export async function startMcpServer(): Promise<void> {
         }
 
         const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
-        const installed = reg.isInstalled(ext.name, ext.type, agent);
-        const record = installed ? reg.get(ext.name, ext.type, agent) : undefined;
+        const cwd = process.cwd();
+        const homeDir = os.homedir();
+        const allRecords = reg.list(agent);
+        const filteredRecords = filterRecordsByDirectory(allRecords, cwd, homeDir);
+        const match = filteredRecords.find(({ record: r }) => r.name === ext.name && r.type === ext.type);
+        const installed = !!match;
+        const record = match?.record;
 
         const result = {
           type: ext.type,
@@ -488,6 +522,7 @@ export async function startMcpServer(): Promise<void> {
           dependencies: ext.dependencies,
           installed,
           installed_scope: record?.scope || null,
+          effectiveScope: match?.effectiveScope || null,
           installed_at: record?.installed_at || null,
         };
 
