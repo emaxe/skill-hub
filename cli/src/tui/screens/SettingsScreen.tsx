@@ -1,3 +1,11 @@
+/**
+ * Экран настроек — самый сложный экран TUI.
+ *
+ * Две подвкладки (SubTabBar): «Основное» и «AI-агенты».
+ * Динамический список полей (fields) зависит от текущей подвкладки и контекста.
+ * Клавиатура: Tab — подвкладка, ↑↓ — поле, ←→ — значение, Enter — действие/сохранение.
+ * Модалки: InitConventionsModal (включение), ExitConventionsModal (выключение), TextEditModal (URL/proxy).
+ */
 import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { AgentName } from '../../catalog';
@@ -12,6 +20,7 @@ import { InitConventionsModal } from '../components/InitConventionsModal';
 import { ExitConventionsModal } from '../components/ExitConventionsModal';
 import { TextEditModal } from '../components/TextEditModal';
 import { getConventionsStatus, ConventionsStatus, disableConventions } from '../../conventions';
+import { checkExtensionSync } from '../../sync';
 import { GeneralTab, AiAgentsTab, SetupTab } from './settings';
 import { ScrollableBox } from '../components/ScrollableBox';
 
@@ -21,6 +30,7 @@ const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
 type Field = 'agent' | 'scope' | 'registryUrl' | 'installMcp' | 'installBaseSkill' | 'updateCache' | 'updateAgent'
   | 'initConventions'
   | 'saveAsGlobal' | 'resetToGlobal' | 'createProjectConfig'
+  | 'syncExtensions'
   | `aiAgent:${AgentName}`
   | 'aiProxy'
   | `aiAgentProxy:${AgentName}`;
@@ -48,10 +58,11 @@ export interface SettingsScreenProps {
   onSaveAsGlobal: () => boolean;
   onResetToGlobal: () => SkillHubConfig | null;
   onCreateProjectConfig: () => boolean;
+  onSyncExtensions?: () => void;
   viewHeight: number;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateConfig, onEditingChange, configSource, hasProjectRoot, onSaveAsGlobal, onResetToGlobal, onCreateProjectConfig, viewHeight }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateConfig, onEditingChange, configSource, hasProjectRoot, onSaveAsGlobal, onResetToGlobal, onCreateProjectConfig, onSyncExtensions, viewHeight }) => {
   const { setStatus } = useStatus();
 
   const [localAgent, setLocalAgent] = useState<AgentName>(config.agent);
@@ -77,13 +88,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   const setup = useBaseSetup(localAgent);
   const [cacheUpdateState, setCacheUpdateState] = useState<InstallState>('idle');
 
+  // Динамический список полей: зависит от подвкладки, агента, статуса setup и config source
   const fields = useMemo<Field[]>(() => {
     switch (activeSubTab) {
       case 'general': {
         const f: Field[] = ['agent', 'scope', 'registryUrl'];
         if (cacheInstalled) f.push('updateCache');
         if (configSource === 'project') {
-          f.push('saveAsGlobal', 'resetToGlobal');
+          f.push('saveAsGlobal', 'resetToGlobal', 'syncExtensions');
         } else if (hasProjectRoot) {
           f.push('createProjectConfig');
         }
@@ -117,6 +129,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     onEditingChange?.(editModal !== null);
   }, [editModal, onEditingChange]);
 
+  // --- Обработка клавиатуры: Tab(подвкладки), ↑↓(поле), ←→(значение), Enter(действие/сохранение) ---
   useInput((input, key) => {
     if (showModal || editModal) return;
 
@@ -220,6 +233,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         }
         return;
       }
+      if (activeField === 'syncExtensions') {
+        const syncResult = checkExtensionSync(localAgent);
+        if (syncResult.missing.length === 0) {
+          setStatus('Все расширения из проекта установлены', 'success');
+        } else if (onSyncExtensions) {
+          onSyncExtensions();
+        }
+        return;
+      }
       if (activeField === 'initConventions') {
         setShowModal(true);
         return;
@@ -286,7 +308,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     || activeField === 'initConventions'
     || activeField === 'saveAsGlobal'
     || activeField === 'resetToGlobal'
-    || activeField === 'createProjectConfig';
+    || activeField === 'createProjectConfig'
+    || activeField === 'syncExtensions';
 
   if (showModal) {
     const enabledAgents = (['claude-code', 'cursor', 'copilot'] as const)

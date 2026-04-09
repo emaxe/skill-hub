@@ -5,7 +5,7 @@ import { ConfigSource } from '../../../config';
 import { InstallState } from '../../hooks/useBaseSetup';
 import { theme } from '../../theme';
 
-type Field = 'agent' | 'scope' | 'registryUrl' | 'updateCache' | 'saveAsGlobal' | 'resetToGlobal' | 'createProjectConfig';
+type Field = 'agent' | 'scope' | 'registryUrl' | 'updateCache' | 'saveAsGlobal' | 'resetToGlobal' | 'createProjectConfig' | 'syncExtensions';
 
 interface Props {
   localAgent: AgentName;
@@ -66,8 +66,8 @@ export const GeneralTab: React.FC<Props> = ({
       </Text>
       <Text color={theme.warning}>
         {localRegistryUrl}
-        {activeField === 'registryUrl' ? '▌' : ''}
       </Text>
+      {activeField === 'registryUrl' && <Text dimColor> [Enter]</Text>}
     </Box>
 
     {/* Кэш */}
@@ -107,6 +107,16 @@ export const GeneralTab: React.FC<Props> = ({
       <Box marginBottom={1}>
         <Text color={activeField === 'resetToGlobal' ? theme.selected : theme.secondary}>
           {activeField === 'resetToGlobal' ? '▶ ' : '  '}{'Сбросить на глобальные '}
+        </Text>
+        <Text dimColor>[Enter]</Text>
+      </Box>
+    )}
+
+    {/* Синхронизировать расширения (только для проектных настроек) */}
+    {configSource === 'project' && (
+      <Box marginBottom={1}>
+        <Text color={activeField === 'syncExtensions' ? theme.selected : theme.secondary}>
+          {activeField === 'syncExtensions' ? '▶ ' : '  '}{'Синхронизировать расширения '}
         </Text>
         <Text dimColor>[Enter]</Text>
       </Box>

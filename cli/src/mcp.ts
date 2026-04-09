@@ -12,15 +12,21 @@ import { getCachePath, ensureCache } from './git';
 import { createRegistry } from './registry';
 import { getAdapter } from './adapters/get-adapter';
 import { filterRecordsByDirectory } from './path-filter';
+import { hasProjectConfig, addProjectExtension, removeProjectExtension } from './config';
 
+// MCP-сервер skill-hub — предоставляет 7 инструментов для AI-агентов через stdio транспорт.
+// Инструменты: search, install, remove, move, list, suggest, get_info.
+
+// Безопасное приведение к string (unknown → string | undefined)
 function str(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined;
 }
 
+// --- Запуск сервера ---
 export async function startMcpServer(): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const server: any = new Server(
-    { name: 'skill-hub', version: '0.1.1' },
+    { name: 'skill-hub', version: '0.1.7' },
     { capabilities: { tools: {} } }
   );
 
@@ -145,6 +151,7 @@ export async function startMcpServer(): Promise<void> {
     const { name, arguments: args = {} } = request.params;
     const a = args as Record<string, unknown>;
 
+    // --- search_extensions ---
     if (name === 'search_extensions') {
       try {
         await ensureCache();
@@ -171,6 +178,7 @@ export async function startMcpServer(): Promise<void> {
       }
     }
 
+    // --- install_extension ---
     if (name === 'install_extension') {
       try {
         await ensureCache();
@@ -196,6 +204,7 @@ export async function startMcpServer(): Promise<void> {
           };
         }
 
+        // agents-conventions работает только в project scope (нет глобальной директории)
         if (agent === 'agents-conventions' && scope === 'global') {
           return {
             content: [{ type: 'text', text: 'agents-conventions поддерживает только project scope' }],
@@ -213,6 +222,7 @@ export async function startMcpServer(): Promise<void> {
 
         const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
 
+        // Разрешение зависимостей: ищем каждую в каталоге и устанавливаем до основного расширения
         for (const dep of ext.dependencies) {
           let depType: ExtensionType | undefined;
           let depName = dep;
@@ -241,6 +251,23 @@ export async function startMcpServer(): Promise<void> {
           path: adapter.getInstallPath(ext, scope),
         });
 
+        if (hasProjectConfig()) {
+          for (const dep of ext.dependencies) {
+            let depType: ExtensionType | undefined;
+            let depName = dep;
+            if (dep.includes(':')) {
+              const parts = dep.split(':');
+              depType = parts[0] as ExtensionType;
+              depName = parts[1];
+            }
+            const depExt = catalog.extensions.find(e => e.name === depName && (!depType || e.type === depType));
+            if (depExt) {
+              addProjectExtension({ type: depExt.type, name: depExt.name, version: depExt.version, scope });
+            }
+          }
+          addProjectExtension({ type: ext.type, name: ext.name, version: ext.version, scope });
+        }
+
         return {
           content: [{ type: 'text', text: `Установлен ${ext.type}:${ext.name} v${ext.version || '?'} (${agent}, ${scope})` }],
         };
@@ -252,6 +279,7 @@ export async function startMcpServer(): Promise<void> {
       }
     }
 
+    // --- remove_extension ---
     if (name === 'remove_extension') {
       try {
         const agent = (str(a.agent) || detectAgent()) as AgentName;
@@ -286,6 +314,10 @@ export async function startMcpServer(): Promise<void> {
         const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
         reg.remove(ext.name, ext.type, agent);
 
+        if (hasProjectConfig()) {
+          removeProjectExtension(ext.name, ext.type);
+        }
+
         const suffix = deleteFromDisk ? '' : ' (файлы сохранены)';
         return {
           content: [{ type: 'text', text: `Удалён ${ext.type}:${ext.name} (${agent})${suffix}` }],
@@ -298,6 +330,7 @@ export async function startMcpServer(): Promise<void> {
       }
     }
 
+    // --- move_extension ---
     if (name === 'move_extension') {
       try {
         await ensureCache();
@@ -361,6 +394,10 @@ export async function startMcpServer(): Promise<void> {
           path: adapter.getInstallPath(ext, to),
         });
 
+        if (hasProjectConfig()) {
+          addProjectExtension({ type: ext.type, name: ext.name, version: ext.version, scope: to });
+        }
+
         return {
           content: [{ type: 'text', text: `Перенесён ${ext.type}:${ext.name} из ${from} в ${to} (${agent})` }],
         };
@@ -372,6 +409,7 @@ export async function startMcpServer(): Promise<void> {
       }
     }
 
+    // --- list_extensions ---
     if (name === 'list_extensions') {
       try {
         const agent = (str(a.agent) || detectAgent()) as AgentName;
@@ -392,6 +430,7 @@ export async function startMcpServer(): Promise<void> {
           source: 'skill-hub' | 'manual';
         }
 
+        // Объединяем реестр и файловую систему; дедупликация по name:scope
         const map = new Map<string, ListEntry>();
         for (const { record: r, effectiveScope } of filtered) {
           map.set(`${r.name}:${r.scope}`, {
@@ -426,6 +465,7 @@ export async function startMcpServer(): Promise<void> {
       }
     }
 
+    // --- suggest_extensions ---
     if (name === 'suggest_extensions') {
       try {
         await ensureCache();
@@ -444,6 +484,7 @@ export async function startMcpServer(): Promise<void> {
         const installedNames = new Set(filteredInstalled.map(({ record }) => record.name));
         const notInstalled = agentExtensions.filter(ext => !installedNames.has(ext.name));
 
+        // Ранжирование по контексту: scoreExtensions сопоставляет теги/описания с содержимым проекта
         const scored = scoreExtensions(notInstalled, context);
         const top = scored.slice(0, limit);
 
@@ -477,6 +518,7 @@ export async function startMcpServer(): Promise<void> {
       }
     }
 
+    // --- get_extension_info ---
     if (name === 'get_extension_info') {
       try {
         await ensureCache();

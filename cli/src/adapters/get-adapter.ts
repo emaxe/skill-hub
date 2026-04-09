@@ -5,6 +5,7 @@ import { CursorAdapter } from './cursor';
 import { CopilotAdapter } from './copilot';
 import { AgentsConventionsAdapter } from './agents-conventions';
 
+/** Фабрика адаптеров: возвращает нужный адаптер по имени агента */
 export function getAdapter(agent: AgentName): AgentAdapter {
   if (agent === 'cursor') return new CursorAdapter();
   if (agent === 'copilot') return new CopilotAdapter();

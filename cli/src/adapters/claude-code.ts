@@ -1,3 +1,7 @@
+/**
+ * Адаптер Claude Code — ~/.claude/ (global), .claude/ (project).
+ * Структура: skills/{name}/SKILL.md, agents/{name}.md, commands/{name}.md
+ */
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -62,6 +66,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     return fs.existsSync(this.getInstallPath(ext, scope));
   }
 
+  // Трёхфазный скан: 1) global (~/.claude/), 2) project (.claude/), 3) parent walk (от projectDir вверх до homeDir)
   scanInstalled(): ScanResult[] {
     const results: ScanResult[] = [];
 
@@ -101,9 +106,10 @@ export class ClaudeCodeAdapter implements AgentAdapter {
       }
     }
 
-    // Parent directories scan: walk up from projectDir to homeDir (exclusive)
+    // Обход родительских директорий от projectDir вверх до homeDir (не включая)
     const homeNorm = path.resolve(this.homeDir);
     const projectNorm = path.resolve(this.projectDir);
+    // Дедупликация: пропускаем расширения, уже найденные в global/project
     const seen = new Set(results.map(r => `${r.type}:${r.name}`));
     let dir = path.dirname(projectNorm);
 

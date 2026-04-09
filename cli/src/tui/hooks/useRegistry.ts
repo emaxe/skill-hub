@@ -1,3 +1,12 @@
+/**
+ * Центральный хук управления расширениями — загрузка, установка, удаление, перемещение, обновление.
+ *
+ * Два режима работы:
+ * - Стандартный (claude-code, cursor, copilot): реестр + filesystem scan для одного агента
+ * - agents-conventions: агрегация проектных из .agents/ + глобальных от всех ИИ-агентов
+ *
+ * Все операции обёрнуты в withStatus() для единообразной обработки loading/error/success.
+ */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import os from 'os';
 import path from 'path';
@@ -7,6 +16,7 @@ import { getAdapter } from '../../adapters/get-adapter';
 import { ScanResult } from '../../adapters/types';
 import { getCachePath } from '../../git';
 import { EffectiveScope, filterRecordsByDirectory } from '../../path-filter';
+import { hasProjectConfig, addProjectExtension, removeProjectExtension } from '../../config';
 
 const REGISTRY_DIR = path.join(os.homedir(), '.skill-hub');
 
@@ -136,6 +146,7 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
 
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
+  /** Обёртка для async-операций: показывает статус загрузки, обрабатывает ошибки, автообновляет список */
   const withStatus = useCallback(async (label: string, fn: () => Promise<void>) => {
     if (!mountedRef.current) return;
     setError(null);
@@ -167,6 +178,9 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
         agent, scope,
         path: adapter.getInstallPath(ext, scope),
       });
+      if (hasProjectConfig()) {
+        addProjectExtension({ type: ext.type, name: ext.name, version: ext.version, scope });
+      }
     });
   }, [withStatus]);
 
@@ -177,6 +191,9 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
         await adapter.remove(ext, scope);
       }
       registryRef.current.remove(ext.name, ext.type, agent);
+      if (hasProjectConfig()) {
+        removeProjectExtension(ext.name, ext.type);
+      }
     });
   }, [withStatus]);
 
@@ -185,7 +202,6 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
     await withStatus(`Перемещаю ${ext.name} в ${toScope}...`, async () => {
       const adapter = getAdapter(agent);
       const cachePath = getCachePath();
-      // Устанавливаем в новый scope
       await adapter.install(ext, toScope, cachePath);
       registryRef.current.add({
         type: ext.type, name: ext.name,
@@ -193,8 +209,10 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
         agent, scope: toScope,
         path: adapter.getInstallPath(ext, toScope),
       });
-      // Удаляем из старого scope
       await adapter.remove(ext, fromScope);
+      if (hasProjectConfig()) {
+        addProjectExtension({ type: ext.type, name: ext.name, version: ext.version, scope: toScope });
+      }
     });
   }, [withStatus]);
 
@@ -202,7 +220,6 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
     await withStatus(`Обновляю ${ext.name}...`, async () => {
       const adapter = getAdapter(agent);
       const cachePath = getCachePath();
-      // Переустанавливаем — это и есть обновление
       await adapter.install(ext, scope, cachePath);
       registryRef.current.add({
         type: ext.type, name: ext.name,
@@ -210,6 +227,9 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
         agent, scope,
         path: adapter.getInstallPath(ext, scope),
       });
+      if (hasProjectConfig()) {
+        addProjectExtension({ type: ext.type, name: ext.name, version: ext.version, scope });
+      }
     });
   }, [withStatus]);
 

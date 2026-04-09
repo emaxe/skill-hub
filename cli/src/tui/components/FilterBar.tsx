@@ -17,7 +17,9 @@ interface Props {
 
 export const FilterBar: React.FC<Props> = ({ activeType }) => (
   <Box paddingX={1}>
-    <Text color={theme.muted}>Тип: </Text>
+    <Text color={theme.muted}>Тип </Text>
+    <Text color={theme.warning}>[t]</Text>
+    <Text color={theme.muted}>: </Text>
     {TYPE_OPTIONS.map(opt => (
       <React.Fragment key={opt.value}>
         <Text color={theme.muted}>  </Text>

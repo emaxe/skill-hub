@@ -1,7 +1,10 @@
+// --- Реестр установленных расширений (installed.json) ---
+
 import fs from 'fs';
 import path from 'path';
 import { AgentName, ExtensionType } from './catalog';
 
+/** Запись об установленном расширении — хранится в installed.json */
 export interface InstallRecord {
   type: ExtensionType;
   name: string;
@@ -12,6 +15,7 @@ export interface InstallRecord {
   path: string;
 }
 
+/** CRUD-интерфейс для работы с реестром установленных расширений */
 export interface Registry {
   add(record: InstallRecord): void;
   remove(name: string, type: ExtensionType, agent: AgentName): void;
@@ -20,6 +24,7 @@ export interface Registry {
   get(name: string, type: ExtensionType, agent: AgentName): InstallRecord | undefined;
 }
 
+/** Фабрика для работы с реестром — читает/пишет installed.json в указанной директории */
 export function createRegistry(registryDir: string): Registry {
   const registryPath = path.join(registryDir, 'installed.json');
 

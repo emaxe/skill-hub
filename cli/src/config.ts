@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { AgentName } from './catalog';
+import { AgentName, ExtensionType } from './catalog';
 
 export interface AiAgentConfig {
   enabled: boolean;
@@ -13,14 +13,27 @@ export interface AiAgentsConfig {
   agents: Record<AgentName, AiAgentConfig>;
 }
 
+export interface ConfigHistory {
+  registryUrl?: string[];
+  proxy?: string[];
+}
+
 export interface SkillHubConfig {
   agent: AgentName;
   defaultScope: 'global' | 'project';
   registryUrl: string;
   aiAgents: AiAgentsConfig;
+  history?: ConfigHistory;
 }
 
 export type ConfigSource = 'global' | 'project';
+
+export interface ProjectExtensionRecord {
+  type: ExtensionType;
+  name: string;
+  version?: string;
+  scope: 'global' | 'project';
+}
 
 export interface ResolvedConfig {
   config: SkillHubConfig;
@@ -59,15 +72,22 @@ function mergeWithDefaults(raw: Partial<SkillHubConfig>): SkillHubConfig {
         ...(raw.aiAgents?.agents || {}),
       },
     },
+    history: {
+      registryUrl: raw.history?.registryUrl ?? [],
+      proxy: raw.history?.proxy ?? [],
+    },
   };
 }
 
-// Ищет корень проекта (директорию с .git) вверх от cwd
+// Ищет корень проекта вверх от cwd: .skill-hub.json или .git
 export function findProjectRoot(from: string = process.cwd()): string | null {
   let dir = path.resolve(from);
   const root = path.parse(dir).root;
   while (dir !== root) {
-    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    if (
+      fs.existsSync(path.join(dir, PROJECT_CONFIG_NAME)) ||
+      fs.existsSync(path.join(dir, '.git'))
+    ) return dir;
     dir = path.dirname(dir);
   }
   return null;
@@ -184,4 +204,68 @@ export function initProjectConfig(): boolean {
   const globalConfig = loadConfig();
   saveProjectConfig(globalConfig, projectRoot);
   return true;
+}
+
+const MAX_HISTORY = 6;
+
+export function pushHistory(list: string[] | undefined, value: string): string[] {
+  if (!value) return list ?? [];
+  const prev = list ?? [];
+  const filtered = prev.filter(v => v !== value);
+  return [value, ...filtered].slice(0, MAX_HISTORY);
+}
+
+// --- Проектные расширения ---
+
+export function hasProjectConfig(projectRoot?: string): boolean {
+  const root = projectRoot ?? findProjectRoot();
+  if (!root) return false;
+  return fs.existsSync(getProjectConfigPath(root));
+}
+
+export function loadProjectExtensions(projectRoot?: string): ProjectExtensionRecord[] {
+  const root = projectRoot ?? findProjectRoot();
+  if (!root) return [];
+  const configPath = getProjectConfigPath(root);
+  try {
+    if (fs.existsSync(configPath)) {
+      const file = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      if (file && Array.isArray(file.extensions)) {
+        return file.extensions as ProjectExtensionRecord[];
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+export function saveProjectExtensions(extensions: ProjectExtensionRecord[], projectRoot?: string): void {
+  const root = projectRoot ?? findProjectRoot();
+  if (!root) return;
+  const configPath = getProjectConfigPath(root);
+
+  let existing: Record<string, unknown> = {};
+  try {
+    if (fs.existsSync(configPath)) {
+      existing = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    }
+  } catch {
+    // ignore
+  }
+  existing.extensions = extensions;
+  fs.writeFileSync(configPath, JSON.stringify(existing, null, 2));
+}
+
+export function addProjectExtension(record: ProjectExtensionRecord, projectRoot?: string): void {
+  const list = loadProjectExtensions(projectRoot);
+  const filtered = list.filter(e => !(e.type === record.type && e.name === record.name));
+  filtered.push(record);
+  saveProjectExtensions(filtered, projectRoot);
+}
+
+export function removeProjectExtension(name: string, type: ExtensionType, projectRoot?: string): void {
+  const list = loadProjectExtensions(projectRoot);
+  const filtered = list.filter(e => !(e.type === type && e.name === name));
+  saveProjectExtensions(filtered, projectRoot);
 }

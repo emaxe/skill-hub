@@ -36,8 +36,9 @@ export const AiAgentsTab: React.FC<Props> = ({ localAiAgents, activeField }) => 
       </Text>
       <Text color={theme.warning}>
         {localAiAgents.proxy || ''}
-        {activeField === 'aiProxy' ? '▌' : (!localAiAgents.proxy ? <Text dimColor>(не задан)</Text> : '')}
+        {!localAiAgents.proxy && activeField !== 'aiProxy' ? <Text dimColor>(не задан)</Text> : ''}
       </Text>
+      {activeField === 'aiProxy' && <Text dimColor> [Enter]</Text>}
     </Box>
 
     {AI_AGENTS.map(agentName => {

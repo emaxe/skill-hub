@@ -16,12 +16,18 @@ export function isCloned(cachePath = getCachePath()): boolean {
   return fs.existsSync(path.join(cachePath, '.git'));
 }
 
+/** Полностью удаляет кеш каталога — используется при смене registryUrl */
 export function resetCache(cachePath = getCachePath()): void {
   if (fs.existsSync(cachePath)) {
     fs.rmSync(cachePath, { recursive: true, force: true });
   }
 }
 
+/**
+ * Гарантирует наличие локального кеша каталога.
+ * Клонирует репозиторий при первом запуске, делает pull если отсутствует catalog.json,
+ * пересоздаёт кеш если registryUrl изменился.
+ */
 export async function ensureCache(cachePath = getCachePath()): Promise<void> {
   const registryUrl = getRegistryUrl();
 
@@ -76,6 +82,7 @@ export async function ensureCache(cachePath = getCachePath()): Promise<void> {
   }
 }
 
+/** Обновляет кеш каталога (git pull). Если кеш отсутствует — вызывает ensureCache */
 export async function updateCache(cachePath = getCachePath()): Promise<void> {
   if (!isCloned(cachePath)) {
     await ensureCache(cachePath);

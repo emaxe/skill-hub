@@ -77,7 +77,7 @@ export function makeConfigCommand(): Command {
       if (resetProjectToGlobal()) {
         console.log(chalk.green('Проектные настройки сброшены на глобальные.'));
       } else {
-        console.error(chalk.red('Не найден корень проекта (нет .git).'));
+        console.error(chalk.red('Не найден корень проекта.'));
         process.exit(1);
       }
     });
@@ -93,7 +93,7 @@ export function makeConfigCommand(): Command {
         if (source === 'project') {
           console.log(chalk.yellow('Проектный конфиг уже существует.'));
         } else {
-          console.error(chalk.red('Не найден корень проекта (нет .git).'));
+          console.error(chalk.red('Не найден корень проекта.'));
           process.exit(1);
         }
       }

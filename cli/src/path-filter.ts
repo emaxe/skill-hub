@@ -1,7 +1,10 @@
+// --- Фильтрация записей реестра по директории ---
+
 import path from 'path';
 
 export type EffectiveScope = 'global' | 'project' | 'parent';
 
+/** Маркеры директорий агентов — используются для определения корня проекта из пути файла */
 const AGENT_MARKERS = ['/.claude/', '/.cursor/', '/.github/', '/.agents/'];
 
 function extractProjectRoot(filePath: string): string | null {
@@ -15,6 +18,11 @@ function extractProjectRoot(filePath: string): string | null {
   return null;
 }
 
+/**
+ * Определяет effective scope записи относительно текущей директории.
+ * global — homeDir, project — cwd совпадает с корнем проекта,
+ * parent — cwd вложен в корень проекта, null — запись не относится к CWD.
+ */
 export function classifyRecord(
   record: { scope: 'global' | 'project' | 'parent'; path: string },
   cwd: string,
@@ -33,6 +41,7 @@ export function classifyRecord(
   return null;
 }
 
+/** Фильтрует записи реестра, оставляя только релевантные для текущей рабочей директории */
 export function filterRecordsByDirectory<T extends { scope: 'global' | 'project' | 'parent'; path: string }>(
   records: T[],
   cwd: string,

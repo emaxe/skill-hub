@@ -8,6 +8,7 @@ import { detectAgent } from '../detect-agent';
 import { getCachePath } from '../git';
 import { createRegistry } from '../registry';
 import { getAdapter } from '../adapters/get-adapter';
+import { hasProjectConfig, removeProjectExtension } from '../config';
 
 export function makeRemoveCommand(): Command {
   return new Command('remove')
@@ -50,6 +51,10 @@ export function makeRemoveCommand(): Command {
 
         const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
         reg.remove(ext.name, ext.type, agent);
+
+        if (hasProjectConfig()) {
+          removeProjectExtension(ext.name, ext.type);
+        }
 
         const suffix = opts.keepFiles ? ', файлы сохранены' : '';
         spinner.succeed(chalk.green(`Удалён ${ext.type}:${ext.name} (${agent}, ${scope}${suffix})`));

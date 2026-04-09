@@ -24,7 +24,7 @@ if (process.argv.length <= 2) {
   program
     .name('skill-hub')
     .description('Extension manager for AI coding agents (Claude Code, Cursor, Copilot)')
-    .version('0.1.0');
+    .version('0.1.7');
 
   program.addCommand(makeSearchCommand());
   program.addCommand(makeListCommand());

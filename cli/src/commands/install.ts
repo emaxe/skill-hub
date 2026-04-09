@@ -9,6 +9,7 @@ import { getCachePath, ensureCache } from '../git';
 import { createRegistry } from '../registry';
 import { AgentAdapter } from '../adapters/types';
 import { getAdapter } from '../adapters/get-adapter';
+import { hasProjectConfig, addProjectExtension } from '../config';
 
 async function installExtension(
   ext: Extension,
@@ -80,6 +81,20 @@ export function makeInstallCommand(): Command {
 
         spinner.text = `Устанавливаю ${ext.type}:${ext.name}...`;
         await installExtension(ext, adapter, scope, cachePath, reg);
+
+        if (hasProjectConfig()) {
+          for (const dep of ext.dependencies) {
+            let depType: ExtensionType | undefined;
+            let depName = dep;
+            if (dep.includes(':')) [depType, depName] = dep.split(':') as [ExtensionType, string];
+            const depExt = catalog.extensions.find(e => e.name === depName && (!depType || e.type === depType));
+            if (depExt) {
+              addProjectExtension({ type: depExt.type, name: depExt.name, version: depExt.version, scope });
+            }
+          }
+          addProjectExtension({ type: ext.type, name: ext.name, version: ext.version, scope });
+        }
+
         spinner.succeed(chalk.green(`Установлен ${ext.type}:${ext.name} v${ext.version || '?'} (${agent}, ${scope})`));
       } catch (err) {
         spinner.fail(chalk.red(String(err)));

@@ -41,12 +41,20 @@ skill-hub list
 | Команда | Описание |
 |---------|----------|
 | `search <query>` | Поиск расширений в каталоге |
-| `install <type:name>` | Установка расширения |
+| `install <type:name>` | Установка расширения (с разрешением зависимостей) |
 | `remove <type:name>` | Удаление расширения |
+| `move <type:name>` | Перемещение между scope (global / project) |
 | `list` | Список установленных расширений |
 | `info <type:name>` | Информация о расширении |
-| `update` | Обновление всех установленных расширений |
+| `update [name]` | Обновление расширений и кеша каталога |
 | `setup-mcp --agent <agent>` | Настройка MCP-сервера |
+| `config <subcommand>` | Управление конфигом (list, get, set, init, save-as-global, reset-to-global) |
+| `agents-conventions <cmd>` | Режим agents-conventions (enable, disable, status) |
+| `launch <agent>` | Запуск AI-агента с настройками прокси |
+
+## Интерактивный TUI
+
+Запуск без аргументов (`skill-hub`) открывает полноэкранный интерфейс с вкладками: Каталог, Установленные, Настройки.
 
 ## MCP-сервер
 
@@ -55,23 +63,24 @@ skill-hub list
 - `search_extensions` — поиск по каталогу (фильтр по агенту)
 - `install_extension` — установка расширения для выбранного агента
 - `remove_extension` — удаление расширения
-- `move_extension` — перемещение между scope (global ↔ project)
+- `move_extension` — перемещение между scope (global / project)
 - `list_extensions` — список установленных
 - `suggest_extensions` — рекомендации расширений для проекта
+- `get_extension_info` — подробная информация о расширении со статусом установки
 
 ## Локальная разработка
 
 Для тестирования без публикации в npm:
 
 ```bash
-# Из корня репозитория — собрать и залинковать глобально
-bash scripts/dev-link.sh
+# Из директории cli/ — собрать и залинковать глобально
+cd cli && npm run build && npm link
 
 # Тестировать как обычно
 skill-hub search git
 
 # Удалить глобальный линк
-bash scripts/dev-link.sh unlink
+npm unlink -g @emaxe/skill-hub
 ```
 
 При изменениях в исходниках достаточно пересобрать (`npm run build`) — линк обновится автоматически.
@@ -79,7 +88,7 @@ bash scripts/dev-link.sh unlink
 ## Ссылки
 
 - [Репозиторий](https://github.com/emaxe/skill-hub)
-- [Создание своего расширения](https://github.com/emaxe/skill-hub/blob/main/CONTRIBUTING.md)
+- [Каталог расширений](https://github.com/emaxe/skill-hub-catalog) — создание своих расширений см. `docs/` в каталоге
 
 ## Лицензия
 

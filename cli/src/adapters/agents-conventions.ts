@@ -1,3 +1,8 @@
+/**
+ * Адаптер agents-conventions — project-only scope, .agents/ директория.
+ * Использует source-файлы от claude-code адаптера (SKILL.md, AGENT.md, COMMAND.md).
+ * Global scope не поддерживается — выбрасывает ошибку.
+ */
 import fs from 'fs';
 import path from 'path';
 import { Extension, ExtensionType } from '../catalog';

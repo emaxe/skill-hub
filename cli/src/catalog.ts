@@ -26,6 +26,10 @@ export interface Catalog {
   extensions: Extension[];
 }
 
+/**
+ * Парсит сырой объект из catalog.json в типизированное расширение.
+ * Нормализует platforms: массив строк → Record, отсутствие → claude-code по умолчанию.
+ */
 export function parseExtension(raw: unknown): Extension {
   const r = raw as Record<string, unknown>;
   let platforms: Partial<Record<AgentName, string | null>> = {};
@@ -72,6 +76,7 @@ export function filterByAgent(extensions: Extension[], agent: AgentName): Extens
   });
 }
 
+/** Загружает и парсит catalog.json из локального кеша */
 export function loadCatalog(cachePath: string): Catalog {
   const catalogPath = path.join(cachePath, 'catalog.json');
   if (!fs.existsSync(catalogPath)) {
@@ -84,6 +89,7 @@ export function loadCatalog(cachePath: string): Catalog {
   };
 }
 
+/** Фильтрует каталог по текстовому запросу, агенту и типу расширения */
 export function searchExtensions(
   catalog: Catalog,
   query: string,
@@ -107,6 +113,10 @@ export interface ScoredExtension {
   matchReasons: string[];
 }
 
+/**
+ * Ранжирует расширения по релевантности контексту.
+ * Веса: точное имя x3, частичное имя x2, точный тег x2, частичный тег x1, описание x1.
+ */
 export function scoreExtensions(extensions: Extension[], context: string): ScoredExtension[] {
   const STOP_WORDS = new Set([
     'the','a','an','is','are','in','on','at','to','for','of','and','or',

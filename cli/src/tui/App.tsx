@@ -1,3 +1,11 @@
+/**
+ * Корневой компонент TUI — оркестрирует навигацию, хуки, экраны и модальные диалоги.
+ *
+ * Структура:
+ * - Header (вкладки) + основная область (экраны) + InfoBar + StatusBar + HintBar
+ * - При старте выполняет 3 проверки: conventions health, project config, extension sync
+ * - Глобальные хоткеи: Tab — смена вкладки, 1-3 — переход, Ctrl+Q — выход
+ */
 import React, { useState, useCallback, useEffect } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import { normalizeInput, isCtrl } from './keymap';
@@ -19,11 +27,15 @@ import { DetailScreen } from './screens/DetailScreen';
 import { MoveScreen } from './screens/MoveScreen';
 import { InstalledDetailScreen } from './screens/InstalledDetailScreen';
 import { ContentScreen } from './screens/ContentScreen';
-import { ConventionsWarningDialog } from './components/ConventionsWarningDialog';
+import { ConventionsWarningDialog, ConventionsIssue } from './components/ConventionsWarningDialog';
 import { ProjectConfigDialog } from './components/ProjectConfigDialog';
-import { Extension } from '../catalog';
+import { ExtensionSyncDialog } from './components/ExtensionSyncDialog';
+import { Extension, loadCatalog } from '../catalog';
 import { InstalledEntry } from './hooks/useRegistry';
 import { getConventionsStatus } from '../conventions';
+import { ProjectExtensionRecord } from '../config';
+import { checkExtensionSync } from '../sync';
+import { getCachePath, ensureCache } from '../git';
 
 const TABS: TabName[] = ['catalog', 'installed', 'settings'];
 
@@ -34,6 +46,7 @@ const GLOBAL_HINTS: Hint[] = [
 ];
 
 export const App: React.FC = () => {
+  // --- Инициализация хуков ---
   const { exit } = useApp();
   const nav = useNavigation();
   const { config, updateConfig, source, hasProjectRoot, doSaveAsGlobal, doResetToGlobal, doCreateProjectConfig } = useSettings();
@@ -60,6 +73,7 @@ export const App: React.FC = () => {
     setStatusType('idle');
   }, []);
 
+  // --- Состояние экранов и диалогов ---
   const [detailExt, setDetailExt] = useState<Extension | null>(null);
   const [moveExt, setMoveExt] = useState<Extension | null>(null);
   const [moveScope, setMoveScope] = useState<'global' | 'project'>('project');
@@ -68,16 +82,51 @@ export const App: React.FC = () => {
   const [settingsEditing, setSettingsEditing] = useState(false);
   const [contentData, setContentData] = useState<{ title: string; content: string } | null>(null);
   const [showConventionsWarning, setShowConventionsWarning] = useState(false);
+  const [conventionsIssues, setConventionsIssues] = useState<ConventionsIssue[]>([]);
   const [showProjectConfigDialog, setShowProjectConfigDialog] = useState(false);
+  const [showSyncDialog, setShowSyncDialog] = useState(false);
+  const [missingExtensions, setMissingExtensions] = useState<ProjectExtensionRecord[]>([]);
 
   useEffect(() => {
-    if (config.agent === 'agents-conventions' && !getConventionsStatus().hasAgentsDir) {
-      setShowConventionsWarning(true);
-    } else if (source === 'global' && hasProjectRoot) {
+    // Проверка 1: agents-conventions — полная валидация
+    if (config.agent === 'agents-conventions') {
+      const status = getConventionsStatus();
+      if (!status.isHealthy) {
+        const issues: ConventionsIssue[] = [];
+        if (!status.hasAgentsDir) {
+          issues.push({ label: 'Директория .agents/ не найдена' });
+        }
+        if (!status.hasAgentsMd) {
+          issues.push({ label: 'Файл AGENTS.md не найден' });
+        }
+        const brokenSymlinks = status.symlinks.filter(s => !s.valid);
+        for (const s of brokenSymlinks) {
+          const name = s.path.split('/').slice(-2).join('/');
+          issues.push({ label: `Битый симлинк: ${name}` });
+        }
+        if (issues.length > 0) {
+          setConventionsIssues(issues);
+          setShowConventionsWarning(true);
+        }
+      }
+    }
+
+    // Проверка 2: проектный конфиг (независимая)
+    if (source === 'global' && hasProjectRoot) {
       setShowProjectConfigDialog(true);
+    }
+
+    // Проверка 3: синхронизация расширений
+    if (source === 'project') {
+      const syncResult = checkExtensionSync(config.agent);
+      if (syncResult.missing.length > 0) {
+        setMissingExtensions(syncResult.missing);
+        setShowSyncDialog(true);
+      }
     }
   }, []);
 
+  // --- Навигация между экранами ---
   const handleOpenDetail = useCallback((ext: Extension) => {
     setDetailExt(ext);
     nav.pushScreen('detail');
@@ -118,6 +167,42 @@ export const App: React.FC = () => {
     setShowProjectConfigDialog(false);
   }, []);
 
+  const handleInstallMissing = useCallback(async () => {
+    setShowSyncDialog(false);
+    try {
+      await ensureCache();
+      const cachePath = getCachePath();
+      const catalog = loadCatalog(cachePath);
+      let installed = 0;
+      for (const ext of missingExtensions) {
+        const fullExt = catalog.extensions.find(e => e.name === ext.name && e.type === ext.type);
+        if (fullExt) {
+          await registry.install(fullExt, agent, ext.scope);
+          installed++;
+        }
+      }
+      if (installed > 0) {
+        setStatus(`Установлено расширений: ${installed}`, 'success');
+      } else {
+        setStatus('Расширения не найдены в каталоге', 'error');
+      }
+    } catch (err) {
+      setStatus(`Ошибка синхронизации: ${String(err)}`, 'error');
+    }
+  }, [missingExtensions, agent, registry, setStatus]);
+
+  const handleDismissSync = useCallback(() => {
+    setShowSyncDialog(false);
+  }, []);
+
+  const handleSyncFromSettings = useCallback(() => {
+    const syncResult = checkExtensionSync(agent);
+    if (syncResult.missing.length > 0) {
+      setMissingExtensions(syncResult.missing);
+      setShowSyncDialog(true);
+    }
+  }, [agent]);
+
   const handleBack = useCallback(() => {
     const leaving = nav.currentScreen;
     nav.popScreen();
@@ -130,11 +215,12 @@ export const App: React.FC = () => {
     }
   }, [nav]);
 
+  // --- Глобальная обработка клавиатуры ---
   useInput((input, key) => {
     const screen = nav.currentScreen;
     const isTopLevel = screen === 'catalog' || screen === 'installed' || screen === 'settings';
 
-    if (showConventionsWarning || showProjectConfigDialog) return;
+    if (showConventionsWarning || showProjectConfigDialog || showSyncDialog) return;
     if (searchFocused || settingsEditing) return;
 
     if (isCtrl(key) && normalizeInput(input) === 'q') {
@@ -172,6 +258,7 @@ export const App: React.FC = () => {
   const projectCount = registry.installed.filter(e => e.effectiveScope === 'project').length;
   const parentCount = registry.installed.filter(e => e.effectiveScope === 'parent').length;
 
+  // --- Рендеринг экранов (стек: detail/move/content поверх вкладок) ---
   const renderScreen = () => {
     if (screen === 'contentView' && contentData) {
       return (
@@ -253,6 +340,7 @@ export const App: React.FC = () => {
           onSaveAsGlobal={doSaveAsGlobal}
           onResetToGlobal={doResetToGlobal}
           onCreateProjectConfig={doCreateProjectConfig}
+          onSyncExtensions={handleSyncFromSettings}
           viewHeight={contentAreaHeight}
         />
       );
@@ -302,6 +390,7 @@ export const App: React.FC = () => {
           {showConventionsWarning && (
             <Box position="absolute" marginTop={2} marginLeft={2}>
               <ConventionsWarningDialog
+                issues={conventionsIssues}
                 onGoToSettings={handleGoToSettings}
                 onDismiss={handleDismissWarning}
               />
@@ -312,6 +401,15 @@ export const App: React.FC = () => {
               <ProjectConfigDialog
                 onCreate={handleCreateProjectConfig}
                 onDismiss={handleDismissProjectConfigDialog}
+              />
+            </Box>
+          )}
+          {showSyncDialog && (
+            <Box position="absolute" marginTop={2} marginLeft={2}>
+              <ExtensionSyncDialog
+                missing={missingExtensions}
+                onInstall={handleInstallMissing}
+                onDismiss={handleDismissSync}
               />
             </Box>
           )}

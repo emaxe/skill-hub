@@ -1,9 +1,14 @@
+/**
+ * Адаптер Copilot — встраивает расширения в copilot-instructions.md через HTML-маркеры.
+ * Каждая секция обёрнута: `<!-- skill-hub: {name} -->` / `<!-- /skill-hub: {name} -->`
+ */
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { Extension, ExtensionType } from '../catalog';
 import { AgentAdapter, ScanResult } from './types';
 
+// Маркеры начала/конца секции расширения внутри copilot-instructions.md
 const MARKER_START = (name: string) => `<!-- skill-hub: ${name} -->`;
 const MARKER_END = (name: string) => `<!-- /skill-hub: ${name} -->`;
 
@@ -100,6 +105,7 @@ export class CopilotAdapter implements AgentAdapter {
     return results;
   }
 
+  /** Удаляет секцию по indexOf маркеров: вырезает текст от start-маркера до конца end-маркера */
   private removeSection(content: string, name: string): string {
     const start = MARKER_START(name);
     const end = MARKER_END(name);

@@ -9,6 +9,7 @@ import { getCachePath, ensureCache } from '../git';
 import { createRegistry } from '../registry';
 import { AgentAdapter } from '../adapters/types';
 import { getAdapter } from '../adapters/get-adapter';
+import { hasProjectConfig, addProjectExtension } from '../config';
 
 export async function moveExtension(
   ext: Extension,
@@ -80,6 +81,11 @@ export function makeMoveCommand(): Command {
 
         spinner.text = `Переношу ${ext.type}:${ext.name} из ${from} в ${to}...`;
         await moveExtension(ext, adapter, from, to, cachePath, reg);
+
+        if (hasProjectConfig()) {
+          addProjectExtension({ type: ext.type, name: ext.name, version: ext.version, scope: to });
+        }
+
         spinner.succeed(chalk.green(`Перенесён ${ext.type}:${ext.name} из ${from} в ${to} (${agent})`));
       } catch (err) {
         spinner.fail(chalk.red(String(err)));

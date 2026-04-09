@@ -1,3 +1,10 @@
+/**
+ * Экран установленных расширений — таблица с фильтрами, действиями и пагинацией.
+ *
+ * Два режима: стандартный и agents-conventions (дополнительные фильтры: поиск, тип, агент).
+ * Удаление — двухэтапное: 1) «Удалить?» → 2) «Удалить файлы с диска?» (можно оставить только из реестра).
+ * Хоткеи: d(удалить), m(переместить), u(обновить), U(обновить все), s(scope), /(поиск).
+ */
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { normalizeInput } from '../keymap';
@@ -197,6 +204,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
     }
   });
 
+  // --- Двухэтапное удаление: 1) confirm → 2) выбор «удалить файлы с диска?» ---
   const handleConfirmDelete = () => {
     if (!confirmTarget) return;
     setConfirmDiskDelete(confirmTarget);
