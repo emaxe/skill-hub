@@ -50,7 +50,43 @@ skill-hub list
 | `setup-mcp --agent <agent>` | Настройка MCP-сервера |
 | `config <subcommand>` | Управление конфигом (list, get, set, init, save-as-global, reset-to-global) |
 | `agents-conventions <cmd>` | Режим agents-conventions (enable, disable, status) |
-| `launch <agent>` | Запуск AI-агента с настройками прокси |
+| `help` / `-h` / `--help` | Справка по всем командам и вариантам запуска |
+
+### Флаг `-a` / `-A` — быстрый запуск агента
+
+```bash
+skill-hub -a <agent> [аргументы для агента...]   # exec (по умолчанию)
+skill-hub -A <agent> [аргументы для агента...]   # через temp-скрипт
+```
+
+Запускает AI-агент (`claude-code`, `cursor`, `copilot`) с настройками прокси из конфига.
+
+- **`-a`** — shell `exec`: процесс skill-hub заменяется на агент. В `ps` виден только агент.
+- **`-A`** — создаёт временный shell-скрипт с env-переменными и `exec`. Полезно для отладки.
+
+Примеры:
+```bash
+skill-hub -a copilot                   # запустить copilot
+skill-hub -a claude-code -p "fix bug"  # запустить claude с промптом
+skill-hub -A copilot                   # через temp-скрипт (для отладки)
+```
+
+### Сокращения для update
+
+```bash
+skill-hub -u              # = skill-hub update
+skill-hub -u git-helper   # = skill-hub update git-helper
+skill-hub -U              # = skill-hub update (обновить всё, без аргументов)
+```
+
+### Флаг `--then` — цепочка команд
+
+Разделяет две команды. Вторая запускается только после полного завершения первой:
+
+```bash
+skill-hub -U --then -a copilot          # обновить всё, затем запустить copilot
+skill-hub update --then -a claude-code  # то же самое
+```
 
 ## Интерактивный TUI
 

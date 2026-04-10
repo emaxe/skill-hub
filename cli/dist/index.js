@@ -33,14 +33,63 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-// If no arguments provided — launch TUI
-if (process.argv.length <= 2) {
-    Promise.resolve().then(() => __importStar(require('./tui'))).then(({ startTUI }) => startTUI()).catch((err) => {
-        console.error(`\nError: ${err.message}`);
-        process.exit(1);
-    });
+/**
+ * Транслирует сокращения -u / -U в команду update.
+ * -u [name] → update [name]
+ * -U        → update (без аргументов, обновить всё)
+ */
+function translateShortcuts(argv) {
+    const prefix = argv.slice(0, 2);
+    const args = argv.slice(2);
+    const result = [];
+    for (let i = 0; i < args.length; i++) {
+        if (args[i] === '-U') {
+            result.push('update');
+        }
+        else if (args[i] === '-u') {
+            result.push('update');
+            // -u принимает необязательный аргумент (имя расширения)
+            if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+                result.push(args[++i]);
+            }
+        }
+        else {
+            result.push(args[i]);
+        }
+    }
+    return [...prefix, ...result];
 }
-else {
+/**
+ * Выполнить одну skill-hub команду по переданному argv.
+ */
+async function executeArgs(argv) {
+    argv = translateShortcuts(argv);
+    // Ранний перехват флага -a / -A <agent> — запуск AI-агента с прокси
+    const agentFlagIdx = Math.max(argv.indexOf('-a'), argv.indexOf('-A'));
+    const launchMode = argv.includes('-A') ? 'script' : 'exec';
+    if (agentFlagIdx !== -1) {
+        const agentName = argv[agentFlagIdx + 1];
+        if (!agentName || agentName.startsWith('-')) {
+            console.error('Использование: skill-hub -a|-A <agent> [аргументы для агента...]');
+            console.error('  -a  запуск через exec (по умолчанию)');
+            console.error('  -A  запуск через temp-скрипт');
+            console.error('Агенты: claude-code, cursor, copilot');
+            process.exit(1);
+        }
+        const extraArgs = argv.filter((_, i) => i > 1 && i !== agentFlagIdx && i !== agentFlagIdx + 1);
+        const { launchAgent } = require('./agent-launcher');
+        launchAgent(agentName, extraArgs, launchMode);
+        return;
+    }
+    // help / -h / --help — пропускаем в Commander, не запускаем TUI
+    const userArgs = argv.slice(2);
+    const isHelp = userArgs.includes('help') || userArgs.includes('-h') || userArgs.includes('--help');
+    // If no arguments provided — launch TUI
+    if (argv.length <= 2 && !isHelp) {
+        const { startTUI } = await Promise.resolve().then(() => __importStar(require('./tui')));
+        await startTUI();
+        return;
+    }
     const { Command } = require('commander');
     const { makeSearchCommand } = require('./commands/search');
     const { makeListCommand } = require('./commands/list');
@@ -52,7 +101,6 @@ else {
     const { makeSetupMcpCommand } = require('./commands/setup-mcp');
     const { makeConfigCommand } = require('./commands/config');
     const { makeAgentsConventionsCommand } = require('./commands/agents-conventions');
-    const { makeLaunchCommand } = require('./commands/launch');
     const program = new Command();
     program
         .name('skill-hub')
@@ -68,9 +116,47 @@ else {
     program.addCommand(makeSetupMcpCommand());
     program.addCommand(makeConfigCommand());
     program.addCommand(makeAgentsConventionsCommand());
-    program.addCommand(makeLaunchCommand());
-    program.parseAsync(process.argv).catch((err) => {
+    program.addHelpText('after', `
+Дополнительные возможности:
+
+  Интерактивный TUI:
+    skill-hub                              Запуск полноэкранного интерфейса (без аргументов)
+
+  Запуск AI-агента:
+    skill-hub -a <agent> [аргументы...]    Запуск агента через exec
+    skill-hub -A <agent> [аргументы...]    Запуск агента через temp-скрипт
+    Агенты: claude-code, cursor, copilot
+
+  Сокращения для update:
+    skill-hub -u [name]                    = skill-hub update [name]
+    skill-hub -U                           = skill-hub update
+
+  Цепочка команд:
+    skill-hub <cmd1> --then <cmd2>         Выполнить cmd2 после завершения cmd1
+
+Примеры:
+  skill-hub search git                     Поиск расширений
+  skill-hub install skill:git-helper       Установить скилл
+  skill-hub -a claude-code -p "fix bug"    Запустить Claude Code
+  skill-hub -U --then -a copilot           Обновить всё, затем запустить Copilot`);
+    await program.parseAsync(argv);
+}
+// Точка входа: поддержка --then для цепочки команд
+(async () => {
+    const thenIdx = process.argv.indexOf('--then');
+    try {
+        if (thenIdx !== -1) {
+            const firstArgv = [...process.argv.slice(0, 2), ...process.argv.slice(2, thenIdx)];
+            const secondArgv = [...process.argv.slice(0, 2), ...process.argv.slice(thenIdx + 1)];
+            await executeArgs(firstArgv);
+            await executeArgs(secondArgv);
+        }
+        else {
+            await executeArgs(process.argv);
+        }
+    }
+    catch (err) {
         console.error(`\nError: ${err.message}`);
         process.exit(1);
-    });
-}
+    }
+})();

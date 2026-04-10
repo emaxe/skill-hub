@@ -151,6 +151,16 @@ Analyze the current project and recommend relevant extensions from the catalog.
 /skill-hub init
 ```
 
+### help
+
+Show help with all available commands and launch options — including TUI, agent flags (`-a`/`-A`), update shortcuts (`-u`/`-U`), and command chaining (`--then`).
+
+```bash
+skill-hub help
+skill-hub -h
+skill-hub --help
+```
+
 ## Architecture
 
 ```

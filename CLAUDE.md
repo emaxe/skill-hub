@@ -89,7 +89,10 @@ Unified `.agents/` directory for multi-agent projects:
 ### CLI Package
 
 `cli/` contains the TypeScript source for the `@emaxe/skill-hub` npm package. Provides:
-- CLI commands: `search`, `install`, `remove`, `move`, `list`, `info`, `update`, `setup-mcp`, `config`, `agents-conventions`, `launch`
+- CLI commands: `search`, `install`, `remove`, `move`, `list`, `info`, `update`, `setup-mcp`, `config`, `agents-conventions`, `help`
+- CLI flag: `-a <agent>` — запуск AI-агента через exec, `-A` — через temp-скрипт
+- CLI flag: `-u [name]` / `-U` — сокращения для команды `update`
+- CLI flag: `--then` — цепочка двух команд (вторая запускается после завершения первой)
 - Interactive TUI: `skill-hub` with no arguments launches fullscreen UI (Ink/React)
 - MCP server (7 tools): `search_extensions`, `install_extension`, `remove_extension`, `move_extension`, `list_extensions`, `suggest_extensions`, `get_extension_info`
 - Agent adapters for Claude Code, Cursor, Copilot, and agents-conventions
