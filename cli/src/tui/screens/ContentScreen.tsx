@@ -9,9 +9,10 @@ export interface ContentScreenProps {
   content: string;
   onBack: () => void;
   viewHeight: number;
+  inputActive?: boolean;
 }
 
-export const ContentScreen: React.FC<ContentScreenProps> = ({ title, content, onBack, viewHeight }) => {
+export const ContentScreen: React.FC<ContentScreenProps> = ({ title, content, onBack, viewHeight, inputActive }) => {
   const lines = useMemo(() => content.split('\n'), [content]);
   const [offset, setOffset] = useState(0);
 
@@ -24,7 +25,7 @@ export const ContentScreen: React.FC<ContentScreenProps> = ({ title, content, on
     if (key.downArrow || input === 'j') { setOffset(o => Math.min(maxOffset, o + 1)); return; }
     if (key.pageUp) { setOffset(o => Math.max(0, o - Math.floor(viewHeight / 2))); return; }
     if (key.pageDown) { setOffset(o => Math.min(maxOffset, o + Math.floor(viewHeight / 2))); return; }
-  });
+  }, { isActive: inputActive !== false });
 
   const visibleLines = lines.slice(offset, offset + viewHeight);
   const emptyLinesCount = Math.max(0, viewHeight - visibleLines.length);

@@ -22,10 +22,11 @@ export interface DetailScreenProps {
   defaultScope: 'global' | 'project';
   onOpenContent: (title: string, content: string) => void;
   viewHeight: number;
+  inputActive?: boolean;
 }
 
 export const DetailScreen: React.FC<DetailScreenProps> = ({
-  extension, agent, onBack, install, remove, isInstalled, defaultScope, onOpenContent, viewHeight,
+  extension, agent, onBack, install, remove, isInstalled, defaultScope, onOpenContent, viewHeight, inputActive,
 }) => {
   const { setStatus } = useStatus();
   const [showConfirm, setShowConfirm] = useState(false);
@@ -58,7 +59,7 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
     if (ni === 'c' && contentResult) {
       onOpenContent(extension.name, contentResult);
     }
-  });
+  }, { isActive: inputActive !== false });
 
   const Row = ({ label, value }: { label: string; value: string }) => (
     <Box>

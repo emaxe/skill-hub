@@ -1,16 +1,20 @@
 import { useState, useCallback, useRef } from 'react';
 import { spawn } from 'child_process';
-import fs from 'fs';
 import { enableConventions } from '../../conventions';
 import { AiAgentsConfig } from '../../config';
 
-export type ConventionsInitStep = 'idle' | 'enabling' | 'running' | 'done' | 'error';
+export type ConventionsInitStep = 'idle' | 'enabling' | 'selectAgent' | 'running' | 'done' | 'error';
 
 export interface UseConventionsInitResult {
   step: ConventionsInitStep;
   outputLines: string[];
   errorMessage: string | null;
-  run(agentName: 'claude-code' | 'cursor' | 'copilot', aiAgentsConfig: AiAgentsConfig): void;
+  /** Запускает enableConventions (механические шаги) */
+  run(): void;
+  /** Запускает AI-агент для выполнения init-agents скилла */
+  runAutoAnalysis(agentName: 'claude-code' | 'cursor' | 'copilot', aiAgentsConfig: AiAgentsConfig): void;
+  /** Пропустить AI-агент и завершить */
+  skipAutoAnalysis(): void;
   cancel(): void;
   reset(): void;
 }
@@ -21,10 +25,13 @@ const AGENT_BINARIES: Record<string, string> = {
   'copilot': 'copilot',
 };
 
-const AGENT_ARGS: Record<string, string[]> = {
-  'claude-code': ['--dangerously-skip-permissions', '-p', 'Обязательно: прочитай и полностью выполни скилл init-agents из файла .claude/skills/init-agents/SKILL.md (следуй алгоритму по шагам, идемпотентно). Не выдавай только план — внеси все нужные изменения в файловую систему. После выполнения кратко перечисли, что создано/изменено.', '--model', 'sonnet'],
-  'cursor': ['-p', 'Обязательно: прочитай и полностью выполни скилл init-agents из файла .claude/skills/init-agents/SKILL.md (следуй алгоритму по шагам, идемпотентно). Не выдавай только план — внеси все нужные изменения в файловую систему. После выполнения кратко перечисли, что создано/изменено.', '--model', 'composer-2', '--force', '--output-format', 'stream-json'],
-  'copilot': ['-p', 'Обязательно: прочитай и полностью выполни скилл init-agents из файла .claude/skills/init-agents/SKILL.md (следуй алгоритму по шагам, идемпотентно). Не выдавай только план — внеси все нужные изменения в файловую систему. После выполнения кратко перечисли, что создано/изменено.', '--model', 'claude-sonnet-4.6', '--allow-all', '--no-ask-user'],
+// Промпт ссылается на установленный скилл init-agents
+const INIT_PROMPT = 'Прочитай скилл .agents/skills/init-agents/SKILL.md и выполни все описанные в нём задачи для AI-агента.';
+
+const AUTO_ANALYSIS_ARGS: Record<string, string[]> = {
+  'claude-code': ['--dangerously-skip-permissions', '-p', INIT_PROMPT, '--model', 'sonnet'],
+  'cursor': ['-p', INIT_PROMPT, '--model', 'composer-2', '--force', '--output-format', 'stream-json'],
+  'copilot': ['-p', INIT_PROMPT, '--model', 'claude-sonnet-4.6', '--allow-all', '--no-ask-user'],
 };
 
 const MAX_OUTPUT_LINES = 20;
@@ -49,70 +56,78 @@ export function useConventionsInit(): UseConventionsInitResult {
     }
   }, []);
 
-  const run = useCallback((agentName: 'claude-code' | 'cursor' | 'copilot', aiAgentsConfig: AiAgentsConfig) => {
+  const run = useCallback(() => {
     setStep('enabling');
     setOutputLines([]);
     setErrorMessage(null);
     lineBufferRef.current = '';
 
     enableConventions().then(() => {
-      fs.appendFileSync('/tmp/skill-hub-init.log', `[${new Date().toISOString()}] enableConventions done, spawning ${agentName}\n`);
-      setStep('running');
-
-      const binary = AGENT_BINARIES[agentName];
-      const args = AGENT_ARGS[agentName];
-      const env = { ...process.env };
-
-      const agentCfg = aiAgentsConfig.agents[agentName as keyof typeof aiAgentsConfig.agents];
-      if (agentCfg?.useProxy && aiAgentsConfig.proxy) {
-        const proxy = aiAgentsConfig.proxy;
-        env.http_proxy = proxy;
-        env.https_proxy = proxy;
-        env.all_proxy = proxy;
-      }
-
-      let child: ReturnType<typeof spawn>;
-      try {
-        child = spawn(binary, args, { stdio: 'pipe', env });
-        childRef.current = child;
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        setErrorMessage(message);
-        setStep('error');
-        return;
-      }
-
-      child.stdout?.on('data', (data: Buffer) => {
-        appendLines(data.toString());
-      });
-
-      child.stderr?.on('data', (data: Buffer) => {
-        appendLines(data.toString());
-      });
-
-      child.on('error', (err: Error) => {
-        setErrorMessage(err.message);
-        setStep('error');
-      });
-
-      child.on('exit', (code: number | null) => {
-        childRef.current = null;
-        if (code === 0) {
-          setStep('done');
-        } else if (code === null) {
-          // killed by cancel() — не показываем ошибку, модаль сама сбросит step
-        } else {
-          setErrorMessage(`Процесс завершился с кодом ${code}`);
-          setStep('error');
-        }
-      });
+      setStep('selectAgent');
     }).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
-      fs.appendFileSync('/tmp/skill-hub-init.log', `[${new Date().toISOString()}] ERROR: ${message}\n${err instanceof Error ? err.stack : ''}\n`);
       setErrorMessage(message);
       setStep('error');
     });
+  }, []);
+
+  const runAutoAnalysis = useCallback((agentName: 'claude-code' | 'cursor' | 'copilot', aiAgentsConfig: AiAgentsConfig) => {
+    setStep('running');
+    setOutputLines([]);
+    lineBufferRef.current = '';
+
+    const binary = AGENT_BINARIES[agentName];
+    const args = AUTO_ANALYSIS_ARGS[agentName];
+    const env = { ...process.env };
+
+    const agentCfg = aiAgentsConfig.agents[agentName as keyof typeof aiAgentsConfig.agents];
+    if (agentCfg?.useProxy && aiAgentsConfig.proxy) {
+      const proxy = aiAgentsConfig.proxy;
+      env.http_proxy = proxy;
+      env.https_proxy = proxy;
+      env.all_proxy = proxy;
+    }
+
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(binary, args, { stdio: 'pipe', env });
+      childRef.current = child;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setErrorMessage(message);
+      setStep('error');
+      return;
+    }
+
+    child.stdout?.on('data', (data: Buffer) => {
+      appendLines(data.toString());
+    });
+
+    child.stderr?.on('data', (data: Buffer) => {
+      appendLines(data.toString());
+    });
+
+    child.on('error', (err: Error) => {
+      setErrorMessage(err.message);
+      setStep('error');
+    });
+
+    child.on('exit', (code: number | null) => {
+      childRef.current = null;
+      if (code === 0) {
+        setStep('done');
+      } else if (code === null) {
+        // killed by cancel()
+      } else {
+        setErrorMessage(`Процесс завершился с кодом ${code}`);
+        setStep('error');
+      }
+    });
   }, [appendLines]);
+
+  const skipAutoAnalysis = useCallback(() => {
+    setStep('done');
+  }, []);
 
   const cancel = useCallback(() => {
     if (childRef.current) {
@@ -132,5 +147,5 @@ export function useConventionsInit(): UseConventionsInitResult {
     lineBufferRef.current = '';
   }, []);
 
-  return { step, outputLines, errorMessage, run, cancel, reset };
+  return { step, outputLines, errorMessage, run, runAutoAnalysis, skipAutoAnalysis, cancel, reset };
 }

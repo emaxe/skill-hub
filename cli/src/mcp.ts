@@ -6,13 +6,13 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { loadCatalog, searchExtensions, filterByAgent, scoreExtensions, platformKey, AgentName, ExtensionType } from './catalog';
+import { loadCatalog, searchExtensions, filterByAgent, filterByProject, scoreExtensions, platformKey, AgentName, ExtensionType } from './catalog';
 import { detectAgent } from './detect-agent';
 import { getCachePath, ensureCache } from './git';
 import { createRegistry } from './registry';
 import { getAdapter } from './adapters/get-adapter';
 import { filterRecordsByDirectory } from './path-filter';
-import { hasProjectConfig, addProjectExtension, removeProjectExtension } from './config';
+import { hasProjectConfig, addProjectExtension, removeProjectExtension, resolveProject, resolveConfig } from './config';
 
 // MCP-сервер skill-hub — предоставляет 7 инструментов для AI-агентов через stdio транспорт.
 // Инструменты: search, install, remove, move, list, suggest, get_info.
@@ -157,11 +157,15 @@ export async function startMcpServer(): Promise<void> {
         await ensureCache();
         const cachePath = getCachePath();
         const catalog = loadCatalog(cachePath);
+        // Определяем project: из аргументов MCP или из конфига
+        const rp = resolveProject();
+        const projectFilter = str(a.project) ?? rp.project;
         const allResults = searchExtensions(
           catalog,
           str(a.query) || '',
           str(a.agent) as AgentName | undefined,
-          str(a.type) as ExtensionType | undefined
+          str(a.type) as ExtensionType | undefined,
+          projectFilter
         );
         const total = allResults.length;
         const limit = typeof a.limit === 'number' && a.limit > 0 ? a.limit : 10;
@@ -239,6 +243,8 @@ export async function startMcpServer(): Promise<void> {
               version: depExt.version || '0.0.0',
               agent, scope,
               path: adapter.getInstallPath(depExt, scope),
+              projects: depExt.projects.length > 0 ? depExt.projects : undefined,
+              tags: depExt.tags.length > 0 ? depExt.tags : undefined,
             });
           }
         }
@@ -249,6 +255,8 @@ export async function startMcpServer(): Promise<void> {
           version: ext.version || '0.0.0',
           agent, scope,
           path: adapter.getInstallPath(ext, scope),
+          projects: ext.projects.length > 0 ? ext.projects : undefined,
+          tags: ext.tags.length > 0 ? ext.tags : undefined,
         });
 
         if (hasProjectConfig()) {
@@ -476,13 +484,16 @@ export async function startMcpServer(): Promise<void> {
         const context = str(a.context) || '';
 
         const agentExtensions = filterByAgent(catalog.extensions, agent);
+        // Фильтрация по проекту
+        const rp = resolveProject();
+        const projectFiltered = filterByProject(agentExtensions, rp.project);
 
         const reg = createRegistry(path.join(os.homedir(), '.skill-hub'));
         const cwd = process.cwd();
         const homeDir = os.homedir();
         const filteredInstalled = filterRecordsByDirectory(reg.list(agent), cwd, homeDir);
         const installedNames = new Set(filteredInstalled.map(({ record }) => record.name));
-        const notInstalled = agentExtensions.filter(ext => !installedNames.has(ext.name));
+        const notInstalled = projectFiltered.filter(ext => !installedNames.has(ext.name));
 
         // Ранжирование по контексту: scoreExtensions сопоставляет теги/описания с содержимым проекта
         const scored = scoreExtensions(notInstalled, context);

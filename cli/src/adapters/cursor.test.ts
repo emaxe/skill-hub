@@ -12,7 +12,7 @@ const mockSkill: Extension = {
   type: 'skill', name: 'test-skill', description: 'Test', tags: [],
   version: '1.0.0', scope: 'global',
   platforms: { cursor: 'CURSOR.md' },
-  path: 'skills/test-skill', dependencies: [],
+  path: 'skills/test-skill', dependencies: [], projects: [],
 };
 
 beforeEach(() => {
@@ -51,13 +51,13 @@ const mockAgent: Extension = {
   type: 'agent', name: 'test-agent', description: 'Test', tags: [],
   version: '1.0.0', scope: 'global',
   platforms: { cursor: 'CURSOR.md' },
-  path: 'agents/test-agent', dependencies: [],
+  path: 'agents/test-agent', dependencies: [], projects: [],
 };
 
-test('install agent: создаёт .cursor/rules/{name}.mdc', async () => {
+test('install agent: создаёт .cursor/agents/{name}.mdc', async () => {
   fs.mkdirSync(path.join(tmpCache, 'agents', 'test-agent'), { recursive: true });
   fs.writeFileSync(path.join(tmpCache, 'agents', 'test-agent', 'CURSOR.md'), '---\ndescription: A\n---\n# A');
   const adapter = new CursorAdapter(tmpProject, tmpHome);
   await adapter.install(mockAgent, 'project', tmpCache);
-  expect(fs.existsSync(path.join(tmpProject, '.cursor', 'rules', 'test-agent.mdc'))).toBe(true);
+  expect(fs.existsSync(path.join(tmpProject, '.cursor', 'agents', 'test-agent.mdc'))).toBe(true);
 });

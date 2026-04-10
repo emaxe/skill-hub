@@ -1,5 +1,6 @@
 // --- Фильтрация записей реестра по директории ---
 
+import fs from 'fs';
 import path from 'path';
 
 export type EffectiveScope = 'global' | 'project' | 'parent';
@@ -41,7 +42,7 @@ export function classifyRecord(
   return null;
 }
 
-/** Фильтрует записи реестра, оставляя только релевантные для текущей рабочей директории */
+/** Фильтрует записи реестра, оставляя только релевантные для текущей рабочей директории и существующие на диске */
 export function filterRecordsByDirectory<T extends { scope: 'global' | 'project' | 'parent'; path: string }>(
   records: T[],
   cwd: string,
@@ -49,6 +50,8 @@ export function filterRecordsByDirectory<T extends { scope: 'global' | 'project'
 ): Array<{ record: T; effectiveScope: EffectiveScope }> {
   const result: Array<{ record: T; effectiveScope: EffectiveScope }> = [];
   for (const record of records) {
+    // Пропускаем записи-призраки: файл удалён, но запись осталась в реестре
+    if (!fs.existsSync(record.path)) continue;
     const es = classifyRecord(record, cwd, homeDir);
     if (es !== null) {
       result.push({ record, effectiveScope: es });

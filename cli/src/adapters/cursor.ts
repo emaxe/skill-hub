@@ -10,9 +10,6 @@ function cursorRoot(scope: 'global' | 'project', projectDir: string, homeDir: st
     : path.join(projectDir, '.cursor');
 }
 
-/** .mdc файлы из rules/ при сканировании получают тип 'rule'.
- *  Registry-записи имеют приоритет и сохраняют свой тип (agent/command). */
-
 export class CursorAdapter implements AgentAdapter {
   agentName = 'cursor' as const;
 
@@ -34,7 +31,13 @@ export class CursorAdapter implements AgentAdapter {
     if (ext.type === 'skill') {
       return path.join(root, 'skills', ext.name, 'SKILL.md');
     }
-    return path.join(root, 'rules', `${ext.name}.mdc`);
+    if (ext.type === 'agent') {
+      return path.join(root, 'agents', `${ext.name}.mdc`);
+    }
+    if (ext.type === 'command') {
+      return path.join(root, 'commands', `${ext.name}.mdc`);
+    }
+    throw new Error(`Неизвестный тип расширения: ${ext.type}`);
   }
 
   async install(ext: Extension, scope: 'global' | 'project', cachePath: string): Promise<void> {
@@ -73,6 +76,7 @@ export class CursorAdapter implements AgentAdapter {
     ];
 
     for (const { scope, root } of roots) {
+      // Скиллы: .cursor/skills/{name}/SKILL.md
       const skillsDir = path.join(root, 'skills');
       if (fs.existsSync(skillsDir)) {
         for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
@@ -84,13 +88,24 @@ export class CursorAdapter implements AgentAdapter {
         }
       }
 
-      const rulesDir = path.join(root, 'rules');
-      if (!fs.existsSync(rulesDir)) continue;
-      for (const entry of fs.readdirSync(rulesDir, { withFileTypes: true })) {
-        if (!entry.isFile() || !entry.name.endsWith('.mdc')) continue;
-        const filePath = path.join(rulesDir, entry.name);
-        const name = entry.name.slice(0, -4);
-        results.push({ type: 'rule', name, scope, path: filePath });
+      // Агенты: .cursor/agents/{name}.mdc
+      const agentsDir = path.join(root, 'agents');
+      if (fs.existsSync(agentsDir)) {
+        for (const entry of fs.readdirSync(agentsDir, { withFileTypes: true })) {
+          if (entry.isFile() && entry.name.endsWith('.mdc')) {
+            results.push({ type: 'agent', name: entry.name.slice(0, -4), scope, path: path.join(agentsDir, entry.name) });
+          }
+        }
+      }
+
+      // Команды: .cursor/commands/{name}.mdc
+      const commandsDir = path.join(root, 'commands');
+      if (fs.existsSync(commandsDir)) {
+        for (const entry of fs.readdirSync(commandsDir, { withFileTypes: true })) {
+          if (entry.isFile() && entry.name.endsWith('.mdc')) {
+            results.push({ type: 'command', name: entry.name.slice(0, -4), scope, path: path.join(commandsDir, entry.name) });
+          }
+        }
       }
     }
 

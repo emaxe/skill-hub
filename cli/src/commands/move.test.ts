@@ -20,7 +20,7 @@ const skillExt: Extension = {
   version: '1.0.0',
   scope: 'both',
   platforms: { 'claude-code': 'SKILL.md', cursor: null, copilot: null },
-  dependencies: [],
+  dependencies: [], projects: [],
   path: 'skills/test-skill',
   author: '',
 };
@@ -33,7 +33,7 @@ const agentExt: Extension = {
   version: '1.0.0',
   scope: 'both',
   platforms: { 'claude-code': 'AGENT.md', cursor: null, copilot: null },
-  dependencies: [],
+  dependencies: [], projects: [],
   path: 'agents/test-agent',
   author: '',
 };

@@ -17,7 +17,7 @@ export interface UseCatalogActions {
   reload: () => void;
 }
 
-export function useCatalog(agent?: AgentName): UseCatalogState & UseCatalogActions {
+export function useCatalog(agent?: AgentName, project?: string | null): UseCatalogState & UseCatalogActions {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [query, setQueryRaw] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -56,7 +56,8 @@ export function useCatalog(agent?: AgentName): UseCatalogState & UseCatalogActio
         catalog,
         debouncedQuery,
         agent,
-        typeFilter === 'all' ? undefined : typeFilter
+        typeFilter === 'all' ? undefined : typeFilter,
+        project
       )
     : [];
 

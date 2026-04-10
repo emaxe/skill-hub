@@ -1,16 +1,21 @@
 import { useState, useCallback, useRef } from 'react';
 import { spawn } from 'child_process';
 import { disableConventions } from '../../conventions';
-import { AiAgentsConfig } from '../../config';
 import { AgentName } from '../../catalog';
+import { AiAgentsConfig } from '../../config';
 
-export type ConventionsExitStep = 'idle' | 'running' | 'disabling' | 'done' | 'error';
+export type ConventionsExitStep = 'idle' | 'selectAgent' | 'running' | 'disabling' | 'done' | 'error';
 
 export interface UseConventionsExitResult {
   step: ConventionsExitStep;
   outputLines: string[];
   errorMessage: string | null;
-  run(agentName: 'claude-code' | 'cursor' | 'copilot', targetAgent: AgentName, aiAgentsConfig: AiAgentsConfig): void;
+  /** Начинает процесс выхода: показывает выбор AI-агента */
+  start(): void;
+  /** Запускает AI-агент с exit-agents скиллом, затем disableConventions */
+  runWithAgent(agentName: 'claude-code' | 'cursor' | 'copilot', aiAgentsConfig: AiAgentsConfig, targetAgent: AgentName): void;
+  /** Пропустить AI-агент и сразу выполнить disableConventions */
+  skipAgent(targetAgent: AgentName): void;
   cancel(): void;
   reset(): void;
 }
@@ -21,10 +26,12 @@ const AGENT_BINARIES: Record<string, string> = {
   'copilot': 'copilot',
 };
 
-const AGENT_ARGS: Record<string, (targetAgent: AgentName) => string[]> = {
-  'claude-code': (target) => ['--dangerously-skip-permissions', '-p', `Обязательно: прочитай и полностью выполни скилл exit-agents из файла .claude/skills/exit-agents/SKILL.md (следуй алгоритму по шагам, идемпотентно). Target agent: ${target}. Не выдавай только план — внеси все нужные изменения в файловую систему. После выполнения кратко перечисли, что создано/изменено.`, '--model', 'sonnet'],
-  'cursor': (target) => ['-p', `Обязательно: прочитай и полностью выполни скилл exit-agents из файла .claude/skills/exit-agents/SKILL.md (следуй алгоритму по шагам, идемпотентно). Target agent: ${target}. Не выдавай только план — внеси все нужные изменения в файловую систему. После выполнения кратко перечисли, что создано/изменено.`, '--model', 'composer-2', '--force', '--output-format', 'stream-json'],
-  'copilot': (target) => ['-p', `Обязательно: прочитай и полностью выполни скилл exit-agents из файла .claude/skills/exit-agents/SKILL.md (следуй алгоритму по шагам, идемпотентно). Target agent: ${target}. Не выдавай только план — внеси все нужные изменения в файловую систему. После выполнения кратко перечисли, что создано/изменено.`, '--model', 'claude-sonnet-4.6', '--allow-all', '--no-ask-user'],
+const EXIT_PROMPT = 'Прочитай скилл .agents/skills/exit-agents/SKILL.md и выполни все описанные в нём задачи для AI-агента.';
+
+const EXIT_ARGS: Record<string, string[]> = {
+  'claude-code': ['--dangerously-skip-permissions', '-p', EXIT_PROMPT, '--model', 'sonnet'],
+  'cursor': ['-p', EXIT_PROMPT, '--model', 'composer-2', '--force', '--output-format', 'stream-json'],
+  'copilot': ['-p', EXIT_PROMPT, '--model', 'claude-sonnet-4.6', '--allow-all', '--no-ask-user'],
 };
 
 const MAX_OUTPUT_LINES = 20;
@@ -49,14 +56,31 @@ export function useConventionsExit(): UseConventionsExitResult {
     }
   }, []);
 
-  const run = useCallback((agentName: 'claude-code' | 'cursor' | 'copilot', targetAgent: AgentName, aiAgentsConfig: AiAgentsConfig) => {
-    setStep('running');
+  const runDisable = useCallback((targetAgent: AgentName) => {
+    setStep('disabling');
+    disableConventions(targetAgent).then(() => {
+      setStep('done');
+    }).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      setErrorMessage(message);
+      setStep('error');
+    });
+  }, []);
+
+  const start = useCallback(() => {
+    setStep('selectAgent');
     setOutputLines([]);
     setErrorMessage(null);
     lineBufferRef.current = '';
+  }, []);
+
+  const runWithAgent = useCallback((agentName: 'claude-code' | 'cursor' | 'copilot', aiAgentsConfig: AiAgentsConfig, targetAgent: AgentName) => {
+    setStep('running');
+    setOutputLines([]);
+    lineBufferRef.current = '';
 
     const binary = AGENT_BINARIES[agentName];
-    const args = AGENT_ARGS[agentName](targetAgent);
+    const args = EXIT_ARGS[agentName];
     const env = { ...process.env };
 
     const agentCfg = aiAgentsConfig.agents[agentName as keyof typeof aiAgentsConfig.agents];
@@ -93,27 +117,20 @@ export function useConventionsExit(): UseConventionsExitResult {
 
     child.on('exit', (code: number | null) => {
       childRef.current = null;
-      if (code === null) {
+      if (code === 0) {
+        runDisable(targetAgent);
+      } else if (code === null) {
         // killed by cancel()
-        return;
-      }
-      if (code !== 0) {
+      } else {
         setErrorMessage(`Процесс завершился с кодом ${code}`);
         setStep('error');
-        return;
       }
-
-      // AI-агент отработал — запускаем программную очистку
-      setStep('disabling');
-      disableConventions(targetAgent).then(() => {
-        setStep('done');
-      }).catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        setErrorMessage(message);
-        setStep('error');
-      });
     });
-  }, [appendLines]);
+  }, [appendLines, runDisable]);
+
+  const skipAgent = useCallback((targetAgent: AgentName) => {
+    runDisable(targetAgent);
+  }, [runDisable]);
 
   const cancel = useCallback(() => {
     if (childRef.current) {
@@ -133,5 +150,5 @@ export function useConventionsExit(): UseConventionsExitResult {
     lineBufferRef.current = '';
   }, []);
 
-  return { step, outputLines, errorMessage, run, cancel, reset };
+  return { step, outputLines, errorMessage, start, runWithAgent, skipAgent, cancel, reset };
 }

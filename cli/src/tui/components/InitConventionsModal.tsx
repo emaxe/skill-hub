@@ -29,6 +29,11 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
   const maxOutputHeight = Math.max(5, (stdout?.rows ?? 24) - 12);
   const init = useConventionsInit();
 
+  // Автозапуск enableConventions при монтировании
+  useEffect(() => {
+    init.run();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (init.step !== 'enabling' && init.step !== 'running') return;
     const timer = setInterval(() => {
@@ -51,7 +56,7 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
 
     if (init.step === 'done') {
       if (key.return || key.escape) {
-        onDone(chosenAgent);
+        onDone(chosenAgent || 'agents-conventions');
       }
       return;
     }
@@ -65,21 +70,25 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
       return;
     }
 
-    // step === 'idle' (select)
-    if (key.upArrow) {
-      setSelectedIdx(i => (i - 1 + Math.max(enabledAgents.length, 1)) % Math.max(enabledAgents.length, 1));
-    } else if (key.downArrow) {
-      setSelectedIdx(i => (i + 1) % Math.max(enabledAgents.length, 1));
-    } else if (key.return && enabledAgents.length > 0) {
-      const agent = enabledAgents[selectedIdx];
-      setChosenAgent(agent);
-      init.run(agent, aiAgentsConfig);
-    } else if (key.escape) {
-      onCancel();
+    // step === 'selectAgent' — выбор агента для автоанализа
+    if (init.step === 'selectAgent') {
+      if (key.upArrow) {
+        setSelectedIdx(i => (i - 1 + Math.max(enabledAgents.length, 1)) % Math.max(enabledAgents.length, 1));
+      } else if (key.downArrow) {
+        setSelectedIdx(i => (i + 1) % Math.max(enabledAgents.length, 1));
+      } else if (key.return && enabledAgents.length > 0) {
+        const agent = enabledAgents[selectedIdx];
+        setChosenAgent(agent);
+        init.runAutoAnalysis(agent, aiAgentsConfig);
+      } else if (input === 's' || input === 'S') {
+        init.skipAutoAnalysis();
+      } else if (key.escape) {
+        init.skipAutoAnalysis();
+      }
+      return;
     }
   });
 
-  const isSelect = init.step === 'idle';
   const isRunning = init.step === 'enabling' || init.step === 'running';
 
   return (
@@ -88,22 +97,32 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
         <Text color={theme.primary} bold>Инициализация agents-conventions</Text>
       </Box>
 
-      {isSelect && (
+      {init.step === 'enabling' && (
+        <Box>
+          <Text color={theme.warning}>{SPINNER_FRAMES[spinnerIdx]} </Text>
+          <Text color={theme.warning}>Создаю структуру .agents/...</Text>
+        </Box>
+      )}
+
+      {init.step === 'selectAgent' && (
         <>
+          <Box marginBottom={1}>
+            <Text color={theme.success}>✓ Структура создана</Text>
+          </Box>
           {enabledAgents.length === 0 ? (
             <>
               <Box marginBottom={1}>
-                <Text color={theme.warning}>Нет настроенных агентов.</Text>
+                <Text dimColor>Нет включённых ИИ-агентов для запуска init-agents скилла.</Text>
               </Box>
               <Box marginBottom={1}>
                 <Text dimColor>Включите claude-code, cursor или copilot в разделе ИИ-агенты.</Text>
               </Box>
-              <Text dimColor>[Esc] отмена</Text>
+              <Text dimColor>[S/Esc] пропустить</Text>
             </>
           ) : (
             <>
               <Box marginBottom={1}>
-                <Text dimColor>Выберите агент для запуска init-agents:</Text>
+                <Text dimColor>Запустить AI-агент для выполнения init-agents скилла?</Text>
               </Box>
               {enabledAgents.map((agent, idx) => (
                 <Box key={agent}>
@@ -113,25 +132,18 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
                 </Box>
               ))}
               <Box marginTop={1}>
-                <Text dimColor>[↑↓] выбор  [Enter] запустить  [Esc] отмена</Text>
+                <Text dimColor>[↑↓] выбор  [Enter] запустить  [S] пропустить  [Esc] пропустить</Text>
               </Box>
             </>
           )}
         </>
       )}
 
-      {init.step === 'enabling' && (
-        <Box>
-          <Text color={theme.warning}>{SPINNER_FRAMES[spinnerIdx]} </Text>
-          <Text color={theme.warning}>Создаю структуру .agents/...</Text>
-        </Box>
-      )}
-
       {init.step === 'running' && (
         <>
           <Box marginBottom={1}>
             <Text color={theme.warning}>{SPINNER_FRAMES[spinnerIdx]} </Text>
-            <Text color={theme.warning}>Запуск {chosenAgent}...</Text>
+            <Text color={theme.warning}>Выполнение init-agents скилла через {chosenAgent}...</Text>
           </Box>
           <Box flexDirection="column" height={maxOutputHeight}>
             {init.outputLines.slice(-maxOutputHeight).map((line, idx) => (
@@ -154,15 +166,17 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
           <Box marginBottom={1}>
             <Text color={theme.success}>✓ Инициализация завершена!</Text>
           </Box>
-          <Box flexDirection="column" height={Math.min(5, maxOutputHeight)}>
-            {init.outputLines.slice(-5).map((line, idx) => (
-              <Box key={idx}>
-                <Text dimColor wrap="truncate-end">{'  '}{line}</Text>
-              </Box>
-            ))}
-          </Box>
+          {init.outputLines.length > 0 && (
+            <Box flexDirection="column" height={Math.min(5, maxOutputHeight)}>
+              {init.outputLines.slice(-5).map((line, idx) => (
+                <Box key={idx}>
+                  <Text dimColor wrap="truncate-end">{'  '}{line}</Text>
+                </Box>
+              ))}
+            </Box>
+          )}
           <Box marginTop={1}>
-            <Text dimColor>[Esc] закрыть</Text>
+            <Text dimColor>[Enter/Esc] закрыть</Text>
           </Box>
         </>
       )}

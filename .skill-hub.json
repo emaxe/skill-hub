@@ -1,0 +1,44 @@
+{
+  "settings": {
+    "agent": "claude-code",
+    "defaultScope": "project",
+    "registryUrl": "https://github.com/emaxe/skill-hub-catalog.git",
+    "aiAgents": {
+      "proxy": "http://185.18.52.90:6100",
+      "agents": {
+        "claude-code": {
+          "enabled": true,
+          "useProxy": true
+        },
+        "cursor": {
+          "enabled": true,
+          "useProxy": false
+        },
+        "copilot": {
+          "enabled": true,
+          "useProxy": true
+        },
+        "agents-conventions": {
+          "enabled": false,
+          "useProxy": false
+        }
+      }
+    },
+    "history": {
+      "registryUrl": [
+        "https://github.com/emaxe/skill-hub-catalog.git"
+      ],
+      "proxy": [
+        "http://185.18.52.90:6111",
+        "http://185.18.52.90:6100"
+      ]
+    }
+  },
+  "extensions": [
+    {
+      "type": "command",
+      "name": "publish-cli",
+      "scope": "project"
+    }
+  ]
+}

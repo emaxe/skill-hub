@@ -18,7 +18,9 @@ export interface CatalogScreenProps {
   install: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
   installed: InstalledEntry[];
   defaultScope: 'global' | 'project';
+  project?: string | null;
   viewHeight: number;
+  inputActive?: boolean;
 }
 
 const PAGE_SIZE_MIN = 3;
@@ -26,10 +28,10 @@ const PAGE_SIZE_MIN = 3;
 const FIXED_ROWS = 8;
 
 export const CatalogScreen: React.FC<CatalogScreenProps> = ({
-  agent, onOpenDetail, onSearchFocusChange, install, installed, defaultScope, viewHeight,
+  agent, onOpenDetail, onSearchFocusChange, install, installed, defaultScope, project, viewHeight, inputActive,
 }) => {
   const catalogAgent = agent === 'agents-conventions' ? 'claude-code' : agent;
-  const { results, query, typeFilter, loading, error, setQuery, setTypeFilter } = useCatalog(catalogAgent);
+  const { results, query, typeFilter, loading, error, setQuery, setTypeFilter } = useCatalog(catalogAgent, project);
   const { setStatus } = useStatus();
 
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -111,7 +113,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
       const idx = types.indexOf(typeFilter);
       setTypeFilter(types[(idx + 1) % types.length]);
     }
-  });
+  }, { isActive: inputActive !== false });
 
   const hints: Hint[] = searchFocused
     ? [{ key: 'Esc', description: 'закрыть поиск' }]
@@ -141,6 +143,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
             selectedIndex={localIndex}
             installedNames={installedNames}
             installedScopes={installedScopes}
+            currentProject={project}
           />
           {totalPages > 1 && (
             <Box paddingX={1} marginTop={1}>

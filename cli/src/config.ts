@@ -22,6 +22,8 @@ export interface SkillHubConfig {
   agent: AgentName;
   defaultScope: 'global' | 'project';
   registryUrl: string;
+  /** Текущий проект. Расширения с несовместимым projects фильтруются/помечаются. */
+  project?: string;
   aiAgents: AiAgentsConfig;
   history?: ConfigHistory;
 }
@@ -79,18 +81,47 @@ function mergeWithDefaults(raw: Partial<SkillHubConfig>): SkillHubConfig {
   };
 }
 
-// Ищет корень проекта вверх от cwd: .skill-hub.json или .git
+// Маркеры агентских scope-директорий — указывают, что директория является отдельным проектом
+const AGENT_SCOPE_MARKERS = ['.claude', '.cursor', '.agents'];
+
+function hasAgentScopeDirs(dir: string): boolean {
+  return AGENT_SCOPE_MARKERS.some(m => {
+    try {
+      return fs.statSync(path.join(dir, m)).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+}
+
+// Ищет корень проекта вверх от cwd.
+// Приоритет: ближайшая директория с агентскими папками (.claude/, .cursor/, .agents/)
+// имеет приоритет над родительской с .skill-hub.json. Поиск ограничен .git границей.
 export function findProjectRoot(from: string = process.cwd()): string | null {
   let dir = path.resolve(from);
   const root = path.parse(dir).root;
+  let firstAgentDir: string | null = null;
+
   while (dir !== root) {
-    if (
-      fs.existsSync(path.join(dir, PROJECT_CONFIG_NAME)) ||
-      fs.existsSync(path.join(dir, '.git'))
-    ) return dir;
+    // .skill-hub.json — сильный маркер, но ближайшая агентская директория приоритетнее
+    if (fs.existsSync(path.join(dir, PROJECT_CONFIG_NAME))) {
+      return firstAgentDir ?? dir;
+    }
+
+    // Запоминаем первую (ближайшую к CWD) директорию с агентскими папками
+    if (!firstAgentDir && hasAgentScopeDirs(dir)) {
+      firstAgentDir = dir;
+    }
+
+    // .git — граница поиска
+    if (fs.existsSync(path.join(dir, '.git'))) {
+      return firstAgentDir ?? dir;
+    }
+
     dir = path.dirname(dir);
   }
-  return null;
+
+  return firstAgentDir ?? null;
 }
 
 export function getProjectConfigPath(projectRoot: string): string {
@@ -163,6 +194,51 @@ export function resolveConfig(): ResolvedConfig {
     }
   }
   return { config: loadConfig(), source: 'global', projectRoot };
+}
+
+// --- Резолв проекта (конфиг → родительские папки) ---
+
+export interface ResolvedProject {
+  project: string | null;
+  /** Откуда взят проект: config — из текущего конфига, parent — из родительского .skill-hub.json */
+  source: 'config' | 'parent' | null;
+  /** Путь к родительскому конфигу (только для source='parent') */
+  parentPath?: string;
+}
+
+/**
+ * Определяет текущий проект:
+ * 1. Из resolved-конфига (project поле)
+ * 2. Если не задан — ищет .skill-hub.json в родительских папках выше projectRoot
+ */
+export function resolveProject(resolvedConfig?: ResolvedConfig): ResolvedProject {
+  const resolved = resolvedConfig ?? resolveConfig();
+  if (resolved.config.project) {
+    return { project: resolved.config.project, source: 'config' };
+  }
+
+  // Поиск в родительских папках выше projectRoot
+  const startDir = resolved.projectRoot ?? process.cwd();
+  let dir = path.dirname(path.resolve(startDir));
+  const root = path.parse(dir).root;
+
+  while (dir !== root) {
+    const configPath = path.join(dir, PROJECT_CONFIG_NAME);
+    if (fs.existsSync(configPath)) {
+      try {
+        const file = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        const parentProject = file?.settings?.project;
+        if (parentProject && typeof parentProject === 'string') {
+          return { project: parentProject, source: 'parent', parentPath: configPath };
+        }
+      } catch {
+        // ignore
+      }
+    }
+    dir = path.dirname(dir);
+  }
+
+  return { project: null, source: null };
 }
 
 // Сохранить конфиг с учётом текущего source

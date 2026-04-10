@@ -22,6 +22,7 @@ export interface InstalledDetailScreenProps {
   defaultScope: 'global' | 'project';
   onOpenContent: (title: string, content: string) => void;
   viewHeight: number;
+  inputActive?: boolean;
 }
 
 type Action = 'delete' | 'move' | 'update' | 'register';
@@ -29,7 +30,7 @@ type Action = 'delete' | 'move' | 'update' | 'register';
 const SEP = <Text color={theme.muted} dimColor>{'─'.repeat(40)}</Text>;
 
 export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
-  entry, agent, onBack, remove, move, update, install, defaultScope, onOpenContent, viewHeight,
+  entry, agent, onBack, remove, move, update, install, defaultScope, onOpenContent, viewHeight, inputActive,
 }) => {
   const { catalog } = useCatalog();
   const { setStatus } = useStatus();
@@ -70,6 +71,7 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
     path: entry.path, dependencies: catalogExt?.dependencies ?? [],
     version: entry.version,
     author: catalogExt?.author,
+    projects: catalogExt?.projects ?? [],
   });
 
   useInput((input, key) => {
@@ -109,7 +111,7 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
         return;
       }
     }
-  });
+  }, { isActive: inputActive !== false });
 
   const handleConfirmDelete = () => {
     setShowConfirm(false);

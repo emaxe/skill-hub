@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import { loadConfig, saveConfig, resolveConfig, saveResolvedConfig, saveGlobalFromProject, resetProjectToGlobal, initProjectConfig, SkillHubConfig } from '../config';
 import { resetCache } from '../git';
 
-const ALLOWED_KEYS: Array<keyof SkillHubConfig> = ['agent', 'defaultScope', 'registryUrl'];
+const ALLOWED_KEYS: Array<keyof SkillHubConfig> = ['agent', 'defaultScope', 'registryUrl', 'project'];
 
 export function makeConfigCommand(): Command {
   const cmd = new Command('config')

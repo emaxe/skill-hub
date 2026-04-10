@@ -12,14 +12,14 @@ const mockSkill: Extension = {
   type: 'skill', name: 'test-skill', description: 'Test', tags: [],
   version: '1.0.0', scope: 'global',
   platforms: { 'claude-code': 'SKILL.md' },
-  path: 'skills/test-skill', dependencies: [],
+  path: 'skills/test-skill', dependencies: [], projects: [],
 };
 
 const mockAgent: Extension = {
   type: 'agent', name: 'test-agent', description: 'Test agent', tags: [],
   version: '1.0.0', scope: 'global',
   platforms: { 'claude-code': 'AGENT.md' },
-  path: 'agents/test-agent', dependencies: [],
+  path: 'agents/test-agent', dependencies: [], projects: [],
 };
 
 beforeEach(() => {

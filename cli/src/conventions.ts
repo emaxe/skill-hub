@@ -8,9 +8,204 @@ import { AgentName, Extension } from './catalog';
 
 const SYMLINK_TARGETS: Array<{ dir: string; link: string; target: string }> = [
   { dir: '.claude', link: 'skills', target: path.join('..', '.agents', 'skills') },
+  { dir: '.claude', link: 'agents', target: path.join('..', '.agents', 'agents') },
+  { dir: '.claude', link: 'commands', target: path.join('..', '.agents', 'commands') },
   { dir: '.github', link: 'skills', target: path.join('..', '.agents', 'skills') },
   { dir: '.cursor', link: 'skills', target: path.join('..', '.agents', 'skills') },
+  { dir: '.cursor', link: 'agents', target: path.join('..', '.agents', 'agents') },
+  { dir: '.cursor', link: 'commands', target: path.join('..', '.agents', 'commands') },
 ];
+
+// Корневые файлы ИИ-агентов для миграции в .agents/rules/project-rules.md
+const ROOT_AI_CONFIGS: Array<{
+  file: string;      // путь от корня проекта
+  marker: string;    // заголовок секции в project-rules.md
+  pointer: string;   // тонкий указатель, заменяющий оригинал
+}> = [
+  {
+    file: 'CLAUDE.md',
+    marker: '## Из CLAUDE.md',
+    pointer: 'Все правила проекта описаны в [AGENTS.md](AGENTS.md).\nПрочитай AGENTS.md перед началом работы.\n',
+  },
+  {
+    file: '.cursorrules',
+    marker: '## Из .cursorrules',
+    pointer: 'Все правила проекта описаны в AGENTS.md.\nПрочитай AGENTS.md перед началом работы.\n',
+  },
+  {
+    file: path.join('.github', 'copilot-instructions.md'),
+    marker: '## Из .github/copilot-instructions.md',
+    pointer: 'Все правила проекта описаны в [AGENTS.md](../AGENTS.md).\nПрочитай AGENTS.md перед началом работы.\n',
+  },
+];
+
+const AGENTS_MD_TEMPLATE = `# Название проекта
+
+Краткое описание проекта.
+
+## Мета
+
+Перед добавлением или изменением правил, скилов, инструкций -- прочитай скилл
+\`agents-conventions\`.
+
+## Правила
+`;
+
+const AGENTS_MD_PROJECT_RULES_SECTION = `
+### Правила проекта
+Основные правила и описание проекта.
+[Подробности](.agents/rules/project-rules.md)
+`;
+
+/** Проверяет, является ли содержимое файла тонким указателем на AGENTS.md */
+function isRootThinPointer(content: string): boolean {
+  return content.includes('Прочитай AGENTS.md перед началом работы');
+}
+
+/**
+ * Программная генерация project-rules.md по метаданным проекта (без AI).
+ * Покрывает ~80% случаев: парсит package.json, requirements.txt, go.mod и т.д.
+ */
+function generateProjectRules(projectDir: string): string | null {
+  const sections: string[] = ['# Правила проекта\n'];
+  let lang = '';
+  let framework = '';
+  let pkgManager = '';
+  const commands: Array<{ label: string; cmd: string }> = [];
+
+  // Определяем стек по файлам-маркерам
+  const pkgJsonPath = path.join(projectDir, 'package.json');
+  if (fs.existsSync(pkgJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
+      lang = 'TypeScript/JavaScript';
+      const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+
+      if (allDeps['next']) framework = 'Next.js';
+      else if (allDeps['nuxt']) framework = 'Nuxt';
+      else if (allDeps['react']) framework = 'React';
+      else if (allDeps['vue']) framework = 'Vue';
+      else if (allDeps['svelte'] || allDeps['@sveltejs/kit']) framework = 'Svelte';
+      else if (allDeps['express']) framework = 'Express';
+      else if (allDeps['fastify']) framework = 'Fastify';
+      else if (allDeps['@nestjs/core']) framework = 'NestJS';
+
+      if (fs.existsSync(path.join(projectDir, 'pnpm-lock.yaml'))) pkgManager = 'pnpm';
+      else if (fs.existsSync(path.join(projectDir, 'yarn.lock'))) pkgManager = 'yarn';
+      else if (fs.existsSync(path.join(projectDir, 'bun.lockb')) || fs.existsSync(path.join(projectDir, 'bun.lock'))) pkgManager = 'bun';
+      else pkgManager = 'npm';
+
+      if (pkg.scripts) {
+        if (pkg.scripts.build) commands.push({ label: 'Сборка', cmd: `${pkgManager} run build` });
+        if (pkg.scripts.test) commands.push({ label: 'Тесты', cmd: `${pkgManager} test` });
+        if (pkg.scripts.lint) commands.push({ label: 'Линтинг', cmd: `${pkgManager} run lint` });
+        if (pkg.scripts.dev) commands.push({ label: 'Dev-сервер', cmd: `${pkgManager} run dev` });
+      }
+    } catch { /* невалидный package.json */ }
+  } else if (fs.existsSync(path.join(projectDir, 'requirements.txt')) || fs.existsSync(path.join(projectDir, 'pyproject.toml'))) {
+    lang = 'Python';
+    pkgManager = fs.existsSync(path.join(projectDir, 'poetry.lock')) ? 'poetry'
+      : fs.existsSync(path.join(projectDir, 'Pipfile')) ? 'pipenv' : 'pip';
+  } else if (fs.existsSync(path.join(projectDir, 'go.mod'))) {
+    lang = 'Go';
+    pkgManager = 'go';
+  } else if (fs.existsSync(path.join(projectDir, 'Cargo.toml'))) {
+    lang = 'Rust';
+    pkgManager = 'cargo';
+  } else if (fs.existsSync(path.join(projectDir, 'Gemfile'))) {
+    lang = 'Ruby';
+    pkgManager = 'bundler';
+  } else {
+    // Не удалось определить стек — лучше оставить для AI
+    return null;
+  }
+
+  // Секция «Стек»
+  sections.push('## Стек\n');
+  sections.push(`- Язык: ${lang}`);
+  if (framework) sections.push(`- Фреймворк: ${framework}`);
+  sections.push(`- Менеджер пакетов: ${pkgManager}`);
+  sections.push('');
+
+  // Секция «Структура проекта» — верхнеуровневые директории
+  try {
+    const entries = fs.readdirSync(projectDir, { withFileTypes: true })
+      .filter(e => !e.name.startsWith('.') && e.name !== 'node_modules')
+      .slice(0, 15);
+    const dirs = entries.filter(e => e.isDirectory()).map(e => e.name + '/');
+    if (dirs.length > 0) {
+      sections.push('## Структура проекта\n');
+      sections.push('```');
+      for (const d of dirs) sections.push(d);
+      sections.push('```');
+      sections.push('');
+    }
+  } catch { /* ignore */ }
+
+  // Секция «Ключевые команды»
+  if (commands.length > 0) {
+    sections.push('## Ключевые команды\n');
+    for (const c of commands) {
+      sections.push(`- ${c.label}: \`${c.cmd}\``);
+    }
+    sections.push('');
+  }
+
+  // README — первые строки описания
+  const readmePath = path.join(projectDir, 'README.md');
+  if (fs.existsSync(readmePath)) {
+    try {
+      const readme = fs.readFileSync(readmePath, 'utf-8');
+      const lines = readme.split('\n').slice(0, 10);
+      // Ищем первый непустой абзац после заголовка
+      let description = '';
+      let pastTitle = false;
+      for (const line of lines) {
+        if (line.startsWith('#')) { pastTitle = true; continue; }
+        if (pastTitle && line.trim().length > 0) {
+          description = line.trim();
+          break;
+        }
+      }
+      if (description) {
+        // Вставляем описание в начало после заголовка
+        sections.splice(1, 0, description + '\n');
+      }
+    } catch { /* ignore */ }
+  }
+
+  return sections.join('\n');
+}
+
+/**
+ * Парсит project-rules.md с маркерами источников.
+ * Возвращает Map<marker, content> или null если маркеров нет (автосгенерированный файл).
+ */
+function parseProjectRulesMarkers(content: string): Map<string, string> | null {
+  const markers = ROOT_AI_CONFIGS.map(c => c.marker);
+  const hasMarkers = markers.some(m => content.includes(m));
+  if (!hasMarkers) return null;
+
+  const result = new Map<string, string>();
+  for (const marker of markers) {
+    const markerIdx = content.indexOf(marker);
+    if (markerIdx === -1) continue;
+    const start = markerIdx + marker.length;
+    let end = content.length;
+    for (const other of markers) {
+      if (other === marker) continue;
+      const otherIdx = content.indexOf(other, start);
+      if (otherIdx !== -1 && otherIdx < end) end = otherIdx;
+    }
+    result.set(marker, content.slice(start, end).trim());
+  }
+  return result;
+}
+
+export interface EnableConventionsResult {
+  /** Нужен ли автоанализ проекта (нет корневых конфигов, project-rules.md не создан) */
+  needsAutoAnalysis: boolean;
+}
 
 // Тонкие указатели: содержат только ссылку на AGENTS.md
 const THIN_POINTERS: Array<{ filePath: string; content: string }> = [
@@ -72,12 +267,16 @@ export function getConventionsStatus(projectDir: string = process.cwd()): Conven
     extensionCount += fs.readdirSync(skillsDir, { withFileTypes: true })
       .filter(e => e.isDirectory()).length;
   }
-  const rulesDir = path.join(agentsDir, 'rules');
-  if (fs.existsSync(rulesDir)) {
-    extensionCount += fs.readdirSync(rulesDir, { withFileTypes: true })
+  const agentsDirPath = path.join(agentsDir, 'agents');
+  if (fs.existsSync(agentsDirPath)) {
+    extensionCount += fs.readdirSync(agentsDirPath, { withFileTypes: true })
       .filter(e => e.isFile() && e.name.endsWith('.md')).length;
   }
-
+  const commandsDir = path.join(agentsDir, 'commands');
+  if (fs.existsSync(commandsDir)) {
+    extensionCount += fs.readdirSync(commandsDir, { withFileTypes: true })
+      .filter(e => e.isFile() && e.name.endsWith('.md')).length;
+  }
   const hasAgentsMd = fs.existsSync(path.join(projectDir, 'AGENTS.md'));
   const isHealthy = hasAgentsDir
     && hasAgentsMd
@@ -86,15 +285,79 @@ export function getConventionsStatus(projectDir: string = process.cwd()): Conven
   return { active, hasAgentsDir, hasAgentsMd, symlinks, pointers, extensionCount, isHealthy };
 }
 
-export async function enableConventions(projectDir: string = process.cwd()): Promise<void> {
+/**
+ * Устанавливает/обновляет bootstrap-скиллы из бандла CLI в .agents/skills/.
+ * Всегда перезаписывает файлы, чтобы гарантировать актуальную версию.
+ */
+function installBootstrapSkills(
+  projectDir: string,
+  reg: ReturnType<typeof createRegistry>,
+  conventionsAdapter: ReturnType<typeof getAdapter>,
+): void {
+  const bundleDir = path.join(__dirname, '..', 'base-skills', 'agents-conventions');
+  const bootstrapSkills = ['agents-conventions', 'init-agents', 'exit-agents'];
+
+  for (const skillName of bootstrapSkills) {
+    const srcDir = path.join(bundleDir, skillName);
+    if (!fs.existsSync(srcDir)) continue;
+
+    const ext: Extension = {
+      type: 'skill',
+      name: skillName,
+      description: '',
+      tags: [],
+      version: '0.0.0',
+      scope: 'project',
+      platforms: { 'claude-code': null },
+      path: '',
+      dependencies: [],
+      projects: [],
+    };
+
+    const destPath = conventionsAdapter.getInstallPath(ext, 'project');
+    const destDir = path.dirname(destPath);
+
+    // Всегда перезаписываем — гарантируем актуальную версию из бандла CLI
+    fs.mkdirSync(destDir, { recursive: true });
+    fs.cpSync(srcDir, destDir, { recursive: true });
+
+    if (!reg.isInstalled(skillName, 'skill', 'agents-conventions')) {
+      reg.add({
+        type: 'skill',
+        name: skillName,
+        version: '0.0.0',
+        agent: 'agents-conventions',
+        scope: 'project',
+        path: destPath,
+      });
+    }
+  }
+}
+
+export async function enableConventions(projectDir: string = process.cwd()): Promise<EnableConventionsResult> {
   const { config, source, projectRoot } = resolveConfig();
 
   // При повторном вызове (переинициализация) используем claude-code как previousAgent
   const previousAgent = config.agent === 'agents-conventions' ? 'claude-code' : config.agent;
 
+  // Быстрый выход: если структура здорова, только обновляем bootstrap-скиллы
+  if (config.agent === 'agents-conventions') {
+    const status = getConventionsStatus(projectDir);
+    if (status.isHealthy) {
+      const registryDir = path.join(os.homedir(), '.skill-hub');
+      const reg = createRegistry(registryDir);
+      const conventionsAdapter = getAdapter('agents-conventions');
+      installBootstrapSkills(projectDir, reg, conventionsAdapter);
+      const projectRulesPath = path.join(projectDir, '.agents', 'rules', 'project-rules.md');
+      return { needsAutoAnalysis: !fs.existsSync(projectRulesPath) };
+    }
+  }
+
   // 1. Создание директорий
   const dirs = [
     path.join(projectDir, '.agents', 'skills'),
+    path.join(projectDir, '.agents', 'agents'),
+    path.join(projectDir, '.agents', 'commands'),
     path.join(projectDir, '.agents', 'rules'),
     path.join(projectDir, '.claude'),
     path.join(projectDir, '.github', 'instructions'),
@@ -104,7 +367,51 @@ export async function enableConventions(projectDir: string = process.cwd()): Pro
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  // 2. Создание симлинков (идемпотентно)
+  // 2. Миграция корневых файлов ИИ-агентов → .agents/rules/project-rules.md
+  const projectRulesPath = path.join(projectDir, '.agents', 'rules', 'project-rules.md');
+  let projectRulesCreated = false;
+
+  if (!fs.existsSync(projectRulesPath)) {
+    const foundConfigs: Array<{ marker: string; content: string; file: string }> = [];
+    for (const cfg of ROOT_AI_CONFIGS) {
+      const filePath = path.join(projectDir, cfg.file);
+      if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        // Пропускаем если уже тонкий указатель
+        if (!isRootThinPointer(content) && content.trim().length > 0) {
+          foundConfigs.push({ marker: cfg.marker, content, file: cfg.file });
+        }
+      }
+    }
+
+    if (foundConfigs.length > 0) {
+      // Собираем project-rules.md из найденных конфигов
+      let projectRulesContent = '# Правила проекта\n\n<!-- Мигрировано из корневых файлов ИИ-агентов -->\n';
+      for (const cfg of foundConfigs) {
+        projectRulesContent += `\n${cfg.marker}\n\n${cfg.content}\n`;
+      }
+      fs.writeFileSync(projectRulesPath, projectRulesContent);
+      projectRulesCreated = true;
+
+      // Заменяем оригиналы тонкими указателями
+      for (const cfg of foundConfigs) {
+        const rootCfg = ROOT_AI_CONFIGS.find(c => c.file === cfg.file)!;
+        const filePath = path.join(projectDir, rootCfg.file);
+        fs.writeFileSync(filePath, rootCfg.pointer);
+      }
+    } else {
+      // Корневых конфигов нет — пробуем программную генерацию по метаданным проекта
+      const generated = generateProjectRules(projectDir);
+      if (generated) {
+        fs.writeFileSync(projectRulesPath, generated);
+        projectRulesCreated = true;
+      }
+    }
+  } else {
+    projectRulesCreated = true; // уже существует
+  }
+
+  // 3. Создание симлинков (идемпотентно)
   for (const s of SYMLINK_TARGETS) {
     const linkPath = path.join(projectDir, s.dir, s.link);
 
@@ -116,11 +423,11 @@ export async function enableConventions(projectDir: string = process.cwd()): Pro
         if (currentTarget === s.target) continue; // уже корректный
         fs.unlinkSync(linkPath);
       } else if (stat.isDirectory()) {
-        // Обычная директория — мигрируем содержимое
+        // Обычная директория — мигрируем содержимое в соответствующую .agents/ поддиректорию
         const entries = fs.readdirSync(linkPath, { withFileTypes: true });
         for (const entry of entries) {
           const src = path.join(linkPath, entry.name);
-          const dest = path.join(projectDir, '.agents', 'skills', entry.name);
+          const dest = path.join(projectDir, '.agents', s.link, entry.name);
           if (!fs.existsSync(dest)) {
             fs.cpSync(src, dest, { recursive: true });
           }
@@ -132,7 +439,7 @@ export async function enableConventions(projectDir: string = process.cwd()): Pro
     fs.symlinkSync(s.target, linkPath);
   }
 
-  // 3. Создание тонких указателей (если не существуют)
+  // 4. Создание тонких указателей (если не существуют)
   for (const p of THIN_POINTERS) {
     const fullPath = path.join(projectDir, p.filePath);
     if (!fs.existsSync(fullPath)) {
@@ -141,9 +448,27 @@ export async function enableConventions(projectDir: string = process.cwd()): Pro
     }
   }
 
-  // 4. Миграция skill-hub расширений из installed.json
+  // 4.5. Миграция agent/command файлов из .agents/rules/ в .agents/agents/ и .agents/commands/
   const registryDir = path.join(os.homedir(), '.skill-hub');
   const reg = createRegistry(registryDir);
+  const existingRecords = reg.list('agents-conventions');
+  const rulesDir = path.join(projectDir, '.agents', 'rules');
+  if (fs.existsSync(rulesDir)) {
+    for (const record of existingRecords) {
+      if (record.type !== 'agent' && record.type !== 'command') continue;
+      const oldPath = path.join(rulesDir, `${record.name}.md`);
+      if (!fs.existsSync(oldPath)) continue;
+      const newDir = record.type === 'agent' ? 'agents' : 'commands';
+      const newPath = path.join(projectDir, '.agents', newDir, `${record.name}.md`);
+      if (!fs.existsSync(newPath)) {
+        fs.mkdirSync(path.dirname(newPath), { recursive: true });
+        fs.renameSync(oldPath, newPath);
+        reg.add({ ...record, path: newPath });
+      }
+    }
+  }
+
+  // 5. Миграция skill-hub расширений из installed.json
   const records = reg.list(previousAgent).filter(r => r.scope === 'project');
   const conventionsAdapter = getAdapter('agents-conventions');
 
@@ -158,6 +483,7 @@ export async function enableConventions(projectDir: string = process.cwd()): Pro
       platforms: { 'claude-code': null },
       path: '',
       dependencies: [],
+      projects: [],
     };
 
     const newPath = conventionsAdapter.getInstallPath(ext, 'project');
@@ -200,46 +526,30 @@ export async function enableConventions(projectDir: string = process.cwd()): Pro
     });
   }
 
-  // 5. Обновление конфига
+  // 6. Обновление конфига
   config.agent = 'agents-conventions';
   saveResolvedConfig(config, source, projectRoot);
 
-  // 6. Установка скиллов agents-conventions и init-agents из бандла CLI
-  const bundleDir = path.join(__dirname, '..', 'base-skills', 'agents-conventions');
-  const bootstrapSkills = ['agents-conventions', 'init-agents', 'exit-agents'];
+  // 7. Установка/обновление bootstrap-скиллов из бандла CLI
+  installBootstrapSkills(projectDir, reg, conventionsAdapter);
 
-  for (const skillName of bootstrapSkills) {
-    if (reg.isInstalled(skillName, 'skill', 'agents-conventions')) continue;
-
-    const srcDir = path.join(bundleDir, skillName);
-    if (!fs.existsSync(srcDir)) continue;
-
-    const ext: Extension = {
-      type: 'skill',
-      name: skillName,
-      description: '',
-      tags: [],
-      version: '0.0.0',
-      scope: 'project',
-      platforms: { 'claude-code': null },
-      path: '',
-      dependencies: [],
-    };
-
-    const destPath = conventionsAdapter.getInstallPath(ext, 'project');
-    const destDir = path.dirname(destPath);
-    fs.mkdirSync(destDir, { recursive: true });
-    fs.cpSync(srcDir, destDir, { recursive: true });
-
-    reg.add({
-      type: 'skill',
-      name: skillName,
-      version: '0.0.0',
-      agent: 'agents-conventions',
-      scope: 'project',
-      path: destPath,
-    });
+  // 8. Создание AGENTS.md (если отсутствует)
+  const agentsMdPath = path.join(projectDir, 'AGENTS.md');
+  if (!fs.existsSync(agentsMdPath)) {
+    let agentsMdContent = AGENTS_MD_TEMPLATE;
+    if (projectRulesCreated) {
+      agentsMdContent += AGENTS_MD_PROJECT_RULES_SECTION;
+    }
+    fs.writeFileSync(agentsMdPath, agentsMdContent);
+  } else if (projectRulesCreated) {
+    // AGENTS.md существует, но может не содержать ссылку на project-rules
+    const existing = fs.readFileSync(agentsMdPath, 'utf-8');
+    if (!existing.includes('project-rules')) {
+      fs.writeFileSync(agentsMdPath, existing + AGENTS_MD_PROJECT_RULES_SECTION);
+    }
   }
+
+  return { needsAutoAnalysis: !projectRulesCreated };
 }
 
 export async function disableConventions(
@@ -262,10 +572,85 @@ export async function disableConventions(
   const records = reg.list('agents-conventions');
   const targetAdapter = getAdapter(targetAgent);
 
-  // 1. Миграция расширений обратно в папку целевого агента
+  // 1. Восстановление корневых файлов из .agents/rules/project-rules.md
+  const projectRulesPath = path.join(projectDir, '.agents', 'rules', 'project-rules.md');
+  if (fs.existsSync(projectRulesPath)) {
+    const prContent = fs.readFileSync(projectRulesPath, 'utf-8');
+    const markerSections = parseProjectRulesMarkers(prContent);
+
+    if (markerSections) {
+      // Файл содержит маркеры — восстанавливаем каждый источник
+      for (const cfg of ROOT_AI_CONFIGS) {
+        const sectionContent = markerSections.get(cfg.marker);
+        if (!sectionContent) continue;
+        const targetPath = path.join(projectDir, cfg.file);
+        if (fs.existsSync(targetPath)) {
+          const existing = fs.readFileSync(targetPath, 'utf-8');
+          if (!isRootThinPointer(existing)) continue; // пользовательский контент — не трогаем
+        }
+        fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+        fs.writeFileSync(targetPath, sectionContent);
+      }
+    } else {
+      // Автосгенерированный — записываем в корневой файл целевого агента
+      const targetFile = targetAgent === 'claude-code' ? 'CLAUDE.md'
+        : targetAgent === 'cursor' ? '.cursorrules'
+        : path.join('.github', 'copilot-instructions.md');
+      const targetPath = path.join(projectDir, targetFile);
+      if (!fs.existsSync(targetPath) || isRootThinPointer(fs.readFileSync(targetPath, 'utf-8'))) {
+        fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+        fs.writeFileSync(targetPath, prContent);
+      }
+    }
+  }
+
+  // 2. Миграция правил из .agents/rules/ в формат целевого агента
+  const rulesDir = path.join(projectDir, '.agents', 'rules');
+  if (fs.existsSync(rulesDir)) {
+    const ruleFiles = fs.readdirSync(rulesDir, { withFileTypes: true })
+      .filter(e => e.isFile() && e.name.endsWith('.md') && e.name !== 'project-rules.md');
+
+    for (const ruleFile of ruleFiles) {
+      const ruleName = ruleFile.name.slice(0, -3); // убираем .md
+      const ruleContent = fs.readFileSync(path.join(rulesDir, ruleFile.name), 'utf-8');
+
+      if (targetAgent === 'claude-code') {
+        const dest = path.join(projectDir, '.claude', `${ruleName}.md`);
+        if (!fs.existsSync(dest)) {
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+          fs.writeFileSync(dest, ruleContent);
+        }
+      } else if (targetAgent === 'cursor') {
+        const dest = path.join(projectDir, '.cursor', 'rules', `${ruleName}.mdc`);
+        if (!fs.existsSync(dest)) {
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+          fs.writeFileSync(dest, `---\ndescription: ${ruleName}\nalwaysApply: false\n---\n${ruleContent}`);
+        }
+      } else if (targetAgent === 'copilot') {
+        const dest = path.join(projectDir, '.github', 'instructions', `${ruleName}.instructions.md`);
+        if (!fs.existsSync(dest)) {
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+          fs.writeFileSync(dest, `---\napplyTo: "**"\n---\n${ruleContent}`);
+        }
+      }
+    }
+  }
+
+  // 3. Очистка корневых тонких указателей (если не были перезаписаны на шаге 1)
+  for (const cfg of ROOT_AI_CONFIGS) {
+    const filePath = path.join(projectDir, cfg.file);
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      if (isRootThinPointer(content)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+  }
+
+  // 4. Миграция расширений обратно в папку целевого агента
   for (const record of records) {
     // Пропускаем bootstrap-скиллы
-    if (record.name === 'agents-conventions' || record.name === 'init-agents') continue;
+    if (record.name === 'agents-conventions' || record.name === 'init-agents' || record.name === 'exit-agents') continue;
 
     const ext: Extension = {
       type: record.type,
@@ -277,6 +662,7 @@ export async function disableConventions(
       platforms: { 'claude-code': null },
       path: '',
       dependencies: [],
+      projects: [],
     };
 
     const newPath = targetAdapter.getInstallPath(ext, 'project');
@@ -303,7 +689,7 @@ export async function disableConventions(
     });
   }
 
-  // 2. Удаление симлинков
+  // 5. Удаление симлинков
   for (const s of SYMLINK_TARGETS) {
     const linkPath = path.join(projectDir, s.dir, s.link);
     if (fs.existsSync(linkPath)) {
@@ -314,7 +700,7 @@ export async function disableConventions(
     }
   }
 
-  // 3. Удаление тонких указателей, созданных CLI
+  // 6. Удаление тонких указателей, созданных CLI
   for (const p of THIN_POINTERS) {
     const fullPath = path.join(projectDir, p.filePath);
     if (fs.existsSync(fullPath)) {
@@ -326,7 +712,7 @@ export async function disableConventions(
     }
   }
 
-  // 4. Удаление bootstrap-скиллов
+  // 7. Удаление bootstrap-скиллов
   const bootstrapSkills = ['agents-conventions', 'init-agents', 'exit-agents'];
   for (const skillName of bootstrapSkills) {
     const skillDir = path.join(projectDir, '.agents', 'skills', skillName);
@@ -336,11 +722,11 @@ export async function disableConventions(
     reg.remove(skillName, 'skill', 'agents-conventions');
   }
 
-  // 5. Обновление конфига
+  // 8. Обновление конфига
   config.agent = targetAgent;
   saveResolvedConfig(config, source, projectRoot);
 
-  // 6. Предложить удаление .agents/ и AGENTS.md
+  // 9. Предложить удаление .agents/ и AGENTS.md
   if (confirmDelete) {
     const shouldDelete = await confirmDelete();
     if (shouldDelete) {

@@ -11,9 +11,10 @@ export interface MoveScreenProps {
   agent: AgentName;
   onBack: () => void;
   move: (ext: Extension, agent: AgentName, fromScope: 'global' | 'project') => Promise<void>;
+  inputActive?: boolean;
 }
 
-export const MoveScreen: React.FC<MoveScreenProps> = ({ extension, currentScope, agent, onBack, move }) => {
+export const MoveScreen: React.FC<MoveScreenProps> = ({ extension, currentScope, agent, onBack, move, inputActive }) => {
   const { setStatus } = useStatus();
 
   const targetScope = currentScope === 'global' ? 'project' : 'global';
@@ -34,7 +35,7 @@ export const MoveScreen: React.FC<MoveScreenProps> = ({ extension, currentScope,
           onBack();
         });
     }
-  });
+  }, { isActive: inputActive !== false });
 
   return (
     <Box flexDirection="column" padding={2}>

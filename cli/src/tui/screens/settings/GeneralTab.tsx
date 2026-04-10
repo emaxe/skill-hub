@@ -1,16 +1,17 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { AgentName } from '../../../catalog';
-import { ConfigSource } from '../../../config';
+import { ConfigSource, ResolvedProject } from '../../../config';
 import { InstallState } from '../../hooks/useBaseSetup';
 import { theme } from '../../theme';
 
-type Field = 'agent' | 'scope' | 'registryUrl' | 'updateCache' | 'saveAsGlobal' | 'resetToGlobal' | 'createProjectConfig' | 'syncExtensions';
+type Field = 'agent' | 'scope' | 'project' | 'registryUrl' | 'updateCache' | 'saveAsGlobal' | 'resetToGlobal' | 'createProjectConfig' | 'syncExtensions' | 'checkProjectConflicts';
 
 interface Props {
   localAgent: AgentName;
   localScope: 'global' | 'project';
   localRegistryUrl: string;
+  resolvedProject: ResolvedProject;
   cachePath: string;
   cacheInstalled: boolean;
   cacheUpdateState: InstallState;
@@ -23,6 +24,7 @@ export const GeneralTab: React.FC<Props> = ({
   localAgent,
   localScope,
   localRegistryUrl,
+  resolvedProject,
   cachePath,
   cacheInstalled,
   cacheUpdateState,
@@ -31,6 +33,12 @@ export const GeneralTab: React.FC<Props> = ({
   hasProjectRoot,
 }) => (
   <Box flexDirection="column">
+    {/* Рабочая папка */}
+    <Box marginBottom={1}>
+      <Text dimColor>{'  '}{'Рабочая папка: '}</Text>
+      <Text color={theme.muted}>{process.cwd()}</Text>
+    </Box>
+
     {/* Источник настроек */}
     <Box marginBottom={1}>
       <Text dimColor>{'  '}{'Источник:     '}</Text>
@@ -57,6 +65,24 @@ export const GeneralTab: React.FC<Props> = ({
       {localAgent === 'agents-conventions'
         ? <Text dimColor> (только project)</Text>
         : <Text dimColor> ←→</Text>}
+    </Box>
+
+    {/* Проект */}
+    <Box marginBottom={1}>
+      <Text color={activeField === 'project' ? theme.selected : theme.secondary}>
+        {activeField === 'project' ? '▶ ' : '  '}{'Проект:       '}
+      </Text>
+      {resolvedProject.project ? (
+        <>
+          <Text color={theme.warning}>[{resolvedProject.project}]</Text>
+          {resolvedProject.source === 'parent' && (
+            <Text dimColor> (из родительской папки: {resolvedProject.parentPath})</Text>
+          )}
+        </>
+      ) : (
+        <Text dimColor>[не задан]</Text>
+      )}
+      {activeField === 'project' && <Text dimColor> [Enter]</Text>}
     </Box>
 
     {/* Registry URL */}
@@ -117,6 +143,16 @@ export const GeneralTab: React.FC<Props> = ({
       <Box marginBottom={1}>
         <Text color={activeField === 'syncExtensions' ? theme.selected : theme.secondary}>
           {activeField === 'syncExtensions' ? '▶ ' : '  '}{'Синхронизировать расширения '}
+        </Text>
+        <Text dimColor>[Enter]</Text>
+      </Box>
+    )}
+
+    {/* Проверить конфликты проектов */}
+    {resolvedProject.project && (
+      <Box marginBottom={1}>
+        <Text color={activeField === 'checkProjectConflicts' ? theme.selected : theme.secondary}>
+          {activeField === 'checkProjectConflicts' ? '▶ ' : '  '}{'Проверить конфликты проектов '}
         </Text>
         <Text dimColor>[Enter]</Text>
       </Box>

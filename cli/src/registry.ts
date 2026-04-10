@@ -13,6 +13,10 @@ export interface InstallRecord {
   scope: 'global' | 'project' | 'parent';
   installed_at?: string;
   path: string;
+  /** Привязка к проектам (копируется из каталога при установке) */
+  projects?: string[];
+  /** Теги расширения (копируются из каталога при установке) */
+  tags?: string[];
 }
 
 /** CRUD-интерфейс для работы с реестром установленных расширений */

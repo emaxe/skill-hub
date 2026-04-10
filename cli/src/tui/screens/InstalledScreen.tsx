@@ -30,6 +30,8 @@ export interface InstalledScreenProps {
   update: (ext: Extension, agent: AgentName, scope: 'global' | 'project') => Promise<void>;
   updateSelf: () => Promise<void>;
   viewHeight: number;
+  project?: string | null;
+  inputActive?: boolean;
 }
 
 type ScopeFilter = 'all' | 'global' | 'project' | 'parent';
@@ -52,12 +54,13 @@ function recordToExtension(record: InstallRecord): Extension {
     type: record.type,
     name: record.name,
     description: '',
-    tags: [],
+    tags: record.tags ?? [],
     scope: record.scope === 'parent' ? 'project' : record.scope,
     platforms: {},
     path: record.path,
     dependencies: [],
     version: record.version,
+    projects: record.projects ?? [],
   };
 }
 
@@ -67,7 +70,7 @@ function nextInList<T>(current: T, list: T[]): T {
 }
 
 export const InstalledScreen: React.FC<InstalledScreenProps> = ({
-  agent, onMoveExt, onOpenDetail, onSearchFocusChange, installed, loading, error, remove, update, updateSelf, viewHeight,
+  agent, onMoveExt, onOpenDetail, onSearchFocusChange, installed, loading, error, remove, update, updateSelf, viewHeight, project, inputActive,
 }) => {
   const { setStatus } = useStatus();
   const isConventions = agent === 'agents-conventions';
@@ -88,11 +91,6 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
 
   const filtered = useMemo(() => {
     let list = installed;
-
-    // Hide rules in agents-conventions mode (they are project descriptions, not AI extensions)
-    if (isConventions) {
-      list = list.filter(e => e.type !== 'rule');
-    }
 
     // Scope filter
     if (scopeFilter !== 'all') {
@@ -202,7 +200,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
         }
       })();
     }
-  });
+  }, { isActive: inputActive !== false });
 
   // --- Двухэтапное удаление: 1) confirm → 2) выбор «удалить файлы с диска?» ---
   const handleConfirmDelete = () => {
@@ -308,9 +306,11 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
             <Box flexDirection="row">
               <Box minWidth={2}><Text> </Text></Box>
               <Box minWidth={9}><Text dimColor>TYPE</Text></Box>
-              <Box minWidth={24}><Text dimColor>NAME</Text></Box>
+              <Box minWidth={22}><Text dimColor>NAME</Text></Box>
               <Box minWidth={8}><Text dimColor>VER</Text></Box>
               <Box minWidth={8}><Text dimColor>SCOPE</Text></Box>
+              <Box minWidth={16}><Text dimColor>TAGS</Text></Box>
+              <Box minWidth={12}><Text dimColor>PROJECT</Text></Box>
               <Box minWidth={10}><Text dimColor>SOURCE</Text></Box>
               <Text dimColor>AGENT</Text>
             </Box>
@@ -318,9 +318,11 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
             <Box flexDirection="row">
               <Box minWidth={2}><Text> </Text></Box>
               <Box minWidth={9}><Text dimColor>{'────────'}</Text></Box>
-              <Box minWidth={24}><Text dimColor>{'──────────────────────'}</Text></Box>
+              <Box minWidth={22}><Text dimColor>{'────────────────────'}</Text></Box>
               <Box minWidth={8}><Text dimColor>{'──────'}</Text></Box>
               <Box minWidth={8}><Text dimColor>{'───────'}</Text></Box>
+              <Box minWidth={16}><Text dimColor>{'──────────────'}</Text></Box>
+              <Box minWidth={12}><Text dimColor>{'──────────'}</Text></Box>
               <Box minWidth={10}><Text dimColor>{'────────'}</Text></Box>
               <Text dimColor>{'────────'}</Text>
             </Box>
@@ -330,6 +332,10 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
               const displayAgent = isConventions
                 ? (entry.sourceAgent === 'agents-conventions' ? 'all agents' : (entry.sourceAgent || entry.agent))
                 : (entry.agent === 'agents-conventions' ? 'all agents' : entry.agent);
+              const tagsText = (entry.tags && entry.tags.length > 0) ? entry.tags.join(', ') : '—';
+              const projectText = (entry.projects && entry.projects.length > 0)
+                ? entry.projects[0] + (entry.projects.length > 1 ? '+' : '')
+                : '—';
               return (
                 <Box key={`${entry.type}:${entry.name}:${entry.scope}:${entry.sourceAgent || entry.agent}`} flexDirection="row">
                   <Box minWidth={2}>
@@ -340,9 +346,9 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
                   <Box minWidth={9}>
                     <Text color={theme.accent}>{truncate(entry.type, 8)}</Text>
                   </Box>
-                  <Box minWidth={24}>
+                  <Box minWidth={22}>
                     <Text color={isSelected ? theme.selected : theme.secondary} bold={isSelected}>
-                      {truncate(entry.name, 22)}
+                      {truncate(entry.name, 20)}
                     </Text>
                   </Box>
                   <Box minWidth={8}>
@@ -351,6 +357,14 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
                   <Box minWidth={8}>
                     <Text color={entry.effectiveScope === 'global' ? theme.success : entry.effectiveScope === 'parent' ? theme.accent : theme.warning}>
                       {entry.effectiveScope}
+                    </Text>
+                  </Box>
+                  <Box minWidth={16}>
+                    <Text color={theme.muted} dimColor>{truncate(tagsText, 15)}</Text>
+                  </Box>
+                  <Box minWidth={12}>
+                    <Text color={projectText === '—' ? theme.muted : theme.accent} dimColor={projectText === '—'}>
+                      {truncate(projectText, 11)}
                     </Text>
                   </Box>
                   <Box minWidth={10}>

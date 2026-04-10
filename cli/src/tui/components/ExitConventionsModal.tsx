@@ -12,30 +12,32 @@ const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
 type AiAgentName = 'claude-code' | 'cursor' | 'copilot';
 
 interface ExitConventionsModalProps {
-  enabledAgents: AiAgentName[];
   targetAgent: AgentName;
+  enabledAgents: AiAgentName[];
   aiAgentsConfig: AiAgentsConfig;
   onDone: () => void;
   onCancel: () => void;
-  onSkip: () => void;
 }
 
 export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
-  enabledAgents,
   targetAgent,
+  enabledAgents,
   aiAgentsConfig,
   onDone,
   onCancel,
-  onSkip,
 }) => {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [spinnerIdx, setSpinnerIdx] = useState(0);
-  const [confirmingSkip, setConfirmingSkip] = useState(false);
   const [deleteArtifacts, setDeleteArtifacts] = useState(false);
   const [deletingArtifacts, setDeletingArtifacts] = useState(false);
-  const exit = useConventionsExit();
   const { stdout } = useStdout();
   const maxOutputHeight = Math.max(5, (stdout?.rows ?? 24) - 12);
+  const exit = useConventionsExit();
+
+  // Автозапуск — показываем выбор AI-агента
+  useEffect(() => {
+    exit.start();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (exit.step !== 'running' && exit.step !== 'disabling') return;
@@ -47,15 +49,14 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
 
   useInput((rawInput, key) => {
     const input = normalizeInput(rawInput);
-    if (exit.step === 'running') {
-      if (key.escape) {
+
+    if (exit.step === 'running' || exit.step === 'disabling') {
+      if (key.escape && exit.step === 'running') {
         exit.cancel();
         onCancel();
       }
       return;
     }
-
-    if (exit.step === 'disabling') return;
 
     if (exit.step === 'done') {
       if (deletingArtifacts) return;
@@ -67,7 +68,6 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
           deleteConventionsArtifacts().then(() => {
             onDone();
           }).catch(() => {
-            // Игнорируем ошибку удаления — переходим дальше
             onDone();
           });
         } else {
@@ -82,39 +82,30 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
     if (exit.step === 'error') {
       if (input === 'r' || input === 'R') {
         exit.reset();
-      } else if (input === 's' || input === 'S') {
-        onSkip();
+        setTimeout(() => exit.start(), 0);
       } else if (key.escape) {
         onCancel();
       }
       return;
     }
 
-    // step === 'idle'
-    if (confirmingSkip) {
-      if (input === 'y' || input === 'Y' || key.return) {
-        onSkip();
-      } else if (input === 'n' || input === 'N' || key.escape) {
-        setConfirmingSkip(false);
+    // step === 'selectAgent' — выбор AI-агента для exit-agents
+    if (exit.step === 'selectAgent') {
+      if (key.upArrow) {
+        setSelectedIdx(i => (i - 1 + Math.max(enabledAgents.length, 1)) % Math.max(enabledAgents.length, 1));
+      } else if (key.downArrow) {
+        setSelectedIdx(i => (i + 1) % Math.max(enabledAgents.length, 1));
+      } else if (key.return && enabledAgents.length > 0) {
+        const agent = enabledAgents[selectedIdx];
+        exit.runWithAgent(agent, aiAgentsConfig, targetAgent);
+      } else if (input === 's' || input === 'S') {
+        exit.skipAgent(targetAgent);
+      } else if (key.escape) {
+        exit.skipAgent(targetAgent);
       }
       return;
     }
-
-    if (key.upArrow) {
-      setSelectedIdx(i => (i - 1 + Math.max(enabledAgents.length, 1)) % Math.max(enabledAgents.length, 1));
-    } else if (key.downArrow) {
-      setSelectedIdx(i => (i + 1) % Math.max(enabledAgents.length, 1));
-    } else if (key.return && enabledAgents.length > 0) {
-      const agent = enabledAgents[selectedIdx];
-      exit.run(agent, targetAgent, aiAgentsConfig);
-    } else if (input === 's' || input === 'S') {
-      setConfirmingSkip(true);
-    } else if (key.escape) {
-      onCancel();
-    }
   });
-
-  const isRunning = exit.step === 'running';
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={theme.border} padding={1} marginTop={1} marginBottom={1}>
@@ -122,25 +113,19 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
         <Text color={theme.primary} bold>Выход из agents-conventions → {targetAgent}</Text>
       </Box>
 
-      {exit.step === 'idle' && !confirmingSkip && (
+      {exit.step === 'selectAgent' && (
         <>
           {enabledAgents.length === 0 ? (
             <>
               <Box marginBottom={1}>
-                <Text color={theme.warning}>Нет настроенных агентов.</Text>
+                <Text dimColor>Нет включённых ИИ-агентов для запуска exit-agents скилла.</Text>
               </Box>
-              <Box marginBottom={1}>
-                <Text dimColor>Включите claude-code, cursor или copilot в разделе ИИ-агенты.</Text>
-              </Box>
-              <Box marginBottom={1}>
-                <Text dimColor>Без AI-агента миграция скиллов/правил не выполнится автоматически.</Text>
-              </Box>
-              <Text dimColor>[S] пропустить (без миграции)  [Esc] отмена</Text>
+              <Text dimColor>[S/Esc] пропустить → выполнить программную миграцию</Text>
             </>
           ) : (
             <>
               <Box marginBottom={1}>
-                <Text dimColor>Выберите агент для миграции скиллов и правил из .agents/:</Text>
+                <Text dimColor>Запустить AI-агент для выполнения exit-agents скилла перед миграцией?</Text>
               </Box>
               {enabledAgents.map((agent, idx) => (
                 <Box key={agent}>
@@ -150,33 +135,18 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
                 </Box>
               ))}
               <Box marginTop={1}>
-                <Text dimColor>[↑↓] выбор  [Enter] запустить  [S] пропустить  [Esc] отмена</Text>
+                <Text dimColor>[↑↓] выбор  [Enter] запустить  [S] пропустить  [Esc] пропустить</Text>
               </Box>
             </>
           )}
         </>
       )}
 
-      {exit.step === 'idle' && confirmingSkip && (
-        <>
-          <Box marginBottom={1}>
-            <Text color={theme.warning}>Пропустить AI-миграцию?</Text>
-          </Box>
-          <Box marginBottom={1}>
-            <Text dimColor>Пользовательские скиллы и правила из .agents/ НЕ будут</Text>
-          </Box>
-          <Box marginBottom={1}>
-            <Text dimColor>скопированы в директорию агента {targetAgent}.</Text>
-          </Box>
-          <Text dimColor>[Y] да, пропустить  [N/Esc] назад</Text>
-        </>
-      )}
-
-      {isRunning && (
+      {exit.step === 'running' && (
         <>
           <Box marginBottom={1}>
             <Text color={theme.warning}>{SPINNER_FRAMES[spinnerIdx]} </Text>
-            <Text color={theme.warning}>Миграция через AI-агент...</Text>
+            <Text color={theme.warning}>Выполнение exit-agents скилла...</Text>
           </Box>
           <Box flexDirection="column" height={maxOutputHeight}>
             {exit.outputLines.slice(-maxOutputHeight).map((line, idx) => (
@@ -197,7 +167,7 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
       {exit.step === 'disabling' && (
         <Box>
           <Text color={theme.warning}>{SPINNER_FRAMES[spinnerIdx]} </Text>
-          <Text color={theme.warning}>Удаляю структуру conventions...</Text>
+          <Text color={theme.warning}>Миграция и очистка...</Text>
         </Box>
       )}
 
@@ -205,13 +175,6 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
         <>
           <Box marginBottom={1}>
             <Text color={theme.success}>✓ Выход из agents-conventions завершён!</Text>
-          </Box>
-          <Box flexDirection="column" height={Math.min(3, maxOutputHeight)}>
-            {exit.outputLines.slice(-3).map((line, idx) => (
-              <Box key={idx}>
-                <Text dimColor wrap="truncate-end">{'  '}{line}</Text>
-              </Box>
-            ))}
           </Box>
           <Box marginTop={1} marginBottom={1}>
             <Text>Удалить .agents/ и AGENTS.md? </Text>
@@ -244,7 +207,7 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
             ))}
           </Box>
           <Box marginTop={1}>
-            <Text dimColor>[R] повторить  [S] пропустить (без миграции)  [Esc] отмена</Text>
+            <Text dimColor>[R] повторить  [Esc] отмена</Text>
           </Box>
         </>
       )}

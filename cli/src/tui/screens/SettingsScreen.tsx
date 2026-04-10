@@ -9,7 +9,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { AgentName } from '../../catalog';
-import { SkillHubConfig, AiAgentsConfig, ConfigSource, pushHistory } from '../../config';
+import { SkillHubConfig, AiAgentsConfig, ConfigSource, pushHistory, resolveProject, ResolvedProject } from '../../config';
 import { useStatus } from '../contexts/StatusContext';
 import { getCachePath, isCloned, resetCache, updateCache } from '../../git';
 import { HintBar } from '../components/HintBar';
@@ -19,18 +19,20 @@ import { useBaseSetup, InstallState } from '../hooks/useBaseSetup';
 import { InitConventionsModal } from '../components/InitConventionsModal';
 import { ExitConventionsModal } from '../components/ExitConventionsModal';
 import { TextEditModal } from '../components/TextEditModal';
-import { getConventionsStatus, ConventionsStatus, disableConventions } from '../../conventions';
+import { getConventionsStatus, ConventionsStatus } from '../../conventions';
 import { checkExtensionSync } from '../../sync';
+import { checkProjectConflicts, ProjectConflict } from '../../sync';
 import { GeneralTab, AiAgentsTab, SetupTab } from './settings';
 import { ScrollableBox } from '../components/ScrollableBox';
 
 const AGENTS: AgentName[] = ['claude-code', 'cursor', 'copilot', 'agents-conventions'];
 const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
 
-type Field = 'agent' | 'scope' | 'registryUrl' | 'installMcp' | 'installBaseSkill' | 'updateCache' | 'updateAgent'
+type Field = 'agent' | 'scope' | 'project' | 'registryUrl' | 'installMcp' | 'installBaseSkill' | 'updateCache' | 'updateAgent'
   | 'initConventions'
   | 'saveAsGlobal' | 'resetToGlobal' | 'createProjectConfig'
   | 'syncExtensions'
+  | 'checkProjectConflicts'
   | `aiAgent:${AgentName}`
   | 'aiProxy'
   | `aiAgentProxy:${AgentName}`;
@@ -59,10 +61,13 @@ export interface SettingsScreenProps {
   onResetToGlobal: () => SkillHubConfig | null;
   onCreateProjectConfig: () => boolean;
   onSyncExtensions?: () => void;
+  onCheckProjectConflicts?: () => void;
+  resolvedProject: ResolvedProject;
   viewHeight: number;
+  inputActive?: boolean;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateConfig, onEditingChange, configSource, hasProjectRoot, onSaveAsGlobal, onResetToGlobal, onCreateProjectConfig, onSyncExtensions, viewHeight }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateConfig, onEditingChange, configSource, hasProjectRoot, onSaveAsGlobal, onResetToGlobal, onCreateProjectConfig, onSyncExtensions, onCheckProjectConflicts, resolvedProject, viewHeight, inputActive }) => {
   const { setStatus } = useStatus();
 
   const [localAgent, setLocalAgent] = useState<AgentName>(config.agent);
@@ -74,7 +79,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   const [localAiAgents, setLocalAiAgents] = useState<AiAgentsConfig>(config.aiAgents);
   const [activeField, setActiveField] = useState<Field>('agent');
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>('general');
-  const [editModal, setEditModal] = useState<'registryUrl' | 'aiProxy' | null>(null);
+  const [editModal, setEditModal] = useState<'registryUrl' | 'aiProxy' | 'project' | null>(null);
 
   const cachePath = getCachePath();
   const cacheInstalled = isCloned(cachePath);
@@ -92,12 +97,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   const fields = useMemo<Field[]>(() => {
     switch (activeSubTab) {
       case 'general': {
-        const f: Field[] = ['agent', 'scope', 'registryUrl'];
+        const f: Field[] = ['agent', 'scope', 'project', 'registryUrl'];
         if (cacheInstalled) f.push('updateCache');
         if (configSource === 'project') {
           f.push('saveAsGlobal', 'resetToGlobal', 'syncExtensions');
         } else if (hasProjectRoot) {
           f.push('createProjectConfig');
+        }
+        if (resolvedProject.project) {
+          f.push('checkProjectConflicts');
         }
         if (localAgent === 'agents-conventions') {
           f.push('initConventions');
@@ -111,7 +119,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
       case 'aiAgents':
         return [...AI_AGENT_FIELDS];
     }
-  }, [activeSubTab, localAgent, setup.status, cacheInstalled, configSource, hasProjectRoot]);
+  }, [activeSubTab, localAgent, setup.status, cacheInstalled, configSource, hasProjectRoot, resolvedProject]);
 
   useEffect(() => {
     if (fields.length > 0) {
@@ -200,6 +208,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         setEditModal('registryUrl');
         return;
       }
+      if (activeField === 'project') {
+        setEditModal('project');
+        return;
+      }
       if (activeField === 'aiProxy') {
         setEditModal('aiProxy');
         return;
@@ -235,10 +247,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
       }
       if (activeField === 'syncExtensions') {
         const syncResult = checkExtensionSync(localAgent);
-        if (syncResult.missing.length === 0) {
-          setStatus('Все расширения из проекта установлены', 'success');
+        if (syncResult.missing.length === 0 && syncResult.untracked.length === 0) {
+          setStatus('Все расширения синхронизированы', 'success');
         } else if (onSyncExtensions) {
           onSyncExtensions();
+        }
+        return;
+      }
+      if (activeField === 'checkProjectConflicts') {
+        const conflicts = checkProjectConflicts(localAgent, resolvedProject.project);
+        if (conflicts.length === 0) {
+          setStatus('Конфликтов проектов не найдено', 'success');
+        } else if (onCheckProjectConflicts) {
+          onCheckProjectConflicts();
         }
         return;
       }
@@ -299,7 +320,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         setStatus('Настройки сохранены', 'success');
       }
     }
-  });
+  }, { isActive: inputActive !== false });
 
   const isActionField = activeField === 'installMcp'
     || activeField === 'installBaseSkill'
@@ -309,7 +330,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     || activeField === 'saveAsGlobal'
     || activeField === 'resetToGlobal'
     || activeField === 'createProjectConfig'
-    || activeField === 'syncExtensions';
+    || activeField === 'syncExtensions'
+    || activeField === 'checkProjectConflicts';
 
   if (showModal) {
     const enabledAgents = (['claude-code', 'cursor', 'copilot'] as const)
@@ -338,8 +360,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     return (
       <Box flexDirection="column" padding={2}>
         <ExitConventionsModal
-          enabledAgents={enabledAgents}
           targetAgent={exitTargetAgent}
+          enabledAgents={enabledAgents}
           aiAgentsConfig={localAiAgents}
           onDone={() => {
             setShowExitModal(false);
@@ -350,16 +372,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
           onCancel={() => {
             setShowExitModal(false);
           }}
-          onSkip={() => {
-            setShowExitModal(false);
-            disableConventions(exitTargetAgent).then(() => {
-              setLocalAgent(exitTargetAgent);
-              updateConfig({ agent: exitTargetAgent, defaultScope: localScope, registryUrl: localRegistryUrl, aiAgents: localAiAgents });
-              setStatus('agents-conventions деактивирован (без миграции)', 'success');
-            }).catch(() => {
-              setStatus('Ошибка при деактивации agents-conventions', 'error');
-            });
-          }}
         />
       </Box>
     );
@@ -367,18 +379,25 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
 
   if (editModal) {
     const isProxy = editModal === 'aiProxy';
-    const currentValue = isProxy ? localAiAgents.proxy : localRegistryUrl;
+    const isProject = editModal === 'project';
+    const currentValue = isProxy ? localAiAgents.proxy : isProject ? (config.project ?? '') : localRegistryUrl;
     const historyList = isProxy
       ? (config.history?.proxy ?? [])
-      : (config.history?.registryUrl ?? []);
+      : isProject
+        ? []
+        : (config.history?.registryUrl ?? []);
     return (
       <Box flexDirection="column" padding={2}>
         <TextEditModal
-          title={isProxy ? 'Редактирование прокси' : 'Редактирование Registry URL'}
+          title={isProxy ? 'Редактирование прокси' : isProject ? 'Редактирование проекта' : 'Редактирование Registry URL'}
           value={currentValue}
           history={historyList}
           onConfirm={(newValue) => {
-            if (isProxy) {
+            if (isProject) {
+              const projectValue = newValue.trim() || undefined;
+              updateConfig({ ...config, agent: localAgent, defaultScope: localScope, registryUrl: localRegistryUrl, aiAgents: localAiAgents, project: projectValue });
+              setStatus(projectValue ? `Проект: ${projectValue}` : 'Проект сброшен', 'success');
+            } else if (isProxy) {
               setLocalAiAgents(prev => ({ ...prev, proxy: newValue }));
               const newHistory = {
                 ...config.history,
@@ -423,6 +442,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
               localAgent={localAgent}
               localScope={localScope}
               localRegistryUrl={localRegistryUrl}
+              resolvedProject={resolvedProject}
               cachePath={cachePath}
               cacheInstalled={cacheInstalled}
               cacheUpdateState={cacheUpdateState}
@@ -453,7 +473,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         { key: 'Tab', description: 'подвкладка' },
         { key: '↑↓', description: 'выбор поля' },
         { key: '←→', description: 'изменить значение' },
-        { key: 'Enter', description: isActionField ? 'установить' : (activeField === 'registryUrl' || activeField === 'aiProxy') ? 'редактировать' : 'сохранить' },
+        { key: 'Enter', description: isActionField ? 'установить' : (activeField === 'registryUrl' || activeField === 'aiProxy' || activeField === 'project') ? 'редактировать' : 'сохранить' },
       ]} />
     </Box>
   );

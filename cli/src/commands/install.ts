@@ -27,6 +27,8 @@ async function installExtension(
     version: ext.version || '0.0.0',
     agent: adapter.agentName, scope,
     path: adapter.getInstallPath(ext, scope),
+    projects: ext.projects.length > 0 ? ext.projects : undefined,
+    tags: ext.tags.length > 0 ? ext.tags : undefined,
   });
 }
 

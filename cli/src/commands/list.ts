@@ -65,8 +65,7 @@ export function makeListCommand(): Command {
 
       console.log(chalk.bold(`\nУстановленные расширения (${agent}):\n`));
       for (const r of entries) {
-        const typeLabel = r.type === 'rule' ? chalk.yellow('[rule]')
-          : r.type === 'agent' ? chalk.blue('[agent]')
+        const typeLabel = r.type === 'agent' ? chalk.blue('[agent]')
           : r.type === 'command' ? chalk.magenta('[cmd]') : chalk.green('[skill]');
         const sourceTag = r.source === 'filesystem'
           ? ` ${chalk.dim('[manual]')}`

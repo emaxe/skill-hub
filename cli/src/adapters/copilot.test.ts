@@ -12,7 +12,7 @@ const mockSkill: Extension = {
   type: 'skill', name: 'test-skill', description: 'Test', tags: [],
   version: '1.0.0', scope: 'both',
   platforms: { copilot: 'COPILOT.md' },
-  path: 'skills/test-skill', dependencies: [],
+  path: 'skills/test-skill', dependencies: [], projects: [],
 };
 
 beforeEach(() => {

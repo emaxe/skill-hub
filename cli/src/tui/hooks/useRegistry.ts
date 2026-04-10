@@ -8,6 +8,7 @@
  * Все операции обёрнуты в withStatus() для единообразной обработки loading/error/success.
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
+import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { AgentName, ExtensionType, Extension } from '../../catalog';
@@ -94,6 +95,8 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
         const agentRecords = registryRef.current.list(realAgent);
         for (const record of agentRecords) {
           if (record.scope !== 'global') continue;
+          // Пропускаем записи-призраки: файл удалён, но запись осталась в реестре
+          if (!fs.existsSync(record.path)) continue;
           const already = entries.some(e => e.name === record.name && e.type === record.type && e.effectiveScope === 'global' && e.sourceAgent === realAgent);
           if (!already) {
             entries.push({ ...record, source: 'registry', effectiveScope: 'global', sourceAgent: realAgent });
@@ -177,6 +180,8 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
         version: ext.version || '0.0.0',
         agent, scope,
         path: adapter.getInstallPath(ext, scope),
+        projects: ext.projects.length > 0 ? ext.projects : undefined,
+        tags: ext.tags.length > 0 ? ext.tags : undefined,
       });
       if (hasProjectConfig()) {
         addProjectExtension({ type: ext.type, name: ext.name, version: ext.version, scope });
@@ -208,6 +213,8 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
         version: ext.version || '0.0.0',
         agent, scope: toScope,
         path: adapter.getInstallPath(ext, toScope),
+        projects: ext.projects.length > 0 ? ext.projects : undefined,
+        tags: ext.tags.length > 0 ? ext.tags : undefined,
       });
       await adapter.remove(ext, fromScope);
       if (hasProjectConfig()) {
@@ -226,6 +233,8 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
         version: ext.version || '0.0.0',
         agent, scope,
         path: adapter.getInstallPath(ext, scope),
+        projects: ext.projects.length > 0 ? ext.projects : undefined,
+        tags: ext.tags.length > 0 ? ext.tags : undefined,
       });
       if (hasProjectConfig()) {
         addProjectExtension({ type: ext.type, name: ext.name, version: ext.version, scope });

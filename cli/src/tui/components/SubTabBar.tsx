@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text, useStdout } from 'ink';
+import { Box, Text } from 'ink';
 import { theme } from '../theme';
 
 export interface SubTab {
@@ -13,8 +13,6 @@ interface Props {
 }
 
 export const SubTabBar: React.FC<Props> = ({ tabs, activeTab }) => {
-  const { stdout } = useStdout();
-  const width = Math.max(10, (stdout?.columns ?? 80) - 4); // account for padding
   return (
     <Box flexDirection="column" marginBottom={1}>
       <Box paddingX={2}>
@@ -29,9 +27,6 @@ export const SubTabBar: React.FC<Props> = ({ tabs, activeTab }) => {
             </Text>
           </React.Fragment>
         ))}
-      </Box>
-      <Box paddingX={1}>
-        <Text color={theme.border}>{'─'.repeat(width)}</Text>
       </Box>
     </Box>
   );

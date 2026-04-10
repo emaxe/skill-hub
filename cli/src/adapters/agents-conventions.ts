@@ -35,8 +35,13 @@ export class AgentsConventionsAdapter implements AgentAdapter {
     if (ext.type === 'skill') {
       return path.join(base, 'skills', ext.name, 'SKILL.md');
     }
-    // agent, command, rule → .agents/rules/{name}.md
-    return path.join(base, 'rules', `${ext.name}.md`);
+    if (ext.type === 'agent') {
+      return path.join(base, 'agents', `${ext.name}.md`);
+    }
+    if (ext.type === 'command') {
+      return path.join(base, 'commands', `${ext.name}.md`);
+    }
+    throw new Error(`Неизвестный тип расширения: ${ext.type}`);
   }
 
   async install(ext: Extension, scope: 'global' | 'project', cachePath: string): Promise<void> {
@@ -92,12 +97,22 @@ export class AgentsConventionsAdapter implements AgentAdapter {
       }
     }
 
-    // Правила: .agents/rules/{name}.md (тип rule)
-    const rulesDir = path.join(base, 'rules');
-    if (fs.existsSync(rulesDir)) {
-      for (const entry of fs.readdirSync(rulesDir, { withFileTypes: true })) {
+    // Агенты: .agents/agents/{name}.md
+    const agentsDir = path.join(base, 'agents');
+    if (fs.existsSync(agentsDir)) {
+      for (const entry of fs.readdirSync(agentsDir, { withFileTypes: true })) {
         if ((entry.isFile() || (entry.isSymbolicLink && entry.isSymbolicLink())) && entry.name.endsWith('.md')) {
-          results.push({ type: 'rule', name: entry.name.slice(0, -3), scope: 'project', path: path.join(rulesDir, entry.name) });
+          results.push({ type: 'agent', name: entry.name.slice(0, -3), scope: 'project', path: path.join(agentsDir, entry.name) });
+        }
+      }
+    }
+
+    // Команды: .agents/commands/{name}.md
+    const commandsDir = path.join(base, 'commands');
+    if (fs.existsSync(commandsDir)) {
+      for (const entry of fs.readdirSync(commandsDir, { withFileTypes: true })) {
+        if ((entry.isFile() || (entry.isSymbolicLink && entry.isSymbolicLink())) && entry.name.endsWith('.md')) {
+          results.push({ type: 'command', name: entry.name.slice(0, -3), scope: 'project', path: path.join(commandsDir, entry.name) });
         }
       }
     }

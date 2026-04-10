@@ -30,11 +30,12 @@ import { ContentScreen } from './screens/ContentScreen';
 import { ConventionsWarningDialog, ConventionsIssue } from './components/ConventionsWarningDialog';
 import { ProjectConfigDialog } from './components/ProjectConfigDialog';
 import { ExtensionSyncDialog } from './components/ExtensionSyncDialog';
+import { ProjectConflictDialog } from './components/ProjectConflictDialog';
 import { Extension, loadCatalog } from '../catalog';
 import { InstalledEntry } from './hooks/useRegistry';
 import { getConventionsStatus } from '../conventions';
-import { ProjectExtensionRecord } from '../config';
-import { checkExtensionSync } from '../sync';
+import { ProjectExtensionRecord, addProjectExtension, resolveProject, ResolvedProject } from '../config';
+import { checkExtensionSync, UntrackedExtension, checkProjectConflicts, ProjectConflict } from '../sync';
 import { getCachePath, ensureCache } from '../git';
 
 const TABS: TabName[] = ['catalog', 'installed', 'settings'];
@@ -86,6 +87,13 @@ export const App: React.FC = () => {
   const [showProjectConfigDialog, setShowProjectConfigDialog] = useState(false);
   const [showSyncDialog, setShowSyncDialog] = useState(false);
   const [missingExtensions, setMissingExtensions] = useState<ProjectExtensionRecord[]>([]);
+  const [untrackedExtensions, setUntrackedExtensions] = useState<UntrackedExtension[]>([]);
+  const [showProjectConflictDialog, setShowProjectConflictDialog] = useState(false);
+  const [projectConflicts, setProjectConflicts] = useState<ProjectConflict[]>([]);
+  const [resolvedProject, setResolvedProject] = useState<ResolvedProject>(() => resolveProject());
+
+  // Флаг: активен ли какой-либо диалог — блокирует ввод на фоновых экранах
+  const dialogActive = showConventionsWarning || showProjectConfigDialog || showSyncDialog || showProjectConflictDialog;
 
   useEffect(() => {
     // Проверка 1: agents-conventions — полная валидация
@@ -116,12 +124,23 @@ export const App: React.FC = () => {
       setShowProjectConfigDialog(true);
     }
 
-    // Проверка 3: синхронизация расширений
+    // Проверка 3: синхронизация расширений (missing + untracked)
     if (source === 'project') {
       const syncResult = checkExtensionSync(config.agent);
-      if (syncResult.missing.length > 0) {
+      if (syncResult.missing.length > 0 || syncResult.untracked.length > 0) {
         setMissingExtensions(syncResult.missing);
+        setUntrackedExtensions(syncResult.untracked);
         setShowSyncDialog(true);
+      }
+    }
+
+    // Проверка 4: конфликты проектов
+    const rp = resolveProject();
+    if (rp.project) {
+      const conflicts = checkProjectConflicts(config.agent, rp.project);
+      if (conflicts.length > 0) {
+        setProjectConflicts(conflicts);
+        setShowProjectConflictDialog(true);
       }
     }
   }, []);
@@ -167,38 +186,95 @@ export const App: React.FC = () => {
     setShowProjectConfigDialog(false);
   }, []);
 
-  const handleInstallMissing = useCallback(async () => {
+  const handleSync = useCallback(async () => {
     setShowSyncDialog(false);
     try {
-      await ensureCache();
-      const cachePath = getCachePath();
-      const catalog = loadCatalog(cachePath);
-      let installed = 0;
-      for (const ext of missingExtensions) {
-        const fullExt = catalog.extensions.find(e => e.name === ext.name && e.type === ext.type);
-        if (fullExt) {
-          await registry.install(fullExt, agent, ext.scope);
-          installed++;
+      let installedCount = 0;
+      let trackedCount = 0;
+
+      // Установка missing-расширений
+      if (missingExtensions.length > 0) {
+        await ensureCache();
+        const cachePath = getCachePath();
+        const catalog = loadCatalog(cachePath);
+        for (const ext of missingExtensions) {
+          const fullExt = catalog.extensions.find(e => e.name === ext.name && e.type === ext.type);
+          if (fullExt) {
+            await registry.install(fullExt, agent, ext.scope);
+            installedCount++;
+          }
         }
       }
-      if (installed > 0) {
-        setStatus(`Установлено расширений: ${installed}`, 'success');
+
+      // Добавление untracked-расширений в .skill-hub.json (только из каталога, с актуальной версией)
+      for (const ext of untrackedExtensions) {
+        if (!ext.inCatalog) continue;
+        addProjectExtension({
+          type: ext.type,
+          name: ext.name,
+          version: ext.catalogVersion,
+          scope: ext.scope === 'parent' ? 'project' : ext.scope,
+        });
+        trackedCount++;
+      }
+
+      const parts: string[] = [];
+      if (installedCount > 0) parts.push(`установлено: ${installedCount}`);
+      if (trackedCount > 0) parts.push(`добавлено в конфиг: ${trackedCount}`);
+      if (parts.length > 0) {
+        setStatus(`Синхронизация: ${parts.join(', ')}`, 'success');
       } else {
         setStatus('Расширения не найдены в каталоге', 'error');
       }
     } catch (err) {
       setStatus(`Ошибка синхронизации: ${String(err)}`, 'error');
     }
-  }, [missingExtensions, agent, registry, setStatus]);
+  }, [missingExtensions, untrackedExtensions, agent, registry, setStatus]);
 
   const handleDismissSync = useCallback(() => {
     setShowSyncDialog(false);
   }, []);
 
+  const handleRemoveProjectConflicts = useCallback(async () => {
+    setShowProjectConflictDialog(false);
+    try {
+      let removedCount = 0;
+      for (const conflict of projectConflicts) {
+        await registry.remove(
+          { type: conflict.type, name: conflict.name } as Extension,
+          agent,
+          conflict.scope === 'parent' ? 'project' : conflict.scope,
+          true
+        );
+        removedCount++;
+      }
+      setStatus(`Удалено конфликтующих расширений: ${removedCount}`, 'success');
+    } catch (err) {
+      setStatus(`Ошибка удаления: ${String(err)}`, 'error');
+    }
+  }, [projectConflicts, agent, registry, setStatus]);
+
+  const handleDismissProjectConflicts = useCallback(() => {
+    setShowProjectConflictDialog(false);
+  }, []);
+
+  const handleCheckProjectConflictsFromSettings = useCallback(() => {
+    const rp = resolveProject();
+    setResolvedProject(rp);
+    if (rp.project) {
+      const conflicts = checkProjectConflicts(agent, rp.project);
+      if (conflicts.length > 0) {
+        setProjectConflicts(conflicts);
+        setShowProjectConflictDialog(true);
+      }
+    }
+  }, [agent]);
+
   const handleSyncFromSettings = useCallback(() => {
     const syncResult = checkExtensionSync(agent);
-    if (syncResult.missing.length > 0) {
+    if (syncResult.missing.length > 0 || syncResult.untracked.length > 0) {
       setMissingExtensions(syncResult.missing);
+      setUntrackedExtensions(syncResult.untracked);
       setShowSyncDialog(true);
     }
   }, [agent]);
@@ -220,7 +296,6 @@ export const App: React.FC = () => {
     const screen = nav.currentScreen;
     const isTopLevel = screen === 'catalog' || screen === 'installed' || screen === 'settings';
 
-    if (showConventionsWarning || showProjectConfigDialog || showSyncDialog) return;
     if (searchFocused || settingsEditing) return;
 
     if (isCtrl(key) && normalizeInput(input) === 'q') {
@@ -247,8 +322,7 @@ export const App: React.FC = () => {
       handleBack();
       return;
     }
-  });
-
+  }, { isActive: !dialogActive });
   const screen = nav.currentScreen;
 
   const { rows: termHeight, columns: termWidth } = useTerminalSize();
@@ -267,6 +341,7 @@ export const App: React.FC = () => {
           content={contentData.content}
           onBack={handleBack}
           viewHeight={contentAreaHeight}
+          inputActive={!dialogActive}
         />
       );
     }
@@ -282,6 +357,7 @@ export const App: React.FC = () => {
           defaultScope={config.defaultScope}
           onOpenContent={handleOpenContent}
           viewHeight={contentAreaHeight}
+          inputActive={!dialogActive}
         />
       );
     }
@@ -293,6 +369,7 @@ export const App: React.FC = () => {
           agent={agent}
           onBack={handleBack}
           move={registry.move}
+          inputActive={!dialogActive}
         />
       );
     }
@@ -309,6 +386,7 @@ export const App: React.FC = () => {
           defaultScope={config.defaultScope}
           onOpenContent={handleOpenContent}
           viewHeight={contentAreaHeight}
+          inputActive={!dialogActive}
         />
       );
     }
@@ -326,6 +404,8 @@ export const App: React.FC = () => {
           update={registry.update}
           updateSelf={setup.doUpdateSelf}
           viewHeight={contentAreaHeight}
+          project={resolvedProject.project}
+          inputActive={!dialogActive}
         />
       );
     }
@@ -333,7 +413,13 @@ export const App: React.FC = () => {
       return (
         <SettingsScreen
           config={config}
-          updateConfig={updateConfig}
+          updateConfig={(updates) => {
+            updateConfig(updates);
+            // Обновляем resolvedProject после изменения project в конфиге
+            if ('project' in updates) {
+              setResolvedProject(resolveProject());
+            }
+          }}
           onEditingChange={setSettingsEditing}
           configSource={source}
           hasProjectRoot={hasProjectRoot}
@@ -341,7 +427,10 @@ export const App: React.FC = () => {
           onResetToGlobal={doResetToGlobal}
           onCreateProjectConfig={doCreateProjectConfig}
           onSyncExtensions={handleSyncFromSettings}
+          onCheckProjectConflicts={handleCheckProjectConflictsFromSettings}
+          resolvedProject={resolvedProject}
           viewHeight={contentAreaHeight}
+          inputActive={!dialogActive}
         />
       );
     }
@@ -353,7 +442,9 @@ export const App: React.FC = () => {
         install={registry.install}
         installed={registry.installed}
         defaultScope={config.defaultScope}
+        project={resolvedProject.project}
         viewHeight={contentAreaHeight}
+        inputActive={!dialogActive}
       />
     );
   };
@@ -408,8 +499,19 @@ export const App: React.FC = () => {
             <Box position="absolute" marginTop={2} marginLeft={2}>
               <ExtensionSyncDialog
                 missing={missingExtensions}
-                onInstall={handleInstallMissing}
+                untracked={untrackedExtensions}
+                onSync={handleSync}
                 onDismiss={handleDismissSync}
+              />
+            </Box>
+          )}
+          {showProjectConflictDialog && resolvedProject.project && (
+            <Box position="absolute" marginTop={2} marginLeft={2}>
+              <ProjectConflictDialog
+                conflicts={projectConflicts}
+                currentProject={resolvedProject.project}
+                onRemove={handleRemoveProjectConflicts}
+                onDismiss={handleDismissProjectConflicts}
               />
             </Box>
           )}

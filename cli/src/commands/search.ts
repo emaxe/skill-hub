@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { loadCatalog, searchExtensions, AgentName, ExtensionType } from '../catalog';
 import { detectAgent } from '../detect-agent';
 import { getCachePath, ensureCache } from '../git';
+import { resolveProject } from '../config';
 
 export function makeSearchCommand(): Command {
   return new Command('search')
@@ -12,11 +13,14 @@ export function makeSearchCommand(): Command {
     .option('--type <type>', 'Тип: skill, agent, command')
     .option('--limit <n>', 'Максимум результатов на страницу', '10')
     .option('--offset <n>', 'Пропустить первые N результатов', '0')
-    .action(async (query: string, opts: { agent?: string; type?: string; limit?: string; offset?: string }) => {
+    .option('--project <project>', 'Фильтр по проекту')
+    .action(async (query: string, opts: { agent?: string; type?: string; limit?: string; offset?: string; project?: string }) => {
       await ensureCache();
       const catalog = loadCatalog(getCachePath());
       const agent = (opts.agent || detectAgent()) as AgentName;
-      const allResults = searchExtensions(catalog, query, agent, opts.type as ExtensionType);
+      const rp = resolveProject();
+      const project = opts.project ?? rp.project;
+      const allResults = searchExtensions(catalog, query, agent, opts.type as ExtensionType, project);
       const total = allResults.length;
       const limit = Math.max(1, parseInt(opts.limit || '10', 10) || 10);
       const offset = Math.max(0, parseInt(opts.offset || '0', 10) || 0);

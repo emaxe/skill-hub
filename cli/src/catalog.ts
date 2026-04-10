@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 export type AgentName = 'claude-code' | 'cursor' | 'copilot' | 'agents-conventions';
-export type ExtensionType = 'skill' | 'agent' | 'command' | 'rule';
+export type ExtensionType = 'skill' | 'agent' | 'command';
 
 export interface Extension {
   type: ExtensionType;
@@ -17,6 +17,8 @@ export interface Extension {
   dependencies: string[];
   model?: string;
   color?: string;
+  /** Привязка к проектам. Пустой массив = универсальное расширение. */
+  projects: string[];
 }
 
 export interface Catalog {
@@ -60,6 +62,7 @@ export function parseExtension(raw: unknown): Extension {
     dependencies: (r.dependencies as string[]) || [],
     model: r.model as string | undefined,
     color: r.color as string | undefined,
+    projects: (r.projects as string[]) || [],
   };
 }
 
@@ -89,17 +92,32 @@ export function loadCatalog(cachePath: string): Catalog {
   };
 }
 
+/**
+ * Фильтрует расширения по проекту.
+ * Если project не задан — возвращает все.
+ * Если у расширения projects пуст — универсальное, проходит.
+ * Если projects содержит project — проходит. Иначе — отфильтровано.
+ */
+export function filterByProject(extensions: Extension[], project: string | null | undefined): Extension[] {
+  if (!project) return extensions;
+  return extensions.filter(ext =>
+    ext.projects.length === 0 || ext.projects.includes(project)
+  );
+}
+
 /** Фильтрует каталог по текстовому запросу, агенту и типу расширения */
 export function searchExtensions(
   catalog: Catalog,
   query: string,
   agent?: AgentName,
-  type?: ExtensionType
+  type?: ExtensionType,
+  project?: string | null
 ): Extension[] {
   const q = query.toLowerCase();
   let results = catalog.extensions;
   if (agent) results = filterByAgent(results, agent);
   if (type) results = results.filter(e => e.type === type);
+  results = filterByProject(results, project);
   if (q) results = results.filter(e =>
     e.name.includes(q) || e.description.toLowerCase().includes(q) ||
     e.tags.some(t => t.includes(q))

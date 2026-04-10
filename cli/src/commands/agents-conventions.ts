@@ -2,7 +2,6 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import readline from 'readline';
-import { spawn } from 'child_process';
 import { AgentName } from '../catalog';
 import { enableConventions, disableConventions, getConventionsStatus } from '../conventions';
 
@@ -16,31 +15,6 @@ function askQuestion(question: string): Promise<string> {
   });
 }
 
-const AGENT_BINARIES: Record<string, string> = {
-  'claude-code': 'claude',
-  'cursor': 'agent',
-  'copilot': 'copilot',
-};
-
-const AGENT_ARGS: Record<string, (targetAgent: AgentName) => string[]> = {
-  'claude-code': (target) => ['--dangerously-skip-permissions', '-p', `Обязательно: прочитай и полностью выполни скилл exit-agents из файла .claude/skills/exit-agents/SKILL.md (следуй алгоритму по шагам, идемпотентно). Target agent: ${target}. Не выдавай только план — внеси все нужные изменения в файловую систему. После выполнения кратко перечисли, что создано/изменено.`, '--model', 'sonnet'],
-  'cursor': (target) => ['-p', `Обязательно: прочитай и полностью выполни скилл exit-agents из файла .claude/skills/exit-agents/SKILL.md (следуй алгоритму по шагам, идемпотентно). Target agent: ${target}. Не выдавай только план — внеси все нужные изменения в файловую систему. После выполнения кратко перечисли, что создано/изменено.`, '--model', 'composer-2', '--force', '--output-format', 'stream-json'],
-  'copilot': (target) => ['-p', `Обязательно: прочитай и полностью выполни скилл exit-agents из файла .claude/skills/exit-agents/SKILL.md (следуй алгоритму по шагам, идемпотентно). Target agent: ${target}. Не выдавай только план — внеси все нужные изменения в файловую систему. После выполнения кратко перечисли, что создано/изменено.`, '--model', 'claude-sonnet-4.6', '--allow-all', '--no-ask-user'],
-};
-
-function spawnAgent(agentName: string, targetAgent: AgentName): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const binary = AGENT_BINARIES[agentName];
-    const args = AGENT_ARGS[agentName](targetAgent);
-    const child = spawn(binary, args, { stdio: 'inherit' });
-    child.on('error', reject);
-    child.on('exit', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`Агент завершился с кодом ${code}`));
-    });
-  });
-}
-
 export function makeAgentsConventionsCommand(): Command {
   const cmd = new Command('agents-conventions')
     .description('Управление режимом agents-conventions (единая .agents/ директория)');
@@ -50,19 +24,22 @@ export function makeAgentsConventionsCommand(): Command {
     .action(async () => {
       const spinner = ora('Включаю agents-conventions...').start();
       try {
-        await enableConventions();
+        const result = await enableConventions();
         spinner.succeed(chalk.green('Режим agents-conventions включён'));
         console.log();
         console.log(chalk.cyan('Структура создана:'));
         console.log('  .agents/skills/    — скиллы');
-        console.log('  .agents/rules/     — правила, агенты, команды');
+        console.log('  .agents/rules/     — правила');
+        console.log('  AGENTS.md          — индекс правил');
         console.log('  Симлинки:          .claude/skills → .agents/skills');
         console.log('                     .github/skills → .agents/skills');
         console.log('                     .cursor/skills → .agents/skills');
-        console.log();
-        console.log(chalk.yellow('Следующий шаг:'));
-        console.log('  Запустите AI-агент и попросите выполнить скилл init-agents');
-        console.log('  для создания AGENTS.md и завершения настройки.');
+        if (result.needsAutoAnalysis) {
+          console.log();
+          console.log(chalk.yellow('Корневые конфиги не найдены.'));
+          console.log('  Для автоанализа проекта запустите AI-агент и попросите');
+          console.log('  создать .agents/rules/project-rules.md с описанием проекта.');
+        }
       } catch (err) {
         spinner.fail(chalk.red(String(err)));
         process.exit(1);
@@ -72,9 +49,7 @@ export function makeAgentsConventionsCommand(): Command {
   cmd.command('disable')
     .description('Выключить режим agents-conventions')
     .option('--agent <agent>', 'Целевой агент: claude-code, cursor, copilot')
-    .option('--ai-agent <aiAgent>', 'AI-агент для запуска exit-agents (claude-code, cursor, copilot)')
-    .option('--skip-agent', 'Пропустить AI-миграцию и выполнить только программную очистку')
-    .action(async (opts: { agent?: string; aiAgent?: string; skipAgent?: boolean }) => {
+    .action(async (opts: { agent?: string }) => {
       let targetAgent = opts.agent as AgentName | undefined;
 
       if (!targetAgent) {
@@ -88,34 +63,6 @@ export function makeAgentsConventionsCommand(): Command {
         targetAgent = answer as AgentName;
       }
 
-      // Шаг 1: запуск AI-агента для интеллектуальной миграции (если не пропускаем)
-      if (!opts.skipAgent) {
-        let aiAgentName = opts.aiAgent;
-        if (!aiAgentName) {
-          const answer = await askQuestion(
-            'AI-агент для запуска exit-agents (claude-code/cursor/copilot, Enter для пропуска): '
-          );
-          if (answer && ['claude-code', 'cursor', 'copilot'].includes(answer)) {
-            aiAgentName = answer;
-          }
-        }
-
-        if (aiAgentName && AGENT_BINARIES[aiAgentName]) {
-          const spinner = ora(`Запускаю exit-agents через ${aiAgentName}...`).start();
-          try {
-            await spawnAgent(aiAgentName, targetAgent);
-            spinner.succeed(chalk.green('Миграция через AI-агент завершена'));
-          } catch (err) {
-            spinner.fail(chalk.yellow(`Ошибка AI-миграции: ${String(err)}`));
-            const cont = await askQuestion('Продолжить без AI-миграции? (y/n): ');
-            if (cont !== 'y' && cont !== 'yes' && cont !== 'д' && cont !== 'да') {
-              process.exit(1);
-            }
-          }
-        }
-      }
-
-      // Шаг 2: программная очистка
       const spinner = ora('Выключаю agents-conventions...').start();
       try {
         await disableConventions(
