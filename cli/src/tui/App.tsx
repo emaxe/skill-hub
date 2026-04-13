@@ -3,7 +3,7 @@
  *
  * Структура:
  * - Header (вкладки) + основная область (экраны) + InfoBar + StatusBar + HintBar
- * - При старте выполняет 3 проверки: conventions health, project config, extension sync
+ * - При старте последовательно выполняет 4 проверки: conventions health → project config → extension sync → conflicts
  * - Глобальные хоткеи: Tab — смена вкладки, 1-3 — переход, Ctrl+Q — выход
  */
 import React, { useState, useCallback, useEffect } from 'react';
@@ -92,58 +92,83 @@ export const App: React.FC = () => {
   const [projectConflicts, setProjectConflicts] = useState<ProjectConflict[]>([]);
   const [resolvedProject, setResolvedProject] = useState<ResolvedProject>(() => resolveProject());
 
+  // Фазы стартовых проверок — выполняются последовательно, каждая ждёт закрытия диалога
+  type StartupPhase = 'conventions' | 'projectConfig' | 'sync' | 'conflicts' | 'done';
+  const [startupPhase, setStartupPhase] = useState<StartupPhase>('conventions');
+
   // Флаг: активен ли какой-либо диалог — блокирует ввод на фоновых экранах
   const dialogActive = showConventionsWarning || showProjectConfigDialog || showSyncDialog || showProjectConflictDialog;
 
   useEffect(() => {
+    if (startupPhase === 'done') return;
+
     // Проверка 1: agents-conventions — полная валидация
-    if (config.agent === 'agents-conventions') {
-      const status = getConventionsStatus();
-      if (!status.isHealthy) {
-        const issues: ConventionsIssue[] = [];
-        if (!status.hasAgentsDir) {
-          issues.push({ label: 'Директория .agents/ не найдена' });
-        }
-        if (!status.hasAgentsMd) {
-          issues.push({ label: 'Файл AGENTS.md не найден' });
-        }
-        const brokenSymlinks = status.symlinks.filter(s => !s.valid);
-        for (const s of brokenSymlinks) {
-          const name = s.path.split('/').slice(-2).join('/');
-          issues.push({ label: `Битый симлинк: ${name}` });
-        }
-        if (issues.length > 0) {
-          setConventionsIssues(issues);
-          setShowConventionsWarning(true);
+    if (startupPhase === 'conventions') {
+      if (config.agent === 'agents-conventions') {
+        const status = getConventionsStatus();
+        if (!status.isHealthy) {
+          const issues: ConventionsIssue[] = [];
+          if (!status.hasAgentsDir) {
+            issues.push({ label: 'Директория .agents/ не найдена' });
+          }
+          if (!status.hasAgentsMd) {
+            issues.push({ label: 'Файл AGENTS.md не найден' });
+          }
+          const brokenSymlinks = status.symlinks.filter(s => !s.valid);
+          for (const s of brokenSymlinks) {
+            const name = s.path.split('/').slice(-2).join('/');
+            issues.push({ label: `Битый симлинк: ${name}` });
+          }
+          if (issues.length > 0) {
+            setConventionsIssues(issues);
+            setShowConventionsWarning(true);
+            return;
+          }
         }
       }
+      setStartupPhase('projectConfig');
+      return;
     }
 
-    // Проверка 2: проектный конфиг (независимая)
-    if (source === 'global' && hasProjectRoot) {
-      setShowProjectConfigDialog(true);
+    // Проверка 2: проектный конфиг
+    if (startupPhase === 'projectConfig') {
+      if (source === 'global' && hasProjectRoot) {
+        setShowProjectConfigDialog(true);
+        return;
+      }
+      setStartupPhase('sync');
+      return;
     }
 
     // Проверка 3: синхронизация расширений (missing + untracked)
-    if (source === 'project') {
-      const syncResult = checkExtensionSync(config.agent);
-      if (syncResult.missing.length > 0 || syncResult.untracked.length > 0) {
-        setMissingExtensions(syncResult.missing);
-        setUntrackedExtensions(syncResult.untracked);
-        setShowSyncDialog(true);
+    if (startupPhase === 'sync') {
+      if (source === 'project') {
+        const syncResult = checkExtensionSync(config.agent);
+        if (syncResult.missing.length > 0 || syncResult.untracked.length > 0) {
+          setMissingExtensions(syncResult.missing);
+          setUntrackedExtensions(syncResult.untracked);
+          setShowSyncDialog(true);
+          return;
+        }
       }
+      setStartupPhase('conflicts');
+      return;
     }
 
     // Проверка 4: конфликты проектов
-    const rp = resolveProject();
-    if (rp.project) {
-      const conflicts = checkProjectConflicts(config.agent, rp.project);
-      if (conflicts.length > 0) {
-        setProjectConflicts(conflicts);
-        setShowProjectConflictDialog(true);
+    if (startupPhase === 'conflicts') {
+      const rp = resolveProject();
+      setResolvedProject(rp);
+      if (rp.project) {
+        const conflicts = checkProjectConflicts(config.agent, rp.project);
+        if (conflicts.length > 0) {
+          setProjectConflicts(conflicts);
+          setShowProjectConflictDialog(true);
+        }
       }
+      setStartupPhase('done');
     }
-  }, []);
+  }, [startupPhase, source, config.agent, hasProjectRoot]);
 
   // --- Навигация между экранами ---
   const handleOpenDetail = useCallback((ext: Extension) => {
@@ -169,21 +194,26 @@ export const App: React.FC = () => {
 
   const handleGoToSettings = useCallback(() => {
     setShowConventionsWarning(false);
+    setStartupPhase(prev => prev === 'conventions' ? 'projectConfig' : prev);
     nav.setTab('settings');
   }, [nav]);
 
   const handleDismissWarning = useCallback(() => {
     setShowConventionsWarning(false);
+    setStartupPhase(prev => prev === 'conventions' ? 'projectConfig' : prev);
   }, []);
 
   const handleCreateProjectConfig = useCallback(() => {
     doCreateProjectConfig();
     setShowProjectConfigDialog(false);
+    setResolvedProject(resolveProject());
     setStatus('Проектный конфиг создан (.skill-hub.json)', 'success');
+    setStartupPhase(prev => prev === 'projectConfig' ? 'sync' : prev);
   }, [doCreateProjectConfig, setStatus]);
 
   const handleDismissProjectConfigDialog = useCallback(() => {
     setShowProjectConfigDialog(false);
+    setStartupPhase(prev => prev === 'projectConfig' ? 'sync' : prev);
   }, []);
 
   const handleSync = useCallback(async () => {
@@ -228,11 +258,14 @@ export const App: React.FC = () => {
       }
     } catch (err) {
       setStatus(`Ошибка синхронизации: ${String(err)}`, 'error');
+    } finally {
+      setStartupPhase(prev => prev === 'sync' ? 'conflicts' : prev);
     }
   }, [missingExtensions, untrackedExtensions, agent, registry, setStatus]);
 
   const handleDismissSync = useCallback(() => {
     setShowSyncDialog(false);
+    setStartupPhase(prev => prev === 'sync' ? 'conflicts' : prev);
   }, []);
 
   const handleRemoveProjectConflicts = useCallback(async () => {
