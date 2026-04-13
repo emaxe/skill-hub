@@ -4,7 +4,7 @@ const mockExt = {
   type: 'skill' as const,
   name: 'test-skill',
   description: 'Test skill for unit tests',
-  platforms: { 'claude-code': 'SKILL.md', cursor: 'CURSOR.md', copilot: null } as Record<string, string | null>,
+  platforms: { 'claude-code': 'SKILL.md', cursor: 'SKILL.md', copilot: null } as Record<string, string | null>,
   path: 'skills/test-skill',
   tags: ['testing'],
   version: '1.0.0',

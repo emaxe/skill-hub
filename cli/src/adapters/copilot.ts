@@ -7,6 +7,7 @@ import path from 'path';
 import os from 'os';
 import { Extension, ExtensionType } from '../catalog';
 import { AgentAdapter, ScanResult } from './types';
+import { stripFrontmatter } from '../frontmatter';
 
 // Маркеры начала/конца секции расширения внутри copilot-instructions.md
 const MARKER_START = (name: string) => `<!-- skill-hub: ${name} -->`;
@@ -25,7 +26,7 @@ export class CopilotAdapter implements AgentAdapter {
   }
 
   getSourceFile(ext: Extension): string {
-    return ext.platforms['copilot'] || 'COPILOT.md';
+    return ext.platforms['copilot'] || 'SKILL.md';
   }
 
   getInstallPath(_ext: Extension, scope: 'global' | 'project'): string {
@@ -46,7 +47,7 @@ export class CopilotAdapter implements AgentAdapter {
       throw new Error(`Copilot version not available for ${ext.name}: missing ${sourceFile}`);
     }
 
-    const content = fs.readFileSync(srcPath, 'utf-8');
+    const content = stripFrontmatter(fs.readFileSync(srcPath, 'utf-8'));
     const destPath = this.getInstallPath(ext, scope);
 
     fs.mkdirSync(path.dirname(destPath), { recursive: true });

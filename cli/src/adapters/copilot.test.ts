@@ -11,13 +11,13 @@ const tmpCache = path.join(os.tmpdir(), 'copilot-cache-' + Date.now());
 const mockSkill: Extension = {
   type: 'skill', name: 'test-skill', description: 'Test', tags: [],
   version: '1.0.0', scope: 'both',
-  platforms: { copilot: 'COPILOT.md' },
+  platforms: { copilot: 'SKILL.md' },
   path: 'skills/test-skill', dependencies: [], projects: [],
 };
 
 beforeEach(() => {
   fs.mkdirSync(path.join(tmpCache, 'skills', 'test-skill'), { recursive: true });
-  fs.writeFileSync(path.join(tmpCache, 'skills', 'test-skill', 'COPILOT.md'), '# Test Skill\nContent here.');
+  fs.writeFileSync(path.join(tmpCache, 'skills', 'test-skill', 'SKILL.md'), '---\nname: test-skill\ndescription: Test\ntags: [testing]\n---\n# Test Skill\nContent here.');
   fs.mkdirSync(path.join(tmpProject, '.github'), { recursive: true });
   fs.mkdirSync(tmpHome, { recursive: true });
 });
@@ -34,6 +34,7 @@ test('install project: добавляет секцию в .github/copilot-instru
   const content = fs.readFileSync(path.join(tmpProject, '.github', 'copilot-instructions.md'), 'utf-8');
   expect(content).toContain('<!-- skill-hub: test-skill -->');
   expect(content).toContain('# Test Skill');
+  expect(content).not.toContain('tags:');
 });
 
 test('remove project: удаляет секцию из copilot-instructions.md', async () => {

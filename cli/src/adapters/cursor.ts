@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import { Extension, ExtensionType } from '../catalog';
 import { AgentAdapter, ScanResult } from './types';
+import { stripFrontmatter } from '../frontmatter';
 
 function cursorRoot(scope: 'global' | 'project', projectDir: string, homeDir: string): string {
   return scope === 'global'
@@ -23,7 +24,7 @@ export class CursorAdapter implements AgentAdapter {
   }
 
   getSourceFile(ext: Extension): string {
-    return ext.platforms['cursor'] || 'CURSOR.md';
+    return ext.platforms['cursor'] || 'SKILL.md';
   }
 
   getInstallPath(ext: Extension, scope: 'global' | 'project'): string {
@@ -49,8 +50,12 @@ export class CursorAdapter implements AgentAdapter {
       throw new Error(`Cursor version not available for ${ext.name}: missing ${sourceFile}`);
     }
 
+    const raw = fs.readFileSync(srcPath, 'utf-8');
+    const body = stripFrontmatter(raw);
+    const cursorFm = `---\ndescription: ${ext.description}\nalwaysApply: false\n---\n`;
+
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
-    fs.copyFileSync(srcPath, destPath);
+    fs.writeFileSync(destPath, cursorFm + body);
   }
 
   async remove(ext: Extension, scope: 'global' | 'project'): Promise<void> {
