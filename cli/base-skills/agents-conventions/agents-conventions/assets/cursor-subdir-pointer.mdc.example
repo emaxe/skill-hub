@@ -1,0 +1,6 @@
+---
+description: Правила UI
+globs: src/ui/**
+---
+Правила UI описаны в [src/ui/AGENTS.md](../src/ui/AGENTS.md).
+Прочитай этот файл при работе с UI-кодом.

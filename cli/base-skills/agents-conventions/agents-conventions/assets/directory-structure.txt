@@ -1,0 +1,62 @@
+project-root/
+  AGENTS.md                                  # SOURCE OF TRUTH -- индекс правил
+  .agents/
+    skills/                                  # скиллы (SKILL.md + YAML frontmatter)
+      git-conventions/SKILL.md
+      writing-rules/SKILL.md
+    rules/                                   # правила (Markdown)
+      api-conventions.md
+      test-plan.md
+      update-rules-after-task.md
+  .github/
+    instructions/
+      project-rules.instructions.md          # тонкий указатель → AGENTS.md (Copilot)
+      ui-rules.instructions.md               # указатель → src/ui/AGENTS.md
+      ui-operator-rules.instructions.md      # указатель → src/ui/Operator.UI/AGENTS.md
+      ui-shared-rules.instructions.md        # указатель → src/ui/shared/AGENTS.md
+    skills -> ../.agents/skills              # симлинк
+  .cursor/
+    rules/
+      project-rules.mdc                      # тонкий указатель → AGENTS.md (Cursor)
+      ui-rules.mdc                           # указатель → src/ui/AGENTS.md
+      ui-operator-rules.mdc                  # указатель → src/ui/Operator.UI/AGENTS.md
+      ui-shared-rules.mdc                    # указатель → src/ui/shared/AGENTS.md
+    skills -> ../.agents/skills              # симлинк
+  .claude/
+    CLAUDE.md                                # тонкий указатель → AGENTS.md (Claude Code)
+    skills -> ../.agents/skills              # симлинк
+
+  src/ui/                                    # --- поддиректория с правилами ---
+    AGENTS.md                                # SOURCE OF TRUTH -- UI-правила
+    .agents/
+      rules/                                 # UI-специфичные правила
+        code-style.md
+        backend-enums.md
+    # --- standalone-режим (если открывается как отдельный проект) ---
+    .github/
+      instructions/
+        project-rules.instructions.md        # тонкий указатель → AGENTS.md (Copilot)
+        operator-rules.instructions.md       # указатель → Operator.UI/AGENTS.md
+        shared-rules.instructions.md         # указатель → shared/AGENTS.md
+      skills -> ../../../.agents/skills      # симлинк на корневые скиллы
+    .cursor/
+      rules/
+        project-rules.mdc                    # тонкий указатель → AGENTS.md (Cursor)
+        operator-rules.mdc                   # указатель → Operator.UI/AGENTS.md
+        shared-rules.mdc                     # указатель → shared/AGENTS.md
+      skills -> ../../../.agents/skills      # симлинк на корневые скиллы
+    .claude/
+      CLAUDE.md                              # тонкий указатель → AGENTS.md (Claude Code)
+      skills -> ../../../.agents/skills      # симлинк на корневые скиллы
+
+    Operator.UI/                             # --- поддиректория с правилами ---
+      AGENTS.md                              # SOURCE OF TRUTH -- правила приложения
+      .agents/
+        rules/
+          app-structure.md
+
+    shared/                                  # --- поддиректория с правилами ---
+      AGENTS.md                              # SOURCE OF TRUTH -- правила библиотеки
+      .agents/
+        rules/
+          library-conventions.md

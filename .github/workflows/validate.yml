@@ -1,0 +1,183 @@
+name: Validate Extensions
+
+on:
+  pull_request:
+    paths:
+      - 'skills/**/*'
+      - 'agents/**/*'
+      - 'commands/**/*'
+
+jobs:
+  validate-extensions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find changed extension files
+        id: changed
+        run: |
+          CHANGED=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'skills/**/SKILL.md' 'agents/**/AGENT.md' 'commands/**/COMMAND.md')
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Validate extensions
+        run: |
+          set -euo pipefail
+
+          KNOWN_TAGS="git workflow safety ci-cd planning jira javascript typescript python go rust java react vue nextjs express django flask fastapi svelte docker eslint testing debugging logging architecture security performance accessibility documentation claude-code cursor copilot gemini codex"
+          ERRORS=()
+          WARNINGS=()
+          SEEN_SKILL_NAMES=()
+          SEEN_AGENT_NAMES=()
+          SEEN_COMMAND_NAMES=()
+
+          FILES="${{ steps.changed.outputs.files }}"
+
+          if [ -z "$FILES" ]; then
+            echo "No extension files changed."
+            exit 0
+          fi
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            echo "--- Validating: $file ---"
+
+            # Check file exists
+            if [ ! -f "$file" ]; then
+              ERRORS+=("$file: file not found")
+              continue
+            fi
+
+            # Check file size < 100KB
+            FILE_SIZE=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null)
+            if [ "$FILE_SIZE" -gt 102400 ]; then
+              ERRORS+=("$file: file size ${FILE_SIZE} bytes exceeds 100KB limit")
+            fi
+
+            # Determine extension type from filename
+            BASENAME=$(basename "$file")
+            EXT_TYPE=""
+            case "$BASENAME" in
+              SKILL.md)   EXT_TYPE="skill" ;;
+              AGENT.md)   EXT_TYPE="agent" ;;
+              COMMAND.md) EXT_TYPE="command" ;;
+              *)
+                WARNINGS+=("$file: unexpected filename '$BASENAME', expected SKILL.md, AGENT.md, or COMMAND.md")
+                continue
+                ;;
+            esac
+
+            # Extract YAML frontmatter (between --- markers)
+            FRONTMATTER=$(sed -n '/^---$/,/^---$/p' "$file" | sed '1d;$d')
+
+            if [ -z "$FRONTMATTER" ]; then
+              ERRORS+=("$file: no YAML frontmatter found (must be between --- markers)")
+              continue
+            fi
+
+            # Extract required fields
+            NAME=$(echo "$FRONTMATTER" | grep -E '^name:' | head -1 | sed 's/^name:[[:space:]]*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//')
+            DESCRIPTION=$(echo "$FRONTMATTER" | grep -E '^description:' | head -1 | sed 's/^description:[[:space:]]*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//')
+
+            # Validate required fields
+            if [ -z "$NAME" ]; then
+              ERRORS+=("$file: missing required field 'name'")
+            fi
+
+            if [ -z "$DESCRIPTION" ]; then
+              ERRORS+=("$file: missing required field 'description'")
+            fi
+
+            # Check that name matches directory name
+            if [ -n "$NAME" ]; then
+              DIR_NAME=$(basename "$(dirname "$file")")
+              if [ "$NAME" != "$DIR_NAME" ]; then
+                ERRORS+=("$file: name '$NAME' does not match directory name '$DIR_NAME'")
+              fi
+
+              # Check uniqueness within type
+              case "$EXT_TYPE" in
+                skill)
+                  for seen in "${SEEN_SKILL_NAMES[@]+"${SEEN_SKILL_NAMES[@]}"}"; do
+                    if [ "$seen" = "$NAME" ]; then
+                      ERRORS+=("$file: duplicate skill name '$NAME'")
+                    fi
+                  done
+                  SEEN_SKILL_NAMES+=("$NAME")
+                  ;;
+                agent)
+                  for seen in "${SEEN_AGENT_NAMES[@]+"${SEEN_AGENT_NAMES[@]}"}"; do
+                    if [ "$seen" = "$NAME" ]; then
+                      ERRORS+=("$file: duplicate agent name '$NAME'")
+                    fi
+                  done
+                  SEEN_AGENT_NAMES+=("$NAME")
+                  ;;
+                command)
+                  for seen in "${SEEN_COMMAND_NAMES[@]+"${SEEN_COMMAND_NAMES[@]}"}"; do
+                    if [ "$seen" = "$NAME" ]; then
+                      ERRORS+=("$file: duplicate command name '$NAME'")
+                    fi
+                  done
+                  SEEN_COMMAND_NAMES+=("$NAME")
+                  ;;
+              esac
+            fi
+
+            # Validate scope for commands (only project or both allowed)
+            if [ "$EXT_TYPE" = "command" ]; then
+              SCOPE=$(echo "$FRONTMATTER" | grep -E '^scope:' | head -1 | sed 's/^scope:[[:space:]]*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//')
+              if [ -n "$SCOPE" ] && [ "$SCOPE" != "project" ] && [ "$SCOPE" != "both" ]; then
+                ERRORS+=("$file: command scope must be 'project' or 'both', got '$SCOPE'")
+              fi
+            fi
+
+            # Secret detection
+            if echo "$FRONTMATTER" | grep -iEq '(API_KEY|SECRET|PASSWORD|TOKEN)[[:space:]]*[:=][[:space:]]*[^[:space:]]+'; then
+              ERRORS+=("$file: potential secret detected in frontmatter (API_KEY, SECRET, PASSWORD, or TOKEN pattern)")
+            fi
+
+            # Warn on unknown tags
+            TAGS=$(echo "$FRONTMATTER" | grep -E '^tags:' | head -1 | sed 's/^tags:[[:space:]]*//')
+            if [ -n "$TAGS" ]; then
+              CLEAN_TAGS=$(echo "$TAGS" | tr -d '[]' | tr ',' '\n' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+              while IFS= read -r tag; do
+                [ -z "$tag" ] && continue
+                tag_lower=$(echo "$tag" | tr '[:upper:]' '[:lower:]')
+                if ! echo "$KNOWN_TAGS" | grep -qw "$tag_lower"; then
+                  WARNINGS+=("$file: unknown tag '$tag' (not in known tags list)")
+                fi
+              done <<< "$CLEAN_TAGS"
+            fi
+
+          done <<< "$FILES"
+
+          # Print warnings (non-blocking)
+          if [ ${#WARNINGS[@]} -gt 0 ]; then
+            echo ""
+            echo "=== WARNINGS ==="
+            for w in "${WARNINGS[@]}"; do
+              echo "::warning::$w"
+            done
+          fi
+
+          # Print errors and fail if any
+          if [ ${#ERRORS[@]} -gt 0 ]; then
+            echo ""
+            echo "=== ERRORS ==="
+            for e in "${ERRORS[@]}"; do
+              echo "::error::$e"
+            done
+            echo ""
+            echo "Validation failed with ${#ERRORS[@]} error(s)."
+            exit 1
+          fi
+
+          echo ""
+          echo "All validations passed."

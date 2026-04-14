@@ -1,93 +1,224 @@
-# skillhub
+# Skill-Hub
 
+Open-source extension manager for AI coding agents. Search, install, and manage reusable skills, agents, and commands from a central repository.
 
+## Supported AI Agents
 
-## Getting started
+| Agent | Status | Scope directories |
+|-------|--------|-------------------|
+| **Claude Code** | Full support | `~/.claude/` / `.claude/` |
+| **Cursor** | Full support | `~/.cursor/` / `.cursor/` |
+| **Copilot** (VS Code) | Full support | `~/.config/Code/User/` / `.github/` |
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+Skill-Hub auto-detects the active agent, but you can set it explicitly:
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.cash24.ru/shared/skillhub.git
-git branch -M main
-git push -uf origin main
+```bash
+skill-hub config set agent cursor
 ```
 
-## Integrate with your tools
+## What are Extensions?
 
-* [Set up project integrations](https://gitlab.cash24.ru/shared/skillhub/-/settings/integrations)
+Skill-Hub manages three types of extensions:
 
-## Collaborate with your team
+| Type | Description | Example install location (Claude Code) |
+|------|-------------|-----------------|
+| **Skill** (`SKILL.md`) | AI behavior instructions activated by context | `~/.claude/skills/{name}/SKILL.md` |
+| **Agent** (`AGENT.md`) | Specialized AI assistants spawned as subprocesses | `~/.claude/agents/{name}.md` |
+| **Command** (`COMMAND.md`) | User-invocable slash commands | `.claude/commands/{name}.md` |
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+Each agent stores extensions in its own directory structure. Extensions can declare per-agent platform support via the `platforms` field — unsupported combinations are filtered out automatically.
 
-## Test and Deploy
+## Quick Start
 
-Use the built-in continuous integration in GitLab.
+### Option A: CLI + MCP (recommended)
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+```bash
+npm install -g @emaxe/skill-hub
 
-***
+# Set up for your agent (claude-code | cursor | copilot)
+skill-hub setup-mcp --agent claude-code
+```
 
-# Editing this README
+After restarting your agent, the MCP tools are available automatically.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+### Option B: Bootstrap skill (manual)
 
-## Suggestions for a good README
+```bash
+# For Claude Code:
+mkdir -p ~/.claude/skills/skill-hub
+cp "$(npm root -g)/@emaxe/skill-hub/base-skills/claude-code/SKILL.md" ~/.claude/skills/skill-hub/SKILL.md
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+# For Cursor:
+mkdir -p ~/.cursor/skills/skill-hub
+cp "$(npm root -g)/@emaxe/skill-hub/base-skills/cursor/SKILL.md" ~/.cursor/skills/skill-hub/SKILL.md
+```
 
-## Name
-Choose a self-explaining name for your project.
+### Using extensions
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+Once installed, you can use the following commands in your agent:
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```
+/skill-hub search <query>              Search by name, tag, or keyword
+/skill-hub search agent:<query>        Search only agents
+/skill-hub install <name>              Install a skill
+/skill-hub install agent:<name>        Install an agent
+/skill-hub install command:<name>      Install a command
+/skill-hub remove <name>               Remove an installed extension
+/skill-hub list                        List all installed extensions
+/skill-hub list --type=agent           List only agents
+/skill-hub update                      Update all to latest versions
+/skill-hub init                        Recommend extensions for project
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+## Interactive TUI
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+Run `skill-hub` without arguments to launch the fullscreen interactive UI:
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```bash
+skill-hub
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+| Key | Action |
+|-----|--------|
+| `Tab` / `1-3` | Switch tabs (Catalog / Installed / Settings) |
+| `↑↓` | Navigate list |
+| `Enter` | Open extension details |
+| `i` | Install selected extension |
+| `d` | Delete (with confirmation) |
+| `m` | Move scope (global ↔ project) |
+| `u` | Update extension |
+| `/` | Focus search |
+| `q` | Quit |
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+### Settings tab
+
+The Settings tab lets you switch between agents (Claude Code, Cursor, Copilot), configure the default scope and registry URL. It also shows the setup status for the selected agent — whether the MCP server is registered and the base skill is installed. If either is missing, you can install it directly from the TUI by navigating to the corresponding field and pressing `Enter`.
+
+## Commands
+
+### search
+
+Search the catalog for extensions matching a query. Supports names, tags, and keywords. Use `type:query` prefix to filter by type.
+
+```
+/skill-hub search git
+/skill-hub search agent:reviewer
+/skill-hub search testing typescript
+```
+
+### install
+
+Install an extension by name. Use `type:name` prefix for agents and commands. Without prefix, defaults to skill.
+
+```
+/skill-hub install git-commit-and-push
+/skill-hub install agent:code-reviewer
+/skill-hub install command:deploy-check
+```
+
+### remove
+
+Remove a previously installed extension.
+
+```
+/skill-hub remove git-commit-and-push
+/skill-hub remove agent:code-reviewer
+```
+
+### list
+
+Show all currently installed extensions with their versions and scope.
+
+```
+/skill-hub list
+/skill-hub list --type=agent
+```
+
+### update
+
+Update all installed extensions to the latest versions from the repository.
+
+```
+/skill-hub update
+/skill-hub update agent:code-reviewer
+```
+
+### init
+
+Analyze the current project and recommend relevant extensions from the catalog.
+
+```
+/skill-hub init
+```
+
+### help
+
+Show help with all available commands and launch options — including TUI, agent flags (`-a`/`-A`), update shortcuts (`-u`/`-U`), and command chaining (`--then`).
+
+```bash
+skill-hub help
+skill-hub -h
+skill-hub --help
+```
+
+## Architecture
+
+```
+skill-hub (this repo)
++-- cli/                     # CLI tool + MCP server (npm: @emaxe/skill-hub)
+    |-- src/
+    |   |-- adapters/        # Agent adapters (claude-code, cursor, copilot)
+    |   |-- commands/        # CLI commands
+    |   +-- tui/             # Interactive TUI (Ink/React)
+    +-- base-skills/         # Bundled base skills per agent — installed by setup
+
+skill-hub-catalog (separate repo)
+|-- skills/                  # Published skills
+|-- agents/                  # Published agents
+|-- commands/                # Published commands
+|-- catalog.json             # Auto-generated extension index
+|-- schema/                  # Frontmatter validation schemas
+|-- scripts/                 # Build & validation scripts
++-- docs/                    # Extension authoring guides
+
+Delivery flow:
+1. git clone --depth 1 skill-hub-catalog => ~/.skill-hub/  (local cache)
+2. Install = agent adapter copies extension to target scope directory
+3. Update = git pull in cache, re-copy installed extensions
+
+Agent adapter handles platform-specific paths and formats:
+  Claude Code: ~/.claude/skills/{name}/SKILL.md, ~/.claude/agents/{name}.md
+  Cursor:      ~/.cursor/skills/{name}/SKILL.md, ~/.cursor/rules/{name}.mdc
+  Copilot:     .github/copilot-instructions.md (merged via markers)
+```
+
+## Локальная разработка CLI
+
+Для тестирования CLI без публикации в npm:
+
+```bash
+# Собрать
+cd cli && npm run build
+
+# Залинковать глобально
+npm link
+
+# Тестировать как обычно
+skill-hub search git
+skill-hub install skill:feature-planning
+
+# Удалить глобальный линк
+npm unlink -g @emaxe/skill-hub
+```
+
+При изменениях в исходниках достаточно пересобрать (`cd cli && npm run build`) — линк обновится автоматически.
 
 ## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Extensions (skills, agents, commands) live in [skill-hub-catalog](https://github.com/emaxe/skill-hub-catalog). See its `docs/` directory for authoring guides.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+For CLI improvements, open a PR in this repo. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+[MIT](LICENSE)

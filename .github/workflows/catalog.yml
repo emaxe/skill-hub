@@ -1,0 +1,42 @@
+name: Update Catalog
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'skills/**/*'
+      - 'agents/**/*'
+      - 'commands/**/*'
+
+jobs:
+  update-catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate catalog
+        run: |
+          chmod +x scripts/generate-catalog.sh
+          bash scripts/generate-catalog.sh
+
+      - name: Commit and push if changed
+        run: |
+          git diff --quiet catalog.json && {
+            echo "No changes to catalog.json"
+            exit 0
+          }
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add catalog.json
+          git commit -m "chore: update catalog.json [skip ci]"
+          git push
