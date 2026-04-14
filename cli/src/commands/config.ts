@@ -1,7 +1,8 @@
 import { Command } from 'commander';
+import readline from 'readline';
 import chalk from 'chalk';
-import { loadConfig, saveConfig, resolveConfig, saveResolvedConfig, saveGlobalFromProject, resetProjectToGlobal, initProjectConfig, SkillHubConfig } from '../config';
-import { resetCache } from '../git';
+import { loadConfig, saveConfig, resolveConfig, saveResolvedConfig, saveGlobalFromProject, resetProjectToGlobal, initProjectConfig, SkillHubConfig, loadProjectExtensions, findProjectRoot } from '../config';
+import { fullCatalogReset } from '../git';
 
 const ALLOWED_KEYS: Array<keyof SkillHubConfig> = ['agent', 'defaultScope', 'registryUrl', 'project'];
 
@@ -41,19 +42,44 @@ export function makeConfigCommand(): Command {
     .description('Установить значение настройки')
     .argument('<key>', `Ключ: ${ALLOWED_KEYS.join(', ')}`)
     .argument('<value>', 'Новое значение')
-    .action((key: string, value: string) => {
+    .option('--yes, -y', 'Пропустить подтверждение при смене registryUrl')
+    .action(async (key: string, value: string, opts: { yes?: boolean }) => {
       if (!ALLOWED_KEYS.includes(key as keyof SkillHubConfig)) {
         console.error(chalk.red(`Неизвестный ключ: ${key}`));
         console.error(`Допустимые ключи: ${ALLOWED_KEYS.join(', ')}`);
         process.exit(1);
       }
       const { config, source, projectRoot } = resolveConfig();
+
+      if (key === 'registryUrl') {
+        const extensions = loadProjectExtensions();
+        if (extensions.length > 0 && !opts.yes) {
+          const projRoot = findProjectRoot() || process.cwd();
+          console.log(chalk.yellow(`\n⚠  Смена каталога приведёт к очистке списка расширений в .skill-hub.json:`));
+          console.log(chalk.yellow(`   • ${extensions.length} расширений в проекте ${projRoot}\n`));
+          console.log(chalk.yellow(`   Файлы расширений на диске останутся без изменений.\n`));
+
+          const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+          const answer = await new Promise<string>(resolve => {
+            rl.question('   Продолжить? (y/N) ', answer => {
+              rl.close();
+              resolve(answer.trim().toLowerCase());
+            });
+          });
+
+          if (answer !== 'y' && answer !== 'yes' && answer !== 'д' && answer !== 'да') {
+            console.log(chalk.yellow('Отменено.'));
+            process.exit(0);
+          }
+        }
+      }
+
       (config as any)[key] = value;
       saveResolvedConfig(config, source, projectRoot);
       console.log(chalk.green(`${key} = ${value}`));
 
       if (key === 'registryUrl') {
-        resetCache();
+        fullCatalogReset();
         console.log(chalk.yellow('Кэш сброшен. При следующем запуске каталог будет загружен из нового URL.'));
       }
     });
