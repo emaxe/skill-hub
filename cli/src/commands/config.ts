@@ -42,7 +42,7 @@ export function makeConfigCommand(): Command {
     .description('Установить значение настройки')
     .argument('<key>', `Ключ: ${ALLOWED_KEYS.join(', ')}`)
     .argument('<value>', 'Новое значение')
-    .option('--yes, -y', 'Пропустить подтверждение при смене registryUrl')
+    .option('-y, --yes', 'Пропустить подтверждение при смене registryUrl')
     .action(async (key: string, value: string, opts: { yes?: boolean }) => {
       if (!ALLOWED_KEYS.includes(key as keyof SkillHubConfig)) {
         console.error(chalk.red(`Неизвестный ключ: ${key}`));
