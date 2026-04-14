@@ -11,7 +11,7 @@ import { Box, Text, useInput } from 'ink';
 import { AgentName } from '../../catalog';
 import { SkillHubConfig, AiAgentsConfig, ConfigSource, pushHistory, resolveProject, ResolvedProject, loadProjectExtensions } from '../../config';
 import { useStatus } from '../contexts/StatusContext';
-import { getCachePath, isCloned, resetCache, fullCatalogReset, updateCache } from '../../git';
+import { getCachePath, isCloned, resetCache, fullCatalogReset, updateCache, ensureCache } from '../../git';
 import { HintBar } from '../components/HintBar';
 import { SubTabBar } from '../components/SubTabBar';
 import { theme } from '../theme';
@@ -98,12 +98,27 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   const setup = useBaseSetup(localAgent);
   const [cacheUpdateState, setCacheUpdateState] = useState<InstallState>('idle');
 
+  /** Сброс кеша + автоматическая загрузка нового каталога */
+  const resetAndRedownload = () => {
+    fullCatalogReset();
+    setCacheUpdateState('loading');
+    ensureCache()
+      .then(() => {
+        setCacheUpdateState('success');
+        setStatus('Каталог загружен из нового URL', 'success');
+      })
+      .catch(() => {
+        setCacheUpdateState('error');
+        setStatus('Ошибка загрузки каталога', 'error');
+      });
+  };
+
   // Динамический список полей: зависит от подвкладки, агента, статуса setup и config source
   const fields = useMemo<Field[]>(() => {
     switch (activeSubTab) {
       case 'general': {
         const f: Field[] = ['agent', 'scope', 'project', 'registryUrl'];
-        if (cacheInstalled) f.push('updateCache');
+        f.push('updateCache');
         if (configSource === 'project') {
           f.push('saveAsGlobal', 'resetToGlobal', 'syncExtensions');
         } else if (hasProjectRoot) {
@@ -329,8 +344,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
       }
       updateConfig({ agent: localAgent, defaultScope: localScope, registryUrl: localRegistryUrl, aiAgents: localAiAgents });
       if (urlChanged) {
-        fullCatalogReset();
-        setStatus('Настройки сохранены. Кэш сброшен.', 'success');
+        resetAndRedownload();
+        setStatus('Настройки сохранены. Загрузка каталога...', 'success');
       } else {
         setStatus('Настройки сохранены', 'success');
       }
@@ -357,16 +372,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
             setShowResetConfirm(false);
             if (pendingResetContext === 'settings') {
               updateConfig({ agent: localAgent, defaultScope: localScope, registryUrl: pendingRegistryUrl, aiAgents: localAiAgents });
-              fullCatalogReset();
-              setStatus('Настройки сохранены. Кэш сброшен.', 'success');
+              resetAndRedownload();
+              setStatus('Настройки сохранены. Загрузка каталога...', 'success');
             } else {
               const newHistory = {
                 ...config.history,
                 registryUrl: pushHistory(config.history?.registryUrl, config.registryUrl),
               };
               updateConfig({ ...config, agent: localAgent, defaultScope: localScope, registryUrl: pendingRegistryUrl, aiAgents: localAiAgents, history: newHistory });
-              fullCatalogReset();
-              setStatus('Registry URL обновлён. Кэш сброшен.', 'success');
+              resetAndRedownload();
+              setStatus('Registry URL обновлён. Загрузка каталога...', 'success');
             }
             setPendingRegistryUrl(null);
             setPendingResetContext(null);
@@ -475,8 +490,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
               }
               updateConfig({ ...config, agent: localAgent, defaultScope: localScope, registryUrl: newValue, aiAgents: localAiAgents, history: newHistory });
               if (urlChanged) {
-                fullCatalogReset();
-                setStatus('Registry URL обновлён. Кэш сброшен.', 'success');
+                resetAndRedownload();
+                setStatus('Registry URL обновлён. Загрузка каталога...', 'success');
               } else {
                 setStatus('Registry URL сохранён', 'success');
               }
