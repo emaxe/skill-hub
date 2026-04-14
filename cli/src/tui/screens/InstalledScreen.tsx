@@ -11,6 +11,7 @@ import { normalizeInput } from '../keymap';
 import { Extension, AgentName, ExtensionType } from '../../catalog';
 import { InstallRecord } from '../../registry';
 import { InstalledEntry } from '../hooks/useRegistry';
+import { ScanResult } from '../../adapters/types';
 import { Confirm } from '../components/Confirm';
 import { HintBar, Hint } from '../components/HintBar';
 import { SearchInput } from '../components/SearchInput';
@@ -32,6 +33,10 @@ export interface InstalledScreenProps {
   viewHeight: number;
   project?: string | null;
   inputActive?: boolean;
+  /** Есть ли write-доступ к каталогу (для кнопки загрузки) */
+  hasUploadAccess?: boolean;
+  /** Открыть экран загрузки */
+  onOpenUpload?: (preselected?: ScanResult[]) => void;
 }
 
 type ScopeFilter = 'all' | 'global' | 'project' | 'parent';
@@ -71,6 +76,7 @@ function nextInList<T>(current: T, list: T[]): T {
 
 export const InstalledScreen: React.FC<InstalledScreenProps> = ({
   agent, onMoveExt, onOpenDetail, onSearchFocusChange, installed, loading, error, remove, update, updateSelf, viewHeight, project, inputActive,
+  hasUploadAccess, onOpenUpload,
 }) => {
   const { setStatus } = useStatus();
   const isConventions = agent === 'agents-conventions';
@@ -199,6 +205,8 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
           setStatus(`Ошибка обновления: ${String(err)}`, 'error');
         }
       })();
+    } else if (ni === 'p' && hasUploadAccess && onOpenUpload) {
+      onOpenUpload();
     }
   }, { isActive: inputActive !== false });
 
@@ -232,6 +240,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
           { key: 'd', description: 'удалить' },
           { key: 'u', description: 'обновить' },
           { key: 'U', description: 'обновить все' },
+          ...(hasUploadAccess ? [{ key: 'p', description: 'загрузить в каталог' }] : []),
         ]
       : [
           { key: '↑↓', description: 'навигация' },
@@ -241,6 +250,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
           { key: 'm', description: 'переместить' },
           { key: 'u', description: 'обновить' },
           { key: 'U', description: 'обновить все' },
+          ...(hasUploadAccess ? [{ key: 'p', description: 'загрузить в каталог' }] : []),
         ];
 
   return (

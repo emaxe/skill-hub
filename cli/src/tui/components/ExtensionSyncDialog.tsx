@@ -3,25 +3,41 @@ import { Box, Text, useInput, useStdout } from 'ink';
 import { theme } from '../theme';
 import { ProjectExtensionRecord } from '../../config';
 import { UntrackedExtension } from '../../sync';
+import { ScanResult } from '../../adapters/types';
 
 interface Props {
   missing: ProjectExtensionRecord[];
   untracked: UntrackedExtension[];
   onSync: () => void;
   onDismiss: () => void;
+  /** Есть ли write-доступ к каталогу */
+  hasUploadAccess?: boolean;
+  /** Открыть экран загрузки */
+  onOpenUpload?: (preselected?: ScanResult[]) => void;
 }
 
 const BG = '#1e1e2e';
 const BORDER_COLOR = theme.warning;
 
-export const ExtensionSyncDialog: React.FC<Props> = ({ missing, untracked, onSync, onDismiss }) => {
+export const ExtensionSyncDialog: React.FC<Props> = ({ missing, untracked, onSync, onDismiss, hasUploadAccess, onOpenUpload }) => {
   const { stdout } = useStdout();
   const innerWidth = Math.min(58, (stdout?.columns ?? 80) - 12);
   const hasActionable = missing.length > 0 || untracked.some(e => e.inCatalog);
+  const uploadable = untracked.filter(e => !e.inCatalog);
+  const canUpload = hasUploadAccess && onOpenUpload && uploadable.length > 0;
 
-  useInput((_input, key) => {
+  useInput((input, key) => {
     if (key.return && hasActionable) onSync();
     if (key.escape) onDismiss();
+    // Hotkey 'p' для загрузки в каталог
+    const ni = input.toLowerCase();
+    if ((ni === 'p' || ni === 'з') && canUpload && onOpenUpload) {
+      const preselected: ScanResult[] = uploadable.map(e => ({
+        type: e.type, name: e.name, scope: e.scope, path: e.path,
+      }));
+      onDismiss();
+      onOpenUpload(preselected);
+    }
   });
 
   const fill = (s: string) => {
@@ -124,6 +140,20 @@ export const ExtensionSyncDialog: React.FC<Props> = ({ missing, untracked, onSyn
         ),
       },
     );
+  }
+
+  // Подсказка для загрузки в каталог (если есть доступ и есть расширения не из каталога)
+  if (canUpload) {
+    lines.push({
+      text: (
+        <Text backgroundColor={BG} color={theme.muted}>
+          {'Нажми '}
+          <Text backgroundColor={BG} color={theme.accent}>p</Text>
+          {' \u2192 загрузить в каталог'}
+          {' '.repeat(Math.max(0, innerWidth - stripAnsi('Нажми p \u2192 загрузить в каталог').length))}
+        </Text>
+      ),
+    });
   }
 
   return (

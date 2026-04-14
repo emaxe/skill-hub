@@ -27,6 +27,8 @@ import { DetailScreen } from './screens/DetailScreen';
 import { MoveScreen } from './screens/MoveScreen';
 import { InstalledDetailScreen } from './screens/InstalledDetailScreen';
 import { ContentScreen } from './screens/ContentScreen';
+import { UploadScreen } from './screens/UploadScreen';
+import { useUploadAccess } from './hooks/useUploadAccess';
 import { ConventionsWarningDialog, ConventionsIssue } from './components/ConventionsWarningDialog';
 import { ProjectConfigDialog } from './components/ProjectConfigDialog';
 import { ExtensionSyncDialog } from './components/ExtensionSyncDialog';
@@ -37,6 +39,7 @@ import { getConventionsStatus } from '../conventions';
 import { ProjectExtensionRecord, addProjectExtension, resolveProject, ResolvedProject } from '../config';
 import { checkExtensionSync, UntrackedExtension, checkProjectConflicts, ProjectConflict } from '../sync';
 import { getCachePath, ensureCache } from '../git';
+import { ScanResult } from '../adapters/types';
 
 const TABS: TabName[] = ['catalog', 'installed', 'settings'];
 
@@ -54,6 +57,7 @@ export const App: React.FC = () => {
   const agent = config.agent;
   const registry = useRegistry(agent);
   const setup = useBaseSetup(agent);
+  const uploadAccess = useUploadAccess();
 
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
   const [statusType, setStatusType] = useState<StatusType>('idle');
@@ -82,6 +86,7 @@ export const App: React.FC = () => {
   const [searchFocused, setSearchFocused] = useState(false);
   const [settingsEditing, setSettingsEditing] = useState(false);
   const [contentData, setContentData] = useState<{ title: string; content: string } | null>(null);
+  const [uploadPreselected, setUploadPreselected] = useState<ScanResult[] | undefined>(undefined);
   const [showConventionsWarning, setShowConventionsWarning] = useState(false);
   const [conventionsIssues, setConventionsIssues] = useState<ConventionsIssue[]>([]);
   const [showProjectConfigDialog, setShowProjectConfigDialog] = useState(false);
@@ -190,6 +195,11 @@ export const App: React.FC = () => {
   const handleOpenContent = useCallback((title: string, content: string) => {
     setContentData({ title, content });
     nav.pushScreen('contentView');
+  }, [nav]);
+
+  const handleOpenUpload = useCallback((preselected?: ScanResult[]) => {
+    setUploadPreselected(preselected);
+    nav.pushScreen('upload');
   }, [nav]);
 
   const handleGoToSettings = useCallback(() => {
@@ -317,6 +327,8 @@ export const App: React.FC = () => {
     nav.popScreen();
     if (leaving === 'contentView') {
       setContentData(null);
+    } else if (leaving === 'upload') {
+      setUploadPreselected(undefined);
     } else {
       setDetailExt(null);
       setMoveExt(null);
@@ -420,6 +432,20 @@ export const App: React.FC = () => {
           onOpenContent={handleOpenContent}
           viewHeight={contentAreaHeight}
           inputActive={!dialogActive}
+          hasUploadAccess={uploadAccess.hasAccess}
+          onOpenUpload={handleOpenUpload}
+        />
+      );
+    }
+    if (screen === 'upload') {
+      return (
+        <UploadScreen
+          agent={agent}
+          onBack={handleBack}
+          preselected={uploadPreselected}
+          onOpenContent={handleOpenContent}
+          viewHeight={contentAreaHeight}
+          inputActive={!dialogActive}
         />
       );
     }
@@ -439,6 +465,8 @@ export const App: React.FC = () => {
           viewHeight={contentAreaHeight}
           project={resolvedProject.project}
           inputActive={!dialogActive}
+          hasUploadAccess={uploadAccess.hasAccess}
+          onOpenUpload={handleOpenUpload}
         />
       );
     }
@@ -535,6 +563,8 @@ export const App: React.FC = () => {
                 untracked={untrackedExtensions}
                 onSync={handleSync}
                 onDismiss={handleDismissSync}
+                hasUploadAccess={uploadAccess.hasAccess}
+                onOpenUpload={handleOpenUpload}
               />
             </Box>
           )}
