@@ -15,7 +15,7 @@ export function makeRemoveCommand(): Command {
     .aliases(['uninstall', 'rm'])
     .description('Удалить расширение')
     .argument('<name>', 'Имя расширения (или type:name)')
-    .option('--agent <agent>', 'Агент: claude-code, cursor, copilot')
+    .option('--agent <agent>', 'Агент: claude-code, cursor, copilot, codex')
     .option('--global', 'Удалить глобальную установку')
     .option('--project', 'Удалить проектную установку')
     .option('--local', 'Удалить проектную установку (alias для --project)')

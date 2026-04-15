@@ -40,7 +40,7 @@ export async function startMcpServer(): Promise<void> {
             type: 'object',
             properties: {
               query: { type: 'string', description: 'Поисковый запрос (имя, описание, тег)' },
-              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'], description: 'Фильтр по агенту' },
+              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'codex', 'agents-conventions'], description: 'Фильтр по агенту' },
               type: { type: 'string', enum: ['skill', 'agent', 'command'], description: 'Фильтр по типу' },
               limit: { type: 'number', description: 'Макс. количество результатов (по умолчанию 10)' },
               offset: { type: 'number', description: 'Пропустить первые N результатов (по умолчанию 0)' },
@@ -54,7 +54,7 @@ export async function startMcpServer(): Promise<void> {
             type: 'object',
             properties: {
               name: { type: 'string', description: 'Имя расширения (или type:name, например skill:git-helper)' },
-              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'], description: 'Агент' },
+              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'codex', 'agents-conventions'], description: 'Агент' },
               scope: { type: 'string', enum: ['global', 'project'], description: 'Область установки (по умолчанию: project)' },
             },
             required: ['name'],
@@ -67,7 +67,7 @@ export async function startMcpServer(): Promise<void> {
             type: 'object',
             properties: {
               name: { type: 'string', description: 'Имя расширения (или type:name)' },
-              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'], description: 'Агент' },
+              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'codex', 'agents-conventions'], description: 'Агент' },
               scope: { type: 'string', enum: ['global', 'project'], description: 'Область установки (по умолчанию: project)' },
               delete_from_disk: { type: 'boolean', description: 'Удалить файлы с диска (по умолчанию: true). false = только из реестра' },
             },
@@ -81,7 +81,7 @@ export async function startMcpServer(): Promise<void> {
             type: 'object',
             properties: {
               name: { type: 'string', description: 'Имя расширения (или type:name)' },
-              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'], description: 'Агент' },
+              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'codex', 'agents-conventions'], description: 'Агент' },
               to: { type: 'string', enum: ['global', 'project'], description: 'Целевой scope' },
             },
             required: ['name', 'to'],
@@ -93,7 +93,7 @@ export async function startMcpServer(): Promise<void> {
           inputSchema: {
             type: 'object',
             properties: {
-              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'], description: 'Фильтр по агенту' },
+              agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'codex', 'agents-conventions'], description: 'Фильтр по агенту' },
               type: { type: 'string', enum: ['skill', 'agent', 'command'], description: 'Фильтр по типу' },
               limit: { type: 'number', description: 'Макс. количество результатов (по умолчанию 10)' },
               offset: { type: 'number', description: 'Пропустить первые N результатов (по умолчанию 0)' },
@@ -112,7 +112,7 @@ export async function startMcpServer(): Promise<void> {
               },
               agent: {
                 type: 'string',
-                enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'],
+                enum: ['claude-code', 'cursor', 'copilot', 'codex', 'agents-conventions'],
                 description: 'Фильтр по агенту (по умолчанию: автодетект)',
               },
               limit: {
@@ -135,7 +135,7 @@ export async function startMcpServer(): Promise<void> {
               },
               agent: {
                 type: 'string',
-                enum: ['claude-code', 'cursor', 'copilot', 'agents-conventions'],
+                enum: ['claude-code', 'cursor', 'copilot', 'codex', 'agents-conventions'],
                 description: 'Агент для проверки статуса установки (по умолчанию: автодетект)',
               },
             },

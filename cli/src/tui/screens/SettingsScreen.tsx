@@ -26,7 +26,7 @@ import { GeneralTab, AiAgentsTab, SetupTab } from './settings';
 import { ScrollableBox } from '../components/ScrollableBox';
 import { Confirm } from '../components/Confirm';
 
-const AGENTS: AgentName[] = ['claude-code', 'cursor', 'copilot', 'agents-conventions'];
+const AGENTS: AgentName[] = ['claude-code', 'cursor', 'copilot', 'codex', 'agents-conventions'];
 const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
 
 type Field = 'agent' | 'scope' | 'project' | 'registryUrl' | 'installMcp' | 'installBaseSkill' | 'updateCache' | 'updateAgent'
@@ -38,7 +38,7 @@ type Field = 'agent' | 'scope' | 'project' | 'registryUrl' | 'installMcp' | 'ins
   | 'aiProxy'
   | `aiAgentProxy:${AgentName}`;
 
-const AI_AGENTS: AgentName[] = ['claude-code', 'cursor', 'copilot'];
+const AI_AGENTS: AgentName[] = ['claude-code', 'cursor', 'copilot', 'codex'];
 const AI_AGENT_FIELDS: Field[] = [
   ...AI_AGENTS.map(a => `aiAgent:${a}` as Field),
   'aiProxy',
@@ -399,7 +399,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   }
 
   if (showModal) {
-    const enabledAgents = (['claude-code', 'cursor', 'copilot'] as const)
+    const enabledAgents = (['claude-code', 'cursor', 'copilot', 'codex'] as const)
       .filter(a => localAiAgents.agents[a]?.enabled);
     return (
       <Box flexDirection="column" padding={2}>
@@ -420,7 +420,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   }
 
   if (showExitModal) {
-    const enabledAgents = (['claude-code', 'cursor', 'copilot'] as const)
+    const enabledAgents = (['claude-code', 'cursor', 'copilot', 'codex'] as const)
       .filter(a => localAiAgents.agents[a]?.enabled);
     return (
       <Box flexDirection="column" padding={2}>

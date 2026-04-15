@@ -15,6 +15,9 @@ const SYMLINK_TARGETS: Array<{ dir: string; link: string; target: string }> = [
   { dir: '.cursor', link: 'skills', target: path.join('..', '.agents', 'skills') },
   { dir: '.cursor', link: 'agents', target: path.join('..', '.agents', 'agents') },
   { dir: '.cursor', link: 'commands', target: path.join('..', '.agents', 'commands') },
+  { dir: '.codex', link: 'skills', target: path.join('..', '.agents', 'skills') },
+  { dir: '.codex', link: 'agents', target: path.join('..', '.agents', 'agents') },
+  { dir: '.codex', link: 'commands', target: path.join('..', '.agents', 'commands') },
 ];
 
 // Корневые файлы ИИ-агентов для миграции в .agents/rules/project-rules.md
@@ -36,6 +39,11 @@ const ROOT_AI_CONFIGS: Array<{
   {
     file: path.join('.github', 'copilot-instructions.md'),
     marker: '## Из .github/copilot-instructions.md',
+    pointer: 'Все правила проекта описаны в [AGENTS.md](../AGENTS.md).\nПрочитай AGENTS.md перед началом работы.\n',
+  },
+  {
+    file: path.join('.codex', 'AGENTS.md'),
+    marker: '## Из .codex/AGENTS.md',
     pointer: 'Все правила проекта описаны в [AGENTS.md](../AGENTS.md).\nПрочитай AGENTS.md перед началом работы.\n',
   },
 ];

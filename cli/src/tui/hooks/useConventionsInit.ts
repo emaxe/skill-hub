@@ -13,7 +13,7 @@ export interface UseConventionsInitResult {
   /** Запускает enableConventions (механические шаги) */
   run(): void;
   /** Запускает AI-агент для выполнения init-agents скилла */
-  runAutoAnalysis(agentName: 'claude-code' | 'cursor' | 'copilot', aiAgentsConfig: AiAgentsConfig): void;
+  runAutoAnalysis(agentName: 'claude-code' | 'cursor' | 'copilot' | 'codex', aiAgentsConfig: AiAgentsConfig): void;
   /** Пропустить AI-агент и завершить */
   skipAutoAnalysis(): void;
   cancel(): void;
@@ -72,7 +72,7 @@ export function useConventionsInit(): UseConventionsInitResult {
     });
   }, []);
 
-  const runAutoAnalysis = useCallback((agentName: 'claude-code' | 'cursor' | 'copilot', aiAgentsConfig: AiAgentsConfig) => {
+  const runAutoAnalysis = useCallback((agentName: 'claude-code' | 'cursor' | 'copilot' | 'codex', aiAgentsConfig: AiAgentsConfig) => {
     setStep('running');
     setOutputLines([]);
     lineBufferRef.current = '';

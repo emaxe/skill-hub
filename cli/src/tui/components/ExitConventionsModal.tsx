@@ -9,7 +9,7 @@ import { normalizeInput } from '../keymap';
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
-type AiAgentName = 'claude-code' | 'cursor' | 'copilot';
+type AiAgentName = 'claude-code' | 'cursor' | 'copilot' | 'codex';
 
 interface ExitConventionsModalProps {
   targetAgent: AgentName;

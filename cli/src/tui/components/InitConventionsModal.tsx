@@ -7,7 +7,7 @@ import { normalizeInput } from '../keymap';
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
-type AiAgentName = 'claude-code' | 'cursor' | 'copilot';
+type AiAgentName = 'claude-code' | 'cursor' | 'copilot' | 'codex';
 
 interface InitConventionsModalProps {
   enabledAgents: AiAgentName[];
@@ -115,7 +115,7 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
                 <Text dimColor>Нет включённых ИИ-агентов для запуска init-agents скилла.</Text>
               </Box>
               <Box marginBottom={1}>
-                <Text dimColor>Включите claude-code, cursor или copilot в разделе ИИ-агенты.</Text>
+                <Text dimColor>Включите claude-code, cursor, copilot или codex в разделе ИИ-агенты.</Text>
               </Box>
               <Text dimColor>[S/Esc] пропустить</Text>
             </>

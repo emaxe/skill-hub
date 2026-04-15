@@ -1,6 +1,7 @@
 // --- Автодетекция AI-агента ---
 // Приоритет: env-переменные (CURSOR_TRACE/CURSOR_IDE) → файловая система (.cursor/) →
-// env-переменные (GITHUB_COPILOT/COPILOT_AGENT) → claude-code по умолчанию
+// env-переменные (GITHUB_COPILOT/COPILOT_AGENT) → env-переменные (CODEX_SANDBOX) →
+// файловая система (.codex/) → claude-code по умолчанию
 
 import fs from 'fs';
 import path from 'path';
@@ -8,6 +9,7 @@ import { AgentName } from './catalog';
 
 interface DetectOptions {
   cursorDir?: string;
+  codexDir?: string;
 }
 
 /** Определяет текущий AI-агент по окружению и файловой структуре проекта */
@@ -21,6 +23,13 @@ export function detectAgent(opts: DetectOptions = {}): AgentName {
   }
   if (process.env.GITHUB_COPILOT || process.env.COPILOT_AGENT) {
     return 'copilot';
+  }
+  if (process.env.CODEX_SANDBOX || process.env.CODEX_SANDBOX_NETWORK_DISABLED) {
+    return 'codex';
+  }
+  const codexDir = opts.codexDir ?? path.join(process.cwd(), '.codex');
+  if (fs.existsSync(codexDir)) {
+    return 'codex';
   }
   return 'claude-code';
 }

@@ -39,7 +39,7 @@ export function makeMoveCommand(): Command {
   return new Command('move')
     .description('Перенести расширение между scope (global ↔ project)')
     .argument('<name>', 'Имя расширения (или type:name)')
-    .option('--agent <agent>', 'Агент: claude-code, cursor, copilot')
+    .option('--agent <agent>', 'Агент: claude-code, cursor, copilot, codex')
     .option('--to-global', 'Перенести в глобальный scope')
     .option('--to-project', 'Перенести в проектный scope')
     .option('--to-local', 'Перенести в проектный scope (alias для --to-project)')

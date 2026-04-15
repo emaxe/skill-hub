@@ -12,7 +12,7 @@ export function makeInfoCommand(): Command {
   return new Command('info')
     .description('Информация о расширении')
     .argument('<name>', 'Имя расширения (или type:name)')
-    .option('--agent <agent>', 'Агент: claude-code, cursor, copilot')
+    .option('--agent <agent>', 'Агент: claude-code, cursor, copilot, codex')
     .action(async (nameArg: string, opts: { agent?: string }) => {
       await ensureCache();
       const catalog = loadCatalog(getCachePath());
