@@ -44,7 +44,7 @@ async function executeArgs(argv: string[]): Promise<void> {
       console.error('Использование: skill-hub -a|-A <agent> [аргументы для агента...]');
       console.error('  -a  запуск через exec (по умолчанию)');
       console.error('  -A  запуск через temp-скрипт');
-      console.error('Агенты: claude-code, cursor, copilot');
+      console.error('Агенты: claude-code, cursor, copilot, codex');
       process.exit(1);
     }
     const extraArgs = argv.filter((_, i) => i > 1 && i !== agentFlagIdx && i !== agentFlagIdx + 1);
@@ -102,7 +102,7 @@ async function executeArgs(argv: string[]): Promise<void> {
   Запуск AI-агента:
     skill-hub -a <agent> [аргументы...]    Запуск агента через exec
     skill-hub -A <agent> [аргументы...]    Запуск агента через temp-скрипт
-    Агенты: claude-code, cursor, copilot
+    Агенты: claude-code, cursor, copilot, codex
 
   Сокращения для update:
     skill-hub -u [name]                    = skill-hub update [name]

@@ -40,7 +40,7 @@ export interface InstalledScreenProps {
 }
 
 type ScopeFilter = 'all' | 'global' | 'project' | 'parent';
-type AgentFilter = 'all' | 'claude-code' | 'cursor' | 'copilot';
+type AgentFilter = 'all' | 'claude-code' | 'cursor' | 'copilot' | 'codex';
 
 const PAGE_SIZE_MIN = 3;
 // Fixed rows: title(1) + header(1) + separator(1) + HintBar(1) + pagination(2) + search/filter(~2 in conventions mode)
@@ -48,7 +48,7 @@ const FIXED_ROWS = 6;
 
 const CONVENTIONS_SCOPE_FILTERS: ScopeFilter[] = ['global', 'project'];
 const STANDARD_SCOPE_FILTERS: ScopeFilter[] = ['all', 'global', 'project', 'parent'];
-const AGENT_FILTERS: AgentFilter[] = ['all', 'claude-code', 'cursor', 'copilot'];
+const AGENT_FILTERS: AgentFilter[] = ['all', 'claude-code', 'cursor', 'copilot', 'codex'];
 
 function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s;

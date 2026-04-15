@@ -89,7 +89,7 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
       } catch { /* ignore */ }
 
       // 2) Глобальные расширения от всех ИИ-агентов
-      const realAgents: AgentName[] = ['claude-code', 'cursor', 'copilot'];
+      const realAgents: AgentName[] = ['claude-code', 'cursor', 'copilot', 'codex'];
       for (const realAgent of realAgents) {
         // Из реестра — только global
         const agentRecords = registryRef.current.list(realAgent);

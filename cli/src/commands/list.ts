@@ -20,7 +20,7 @@ interface ListEntry {
 export function makeListCommand(): Command {
   return new Command('list')
     .description('Список установленных расширений')
-    .option('--agent <agent>', 'Агент: claude-code, cursor, copilot')
+    .option('--agent <agent>', 'Агент: claude-code, cursor, copilot, codex')
     .option('--type <type>', 'Тип: skill, agent, command')
     .option('--limit <n>', 'Максимум результатов на страницу', '10')
     .option('--offset <n>', 'Пропустить первые N результатов', '0')

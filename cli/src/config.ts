@@ -57,6 +57,7 @@ const DEFAULT_CONFIG: SkillHubConfig = {
       'claude-code':        { enabled: false, useProxy: false },
       'cursor':             { enabled: false, useProxy: false },
       'copilot':            { enabled: false, useProxy: false },
+      'codex':              { enabled: false, useProxy: false },
       'agents-conventions': { enabled: false, useProxy: false },
     },
   },
@@ -82,7 +83,7 @@ function mergeWithDefaults(raw: Partial<SkillHubConfig>): SkillHubConfig {
 }
 
 // Маркеры агентских scope-директорий — указывают, что директория является отдельным проектом
-const AGENT_SCOPE_MARKERS = ['.claude', '.cursor', '.agents'];
+const AGENT_SCOPE_MARKERS = ['.claude', '.cursor', '.codex', '.agents'];
 
 function hasAgentScopeDirs(dir: string): boolean {
   return AGENT_SCOPE_MARKERS.some(m => {

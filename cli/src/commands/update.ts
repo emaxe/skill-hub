@@ -14,7 +14,7 @@ export function makeUpdateCommand(): Command {
   return new Command('update')
     .description('Обновить расширения и каталог')
     .argument('[name]', 'Имя конкретного расширения (необязательно)')
-    .option('--agent <agent>', 'Агент: claude-code, cursor, copilot')
+    .option('--agent <agent>', 'Агент: claude-code, cursor, copilot, codex')
     .option('--no-self', 'Не обновлять базовый скилл и MCP')
     .action(async (name: string | undefined, opts: { agent?: string; self: boolean }) => {
       const spinner = ora('Обновление каталога...').start();

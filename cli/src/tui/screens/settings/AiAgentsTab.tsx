@@ -4,7 +4,7 @@ import { AgentName } from '../../../catalog';
 import { AiAgentsConfig } from '../../../config';
 import { theme } from '../../theme';
 
-const AI_AGENTS: AgentName[] = ['claude-code', 'cursor', 'copilot'];
+const AI_AGENTS: AgentName[] = ['claude-code', 'cursor', 'copilot', 'codex'];
 
 interface Props {
   localAiAgents: AiAgentsConfig;

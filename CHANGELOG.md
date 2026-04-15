@@ -2,6 +2,20 @@
 
 Все заметные изменения в проекте документируются здесь.
 
+## [0.1.11] — 2026-04-15
+
+### Добавлено
+- **Поддержка Codex** — OpenAI Codex как пятый AI-агент в skill-hub
+  - Адаптер `CodexAdapter` с инъекцией через HTML-маркеры (аналог CopilotAdapter)
+  - Global path: `~/.codex/AGENTS.md`; Project path: `.codex/AGENTS.md`
+  - `platformKey('codex')` → `'claude-code'` — все расширения каталога сразу доступны
+  - Автодетекция: env vars `CODEX_SANDBOX` / `CODEX_SANDBOX_NETWORK_DISABLED`, директория `.codex/`
+  - TUI: codex в настройках агентов, фильтрах установленных, AI Agents вкладке
+  - MCP: все 7 инструментов принимают `'codex'` как значение параметра `agent`
+  - Conventions Mode: symlinks `.codex/` → `.agents/` + thin pointer `.codex/AGENTS.md` → `AGENTS.md`
+  - Bootstrap-скилл `base-skills/codex/SKILL.md`
+  - Unit-тесты `CodexAdapter` и автодетекции Codex
+
 ## [0.1.9] — 2026-04-15
 
 ### Добавлено

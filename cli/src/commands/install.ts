@@ -36,7 +36,7 @@ export function makeInstallCommand(): Command {
   return new Command('install')
     .description('Установить расширение')
     .argument('<name>', 'Имя расширения (или type:name)')
-    .option('--agent <agent>', 'Агент: claude-code, cursor, copilot')
+    .option('--agent <agent>', 'Агент: claude-code, cursor, copilot, codex')
     .option('--global', 'Глобальная установка')
     .option('--project', 'Установка в текущий проект (по умолчанию)')
     .option('--local', 'Установка в текущий проект (alias для --project)')

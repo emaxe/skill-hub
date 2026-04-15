@@ -14,7 +14,7 @@ export interface UseConventionsExitResult {
   /** Начинает процесс выхода: показывает выбор AI-агента */
   start(): void;
   /** Запускает AI-агент с exit-agents скиллом, затем disableConventions */
-  runWithAgent(agentName: 'claude-code' | 'cursor' | 'copilot', aiAgentsConfig: AiAgentsConfig, targetAgent: AgentName): void;
+  runWithAgent(agentName: 'claude-code' | 'cursor' | 'copilot' | 'codex', aiAgentsConfig: AiAgentsConfig, targetAgent: AgentName): void;
   /** Пропустить AI-агент и сразу выполнить disableConventions */
   skipAgent(targetAgent: AgentName): void;
   cancel(): void;
@@ -75,7 +75,7 @@ export function useConventionsExit(): UseConventionsExitResult {
     lineBufferRef.current = '';
   }, []);
 
-  const runWithAgent = useCallback((agentName: 'claude-code' | 'cursor' | 'copilot', aiAgentsConfig: AiAgentsConfig, targetAgent: AgentName) => {
+  const runWithAgent = useCallback((agentName: 'claude-code' | 'cursor' | 'copilot' | 'codex', aiAgentsConfig: AiAgentsConfig, targetAgent: AgentName) => {
     setStep('running');
     setOutputLines([]);
     lineBufferRef.current = '';

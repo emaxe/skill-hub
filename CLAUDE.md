@@ -1,17 +1,17 @@
 # CLAUDE.md
 
-Инструкции для AI-агентов (Claude Code, Cursor, Copilot) при работе с кодом этого репозитория.
+Инструкции для AI-агентов (Claude Code, Cursor, Copilot, Codex) при работе с кодом этого репозитория.
 
 ## Обзор проекта
 
-Skill-Hub — менеджер расширений для AI-агентов (Claude Code, Cursor, Copilot). CLI + MCP-сервер для поиска, установки и управления переиспользуемыми **skills**, **agents** и **commands**.
+Skill-Hub — менеджер расширений для AI-агентов (Claude Code, Cursor, Copilot, Codex). CLI + MCP-сервер для поиска, установки и управления переиспользуемыми **skills**, **agents** и **commands**.
 
 | Репозиторий | Содержимое |
 |-------------|-----------|
 | `skill-hub` (этот) | `cli/` — TypeScript CLI + MCP-сервер; `cli/base-skills/` — бутстрап-скиллы |
 | `skill-hub-catalog` | `skills/`, `agents/`, `commands/`, `schema/`, `catalog.json` |
 
-**Npm-пакет:** `@emaxe/skill-hub` (version 0.1.9)
+**Npm-пакет:** `@emaxe/skill-hub` (version 0.1.11)
 **Node:** ≥18
 
 ## Команды разработки
@@ -43,11 +43,12 @@ cli/
 │   ├── agent-launcher.ts     # Запуск AI-агентов: exec (-a) и script (-A) режимы
 │   ├── detect-agent.ts       # Автодетекция агента по env vars / директориям
 │   ├── keymap.ts             # Нормализация русской раскладки → латинская для хоткеев
-│   ├── adapters/             # Адаптеры агентов (claude-code, cursor, copilot, conventions)
+│   ├── adapters/             # Адаптеры агентов (claude-code, cursor, copilot, codex, conventions)
 │   │   ├── types.ts          # AgentAdapter interface, ScanResult
 │   │   ├── claude-code.ts
 │   │   ├── cursor.ts
 │   │   ├── copilot.ts
+│   │   ├── codex.ts
 │   │   └── agents-conventions.ts
 │   ├── commands/             # CLI-команды (search, install, remove, list, info, ...)
 │   └── tui/                  # Интерактивный TUI (Ink/React)
@@ -114,7 +115,7 @@ cli/
 
 ```typescript
 interface SkillHubConfig {
-  agent: 'claude-code' | 'cursor' | 'copilot' | 'agents-conventions';
+  agent: 'claude-code' | 'cursor' | 'copilot' | 'codex' | 'agents-conventions';
   defaultScope: 'global' | 'project';
   registryUrl: string;          // URL git-репозитория каталога
   project?: string;             // Имя текущего проекта
@@ -157,9 +158,10 @@ interface SkillHubConfig {
 | Claude Code | `~/.claude/skills/{name}/SKILL.md` | `.claude/skills/{name}/SKILL.md` |
 | Cursor | `~/.cursor/skills/{name}/SKILL.md` | `.cursor/skills/{name}/SKILL.md` |
 | Copilot | `~/.config/Code/User/copilot-instructions.md` | `.github/copilot-instructions.md` |
+| Codex | `~/.codex/AGENTS.md` | `.codex/AGENTS.md` |
 | agents-conventions | — | `.agents/skills/{name}/SKILL.md` |
 
-**Автодетекция** (`detect-agent.ts`): env vars (`CURSOR_TRACE` → cursor, `GITHUB_COPILOT` → copilot) → наличие `.cursor/` → default `claude-code`.
+**Автодетекция** (`detect-agent.ts`): env vars (`CURSOR_TRACE` → cursor, `GITHUB_COPILOT` → copilot, `CODEX_SANDBOX` → codex) → наличие `.cursor/` → наличие `.codex/` → default `claude-code`.
 
 ### Кеш каталога
 
@@ -196,6 +198,12 @@ interface SkillHubConfig {
 - `conventions.ts → exitConventions()` — мигрировать расширения обратно, удалить symlinks
 - Health check: `.agents/` exists, `AGENTS.md` exists, symlinks valid
 - `generateProjectRules()` — автоанализ проекта (package.json, go.mod, etc.)
+
+**Symlink targets (`SYMLINK_TARGETS`):** `.claude/skills`, `.cursor/skills`, `.codex/` → `.agents/`
+
+**Thin pointers (`ROOT_AI_CONFIGS`):** `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`, `.codex/AGENTS.md` → указывают на `AGENTS.md`
+
+> **Важно для Windows:** при создании symlinks использовать стратегию `dir` → `junction` → fallback-копирование (через `conventions.ts`). Нельзя создавать `POSIX symlinks` напрямую.
 
 ## CLI: команды и флаги
 
@@ -288,6 +296,8 @@ interface SkillHubConfig {
 
 ## Стиль кода и паттерны
 
+> ⚠️ **Все изменения в коде должны быть кроссплатформенными** — работать на macOS, Linux и Windows без условных веток по ОС в логике фичи. Любой платформо-специфичный код изолировать в `platform.ts`. Подробности — в разделе «Windows и кроссплатформенность» ниже.
+
 ### Общие правила
 
 1. **Документация синхронизирована с кодом.** При добавлении/удалении CLI-команд, MCP-инструментов, полей конфига — обновлять CLAUDE.md и README.md.
@@ -333,6 +343,8 @@ interface SkillHubConfig {
 
 ### Windows и кроссплатформенность
 
+> **Обязательное требование:** весь новый код должен проходить проверку на Windows. Если добавляешь файловые операции, запуск процессов, пути или symlinks — обязательно проверь поведение на Windows через моки (см. правила ниже) и добавь соответствующие тесты.
+
 Для платформо-зависимого кода использовать хелпер `platform.ts`:
 
 ```typescript
@@ -348,4 +360,6 @@ import { isWindows, isMac, isLinux, getAppData } from './platform';
 - **Сигналы**: `child.kill()` без аргумента (не `SIGTERM`) — на Windows `SIGTERM` не поддерживается
 - **Spawn**: добавлять `shell: true` при `isWindows` для корректного поиска бинарников в PATH
 - **Пути**: всегда `path.join()`, `path.sep`, `path.basename()` — никогда не хардкодить `/` или `\\`
+- **Home dir**: использовать `os.homedir()` — никогда `process.env.HOME` (не работает на Windows cmd.exe)
 - **Тесты**: мокать `process.platform` через `jest.replaceProperty(process, 'platform', 'win32')`; мокать `os.homedir()` вместо `process.env.HOME`
+- **Новые адаптеры и модули**: если добавляешь путь к файлу агента — проверь, что путь строится через `path.join(homeDir, ...)`, а не строковой конкатенацией

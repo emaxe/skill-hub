@@ -34,6 +34,7 @@ export function makeAgentsConventionsCommand(): Command {
         console.log('  Симлинки:          .claude/skills → .agents/skills');
         console.log('                     .github/skills → .agents/skills');
         console.log('                     .cursor/skills → .agents/skills');
+        console.log('                     .codex/skills  → .agents/skills');
         if (result.needsAutoAnalysis) {
           console.log();
           console.log(chalk.yellow('Корневые конфиги не найдены.'));
@@ -48,16 +49,16 @@ export function makeAgentsConventionsCommand(): Command {
 
   cmd.command('disable')
     .description('Выключить режим agents-conventions')
-    .option('--agent <agent>', 'Целевой агент: claude-code, cursor, copilot')
+    .option('--agent <agent>', 'Целевой агент: claude-code, cursor, copilot, codex')
     .action(async (opts: { agent?: string }) => {
       let targetAgent = opts.agent as AgentName | undefined;
 
       if (!targetAgent) {
         const answer = await askQuestion(
-          'Целевой агент (claude-code/cursor/copilot): '
+          'Целевой агент (claude-code/cursor/copilot/codex): '
         );
-        if (!['claude-code', 'cursor', 'copilot'].includes(answer)) {
-          console.error(chalk.red('Неверный агент. Допустимые: claude-code, cursor, copilot'));
+        if (!['claude-code', 'cursor', 'copilot', 'codex'].includes(answer)) {
+          console.error(chalk.red('Неверный агент. Допустимые: claude-code, cursor, copilot, codex'));
           process.exit(1);
         }
         targetAgent = answer as AgentName;
