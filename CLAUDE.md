@@ -11,7 +11,7 @@ Skill-Hub — менеджер расширений для AI-агентов (Cl
 | `skill-hub` (этот) | `cli/` — TypeScript CLI + MCP-сервер; `cli/base-skills/` — бутстрап-скиллы |
 | `skill-hub-catalog` | `skills/`, `agents/`, `commands/`, `schema/`, `catalog.json` |
 
-**Npm-пакет:** `@emaxe/skill-hub` (version 0.1.9)
+**Npm-пакет:** `@emaxe/skill-hub` (version 0.1.11)
 **Node:** ≥18
 
 ## Команды разработки
@@ -199,6 +199,12 @@ interface SkillHubConfig {
 - Health check: `.agents/` exists, `AGENTS.md` exists, symlinks valid
 - `generateProjectRules()` — автоанализ проекта (package.json, go.mod, etc.)
 
+**Symlink targets (`SYMLINK_TARGETS`):** `.claude/skills`, `.cursor/skills`, `.codex/` → `.agents/`
+
+**Thin pointers (`ROOT_AI_CONFIGS`):** `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`, `.codex/AGENTS.md` → указывают на `AGENTS.md`
+
+> **Важно для Windows:** при создании symlinks использовать стратегию `dir` → `junction` → fallback-копирование (через `conventions.ts`). Нельзя создавать `POSIX symlinks` напрямую.
+
 ## CLI: команды и флаги
 
 | Команда | Описание |
@@ -290,6 +296,8 @@ interface SkillHubConfig {
 
 ## Стиль кода и паттерны
 
+> ⚠️ **Все изменения в коде должны быть кроссплатформенными** — работать на macOS, Linux и Windows без условных веток по ОС в логике фичи. Любой платформо-специфичный код изолировать в `platform.ts`. Подробности — в разделе «Windows и кроссплатформенность» ниже.
+
 ### Общие правила
 
 1. **Документация синхронизирована с кодом.** При добавлении/удалении CLI-команд, MCP-инструментов, полей конфига — обновлять CLAUDE.md и README.md.
@@ -335,6 +343,8 @@ interface SkillHubConfig {
 
 ### Windows и кроссплатформенность
 
+> **Обязательное требование:** весь новый код должен проходить проверку на Windows. Если добавляешь файловые операции, запуск процессов, пути или symlinks — обязательно проверь поведение на Windows через моки (см. правила ниже) и добавь соответствующие тесты.
+
 Для платформо-зависимого кода использовать хелпер `platform.ts`:
 
 ```typescript
@@ -350,4 +360,6 @@ import { isWindows, isMac, isLinux, getAppData } from './platform';
 - **Сигналы**: `child.kill()` без аргумента (не `SIGTERM`) — на Windows `SIGTERM` не поддерживается
 - **Spawn**: добавлять `shell: true` при `isWindows` для корректного поиска бинарников в PATH
 - **Пути**: всегда `path.join()`, `path.sep`, `path.basename()` — никогда не хардкодить `/` или `\\`
+- **Home dir**: использовать `os.homedir()` — никогда `process.env.HOME` (не работает на Windows cmd.exe)
 - **Тесты**: мокать `process.platform` через `jest.replaceProperty(process, 'platform', 'win32')`; мокать `os.homedir()` вместо `process.env.HOME`
+- **Новые адаптеры и модули**: если добавляешь путь к файлу агента — проверь, что путь строится через `path.join(homeDir, ...)`, а не строковой конкатенацией

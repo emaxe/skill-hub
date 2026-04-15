@@ -9,8 +9,9 @@ Open-source менеджер расширений для AI-агентов. Ищ
 | **Claude Code** | Полная поддержка | `~/.claude/` / `.claude/` |
 | **Cursor** | Полная поддержка | `~/.cursor/` / `.cursor/` |
 | **Copilot** (VS Code) | Полная поддержка | `~/.config/Code/User/` / `.github/` |
+| **Codex** (OpenAI) | Полная поддержка | `~/.codex/` / `.codex/` |
 
-Skill-Hub автоматически определяет активного агента. Можно задать явно:
+Skill-Hub автоматически определяет активного агента по env vars (`CODEX_SANDBOX` → codex, `GITHUB_COPILOT` → copilot, `CURSOR_TRACE` → cursor) и наличию директорий (`.codex/`, `.cursor/`). Можно задать явно:
 
 ```bash
 skill-hub config set agent cursor
@@ -60,7 +61,7 @@ Skill-Hub управляет тремя типами расширений:
 ```bash
 npm install -g @emaxe/skill-hub
 
-# Настроить для вашего агента (claude-code | cursor | copilot)
+# Настроить для вашего агента (claude-code | cursor | copilot | codex)
 skill-hub setup-mcp --agent claude-code
 ```
 
@@ -76,6 +77,10 @@ cp "$(npm root -g)/@emaxe/skill-hub/base-skills/claude-code/SKILL.md" ~/.claude/
 # Для Cursor:
 mkdir -p ~/.cursor/skills/skill-hub
 cp "$(npm root -g)/@emaxe/skill-hub/base-skills/cursor/SKILL.md" ~/.cursor/skills/skill-hub/SKILL.md
+
+# Для Codex:
+mkdir -p ~/.codex
+cp "$(npm root -g)/@emaxe/skill-hub/base-skills/codex/SKILL.md" ~/.codex/AGENTS.md
 ```
 
 ## Интерактивный TUI
@@ -132,7 +137,7 @@ skill-hub
 
 | Поле | Клавиша | Описание |
 |------|---------|----------|
-| Агент | `←` `→` | Переключение между claude-code, cursor, copilot, agents-conventions |
+| Агент | `←` `→` | Переключение между claude-code, cursor, copilot, codex, agents-conventions |
 | Scope | `←` `→` | Scope по умолчанию: global или project |
 | Проект | — | Имя текущего проекта |
 | Registry URL | `Enter` | Редактировать URL репозитория каталога |
@@ -150,7 +155,7 @@ skill-hub
 
 | Поле | Клавиша | Описание |
 |------|---------|----------|
-| claude-code / cursor / copilot | `←` `→` | Включить/выключить агента |
+| claude-code / cursor / copilot / codex | `←` `→` | Включить/выключить агента |
 | Proxy URL | `Enter` | Общий прокси для всех агентов |
 | Использовать прокси (per-agent) | `←` `→` | Вкл/выкл прокси для конкретного агента |
 
@@ -323,7 +328,8 @@ skill-hub agents-conventions enable
 Что происходит:
 - Создаётся `.agents/` с поддиректориями `skills/`, `agents/`, `commands/`
 - Создаётся `AGENTS.md` (общие правила проекта)
-- Создаются symlinks из `.claude/`, `.cursor/` в `.agents/`
+- Создаются symlinks: `.claude/` → `.agents/`, `.cursor/` → `.agents/`, `.codex/` → `.agents/`
+- Для Copilot создаётся thin pointer в `.github/copilot-instructions.md`
 - Устанавливаются bootstrap-скиллы
 
 ### Выключение
@@ -425,6 +431,7 @@ skill-hub config reset
 skill-hub setup-mcp --agent claude-code
 skill-hub setup-mcp --agent cursor
 skill-hub setup-mcp --agent copilot
+skill-hub setup-mcp --agent codex
 ```
 
 ### agents-conventions
@@ -482,7 +489,7 @@ skill-hub --then                     # цепочка двух команд
 skill-hub (этот репо)
 ├── cli/                     # CLI + MCP-сервер (npm: @emaxe/skill-hub)
 │   ├── src/
-│   │   ├── adapters/        # Адаптеры агентов (claude-code, cursor, copilot)
+│   │   ├── adapters/        # Адаптеры агентов (claude-code, cursor, copilot, codex)
 │   │   ├── commands/        # CLI-команды
 │   │   └── tui/             # Интерактивный TUI (Ink/React)
 │   └── base-skills/         # Бутстрап-скиллы для каждого агента
