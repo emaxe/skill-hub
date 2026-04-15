@@ -1,127 +1,330 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Инструкции для AI-агентов (Claude Code, Cursor, Copilot) при работе с кодом этого репозитория.
 
-## Project Overview
+## Обзор проекта
 
-Skill-Hub is an open-source extension manager for AI coding agents (Claude Code, Cursor, Copilot). It provides a CLI tool and MCP server for searching, installing, and managing reusable extensions — **skills**, **agents**, and **commands**.
+Skill-Hub — менеджер расширений для AI-агентов (Claude Code, Cursor, Copilot). CLI + MCP-сервер для поиска, установки и управления переиспользуемыми **skills**, **agents** и **commands**.
 
-- **This repo** (`skill-hub`) — CLI tool (`cli/`)
-- **Catalog repo** (`skill-hub-catalog`) — all published extensions (skills, agents, commands), schemas, and docs
+| Репозиторий | Содержимое |
+|-------------|-----------|
+| `skill-hub` (этот) | `cli/` — TypeScript CLI + MCP-сервер; `cli/base-skills/` — бутстрап-скиллы |
+| `skill-hub-catalog` | `skills/`, `agents/`, `commands/`, `schema/`, `catalog.json` |
 
-## Key Commands
+**Npm-пакет:** `@emaxe/skill-hub` (version 0.1.9)
+**Node:** ≥18
+
+## Команды разработки
 
 ```bash
-# Local CLI development — build, link globally, test without npm publish
-cd cli && npm run build          # rebuild
-npm link                         # link globally (or use dev-link.sh equivalent)
-skill-hub search git             # test any command
-npm unlink -g @emaxe/skill-hub  # remove global link
-
-# Run tests
-cd cli && npm test
+cd cli && npm run build          # сборка (tsc)
+cd cli && npm test               # Jest-тесты (82 теста)
+npm link                         # глобальная линковка для локального тестирования
+npm unlink -g @emaxe/skill-hub   # удалить линк
+skill-hub search git             # проверить CLI
 ```
 
-## Architecture
+## Структура файлов
 
-### Repository Split
+```
+cli/
+├── src/
+│   ├── index.ts              # Точка входа CLI (Commander). 8 команд + TUI
+│   ├── mcp.ts                # MCP-сервер (7 инструментов)
+│   ├── mcp-entry.ts          # Отдельная точка входа для MCP
+│   ├── catalog.ts            # Типы Extension, AgentName, loadCatalog(), scoreExtensions()
+│   ├── config.ts             # Двухуровневый конфиг: global + project
+│   ├── registry.ts           # Реестр установленных расширений (registry.json)
+│   ├── git.ts                # Git-операции: clone, pull, cache management
+│   ├── upload.ts             # Загрузка расширений в каталог (git push + PR URL)
+│   ├── sync.ts               # Синхронизация расширений: missing/untracked detection
+│   ├── conventions.ts        # Режим agents-conventions: init/exit/health
+│   ├── detect-agent.ts       # Автодетекция агента по env vars / директориям
+│   ├── keymap.ts             # Нормализация русской раскладки → латинская для хоткеев
+│   ├── adapters/             # Адаптеры агентов (claude-code, cursor, copilot, conventions)
+│   │   ├── types.ts          # AgentAdapter interface, ScanResult
+│   │   ├── claude-code.ts
+│   │   ├── cursor.ts
+│   │   ├── copilot.ts
+│   │   └── agents-conventions.ts
+│   ├── commands/             # CLI-команды (search, install, remove, list, info, ...)
+│   └── tui/                  # Интерактивный TUI (Ink/React)
+│       ├── index.ts          # renderApp() — точка входа TUI
+│       ├── App.tsx           # Корневой компонент (~600 строк)
+│       ├── theme.ts          # Цветовая тема
+│       ├── keymap.ts         # normalizeInput(), isCtrl()
+│       ├── contexts/
+│       │   └── StatusContext.tsx  # Глобальная статусная строка
+│       ├── hooks/
+│       │   ├── useRegistry.ts     # Центральный стейт расширений
+│       │   ├── useCatalog.ts      # Поиск по каталогу
+│       │   ├── useSettings.ts     # Настройки + персистенция
+│       │   ├── useNavigation.ts   # Screen stack navigation
+│       │   ├── useBaseSetup.ts    # MCP/base-skill setup status
+│       │   ├── useUploadAccess.ts # Async проверка write-доступа к каталогу
+│       │   └── useTerminalSize.ts # Размер терминала + debounced resize
+│       ├── screens/
+│       │   ├── CatalogScreen.tsx        # Таб «Каталог» — поиск, фильтры, установка
+│       │   ├── InstalledScreen.tsx       # Таб «Установленные» — список, удаление, обновление
+│       │   ├── SettingsScreen.tsx        # Таб «Настройки» — конфигурация, подвкладки
+│       │   ├── DetailScreen.tsx          # Карточка расширения из каталога
+│       │   ├── InstalledDetailScreen.tsx # Карточка установленного расширения
+│       │   ├── MoveScreen.tsx            # Перемещение global ↔ project
+│       │   ├── ContentScreen.tsx         # Просмотр содержимого файла
+│       │   ├── UploadScreen.tsx          # Загрузка расширений в каталог
+│       │   └── settings/                # Подкомпоненты SettingsScreen
+│       └── components/
+│           ├── HintBar.tsx              # Полоска хоткеев внизу
+│           ├── ExtensionList.tsx        # Таблица расширений
+│           ├── ExtensionSyncDialog.tsx  # Диалог синхронизации расширений
+│           ├── Confirm.tsx              # Подтверждение действия (y/n)
+│           ├── ScrollableBox.tsx        # Прокрутка списков
+│           ├── SearchInput.tsx          # Поле поиска
+│           ├── FilterBar.tsx            # Фильтры (тип, скоуп)
+│           ├── TextEditModal.tsx        # Редактирование длинных строк (URL, proxy)
+│           ├── InitConventionsModal.tsx # Модалка включения conventions
+│           └── ExitConventionsModal.tsx # Модалка выключения conventions
+├── base-skills/              # Бутстрап-скиллы для каждого агента
+└── dist/                     # Скомпилированный JS
+```
 
-| Repo | Contents |
-|------|----------|
-| `skill-hub` (this repo) | `cli/` — TypeScript CLI + MCP server; `cli/base-skills/` — bootstrap skills per agent |
-| `skill-hub-catalog` | `skills/`, `agents/`, `commands/`, `schema/`, `scripts/`, `docs/`, `catalog.json` |
+## Архитектура
 
-### Delivery Flow
+### Потоки данных
 
-**Via CLI (recommended):**
-1. `npm install -g @emaxe/skill-hub` — install the CLI
-2. `skill-hub setup-mcp --agent claude-code` — configure MCP server
-3. CLI clones `skill-hub-catalog` to `~/.skill-hub/` cache, handles install/update
+```
+Пользователь → CLI (Commander) → Команда (commands/*.ts) → Adapter → Файловая система
+                │
+                └→ TUI (Ink/React) → Hooks → Registry/Catalog/Config → Adapter → ФС
+                │
+                └→ MCP Server → 7 tools → Adapter → ФС
 
-**Manual:**
-1. User clones catalog repo to `~/.skill-hub/`
-2. Install = copy extension to target scope directory (agents/commands: single file renamed to `{name}.md`)
-3. Update = `git pull` in cache, re-copy installed extensions
+Каталог: GitHub/GitLab repo → git clone → ~/.skill-hub/ (кеш) → catalog.json (индекс)
+```
 
-### Agent Adapters
+### Система конфигурации
 
-Four agents supported via `AgentAdapter` interface (`cli/src/adapters/`):
-- **Claude Code** — `~/.claude/` / `.claude/` (skills, agents, commands)
-- **Cursor** — `~/.cursor/` / `.cursor/` (skills in `skills/`, rules in `.mdc` format)
-- **Copilot** — `~/.config/Code/User/` / `.github/` (merges into `copilot-instructions.md` via HTML markers)
-- **agents-conventions** — `.agents/` (project-only scope, unified directory with symlinks to agent dirs)
+**Два уровня:**
+- **Глобальный:** `~/.skill-hub/config.json`
+- **Проектный:** `.skill-hub.json` (в корне проекта)
 
-Auto-detection in `detect-agent.ts`: checks env vars (`CURSOR_TRACE`, `GITHUB_COPILOT`), then `.cursor/` dir, defaults to `claude-code`.
+Проектный конфиг переопределяет глобальный. Поиск проектного конфига: `config.ts → resolveProject()` — поднимается от CWD вверх, ищет `.skill-hub.json` или `.git`.
 
-### Scope Directories (Claude Code example)
-
-- **Global:** `~/.claude/skills/{name}/SKILL.md`, `~/.claude/agents/{name}.md`
-- **Project:** `./.claude/skills/{name}/SKILL.md`, `.claude/agents/{name}.md`, `.claude/commands/{name}.md`
-
-### Project Config
-
-Two-tier configuration system:
-- **Global config:** `~/.skill-hub/config.json`
-- **Project config:** `.skill-hub.json` at project root (auto-detected by walking up from CWD looking for `.skill-hub.json` or `.git`)
-
-Project config overrides global. Structure of `.skill-hub.json`:
-```json
-{
-  "settings": { "agent": "...", "defaultScope": "...", ... },
-  "extensions": [{ "type": "skill", "name": "...", "version": "...", "scope": "project" }]
+```typescript
+interface SkillHubConfig {
+  agent: 'claude-code' | 'cursor' | 'copilot' | 'agents-conventions';
+  defaultScope: 'global' | 'project';
+  registryUrl: string;          // URL git-репозитория каталога
+  project?: string;             // Имя текущего проекта
+  aiAgents: {
+    proxy: string;              // Общий прокси-URL
+    agents: Record<AgentName, { enabled: boolean; useProxy: boolean }>;
+  };
+  history?: {
+    registryUrl: string[];      // Последние 6 URL
+    proxy: string[];            // Последние 6 прокси
+  };
 }
 ```
 
-The `extensions` array tracks which extensions should be installed for the project — enables team sync.
+**Проектный конфиг** (`.skill-hub.json`):
+```json
+{
+  "settings": { "agent": "claude-code", "defaultScope": "project" },
+  "extensions": [
+    { "type": "skill", "name": "git-commit-and-push", "version": "1.0.0", "scope": "project" }
+  ]
+}
+```
 
-### Extension Sync
+### Адаптеры агентов
 
-On TUI startup, `sync.ts` checks if extensions listed in `.skill-hub.json` are actually installed. Missing extensions trigger `ExtensionSyncDialog` offering to install them. Can also be triggered from Settings.
+Интерфейс `AgentAdapter` (`adapters/types.ts`):
 
-### Conventions Mode (agents-conventions)
+| Метод | Назначение |
+|-------|-----------|
+| `install(ext, scope)` | Копировать файлы расширения в целевую директорию |
+| `remove(ext, scope)` | Удалить файлы расширения |
+| `scanInstalled()` | Сканировать диск, найти все установленные расширения |
+| `getExtensionPath(ext, scope)` | Путь к установленному расширению |
 
-Unified `.agents/` directory for multi-agent projects:
-- `skill-hub agents-conventions enable` — creates `.agents/`, sets up symlinks from agent dirs, creates thin pointer files
-- `skill-hub agents-conventions disable` — migrates extensions back, removes symlinks
-- Init/exit flows can spawn AI agent subprocesses to execute migration skills (`init-agents`, `exit-agents`)
-- Implementation: `cli/src/conventions.ts`, TUI modals: `InitConventionsModal`, `ExitConventionsModal`
+**Директории скоупов:**
 
-### CLI Package
+| Агент | Global | Project |
+|-------|--------|---------|
+| Claude Code | `~/.claude/skills/{name}/SKILL.md` | `.claude/skills/{name}/SKILL.md` |
+| Cursor | `~/.cursor/skills/{name}/SKILL.md` | `.cursor/skills/{name}/SKILL.md` |
+| Copilot | `~/.config/Code/User/copilot-instructions.md` | `.github/copilot-instructions.md` |
+| agents-conventions | — | `.agents/skills/{name}/SKILL.md` |
 
-`cli/` contains the TypeScript source for the `@emaxe/skill-hub` npm package. Provides:
-- CLI commands: `search`, `install`, `remove`, `move`, `list`, `info`, `update`, `setup-mcp`, `config`, `agents-conventions`, `help`
-- CLI flag: `-a <agent>` — запуск AI-агента через exec, `-A` — через temp-скрипт
-- CLI flag: `-u [name]` / `-U` — сокращения для команды `update`
-- CLI flag: `--then` — цепочка двух команд (вторая запускается после завершения первой)
-- Interactive TUI: `skill-hub` with no arguments launches fullscreen UI (Ink/React)
-- MCP server (7 tools): `search_extensions`, `install_extension`, `remove_extension`, `move_extension`, `list_extensions`, `suggest_extensions`, `get_extension_info`
-- Agent adapters for Claude Code, Cursor, Copilot, and agents-conventions
-- Config: `~/.skill-hub/config.json` — fields: `agent`, `defaultScope`, `registryUrl`, `aiAgents` (proxy + per-agent settings), `history` (recent URLs/proxies)
+**Автодетекция** (`detect-agent.ts`): env vars (`CURSOR_TRACE` → cursor, `GITHUB_COPILOT` → copilot) → наличие `.cursor/` → default `claude-code`.
 
-### TUI Architecture
+### Кеш каталога
 
-Built with **Ink** (React for terminals). Key structure:
-- **Entry:** `tui/index.ts` → `App.tsx` (root component, 400+ lines)
-- **Navigation:** tab-based (Catalog / Installed / Settings) + screen stack for detail views
-- **Hooks:** `useRegistry` (central extension state), `useCatalog` (search), `useSettings`, `useBaseSetup`, `useNavigation`, `useConventionsInit/Exit`, `useTerminalSize`
-- **Screens:** `CatalogScreen`, `InstalledScreen`, `SettingsScreen` (tabs), `DetailScreen`, `InstalledDetailScreen`, `MoveScreen`, `ContentScreen` (pushed)
-- **State:** pure React hooks + single `StatusContext` for global status bar
-- **Keymap:** `keymap.ts` normalizes Russian keyboard layout to Latin for hotkeys
+- **Путь:** `~/.skill-hub/` (git-клон каталога)
+- `ensureCache()` — clone если нет, pull если нет catalog.json
+- `updateCache()` — `git pull --ff-only`
+- `resetCache()` — удалить весь кеш (при смене registryUrl)
+- `fullCatalogReset()` — resetCache + очистка списка расширений в проектном конфиге
 
-## Contributing Extensions
+### Upload в каталог
 
-Extensions (skills, agents, commands) live in the catalog repo: **github.com/emaxe/skill-hub-catalog**. See its `docs/` directory for authoring guides.
+Полный flow (`upload.ts`):
+1. `checkCatalogWriteAccess()` — `git push --dry-run` в кеш-директории
+2. `getUploadCandidates()` — расширения установленные, но не в каталоге
+3. `validateExtensionsForUpload()` — файл существует, frontmatter полный, имя в kebab-case
+4. `uploadExtensions()` — checkout main → create branch → copy files → update catalog.json → commit → push
+5. `generatePrUrl()` — URL для создания PR/MR (GitHub/GitLab)
+6. Открытие в браузере через `spawn('open', [url])`
 
-## Language
+**Важно:** в `finally` всегда `git checkout main` чтобы не сломать кеш для остального CLI.
 
-Documentation and extension content are written in Russian. Code identifiers, file paths, and technical terms remain in English.
+### Синхронизация расширений
 
-## Coding Conventions
+При старте TUI (`sync.ts → checkExtensionSync()`):
+1. Загрузить `extensions` из `.skill-hub.json`
+2. Сканировать диск через адаптер
+3. **Missing** — в конфиге, но не на диске → предложить установить
+4. **Untracked** — на диске, но не в конфиге → предложить добавить в конфиг или загрузить в каталог
 
-When modifying code in this project, follow these rules:
+### Conventions Mode
 
-1. **Keep documentation in sync with code.** When adding/removing CLI commands, MCP tools, config fields, or adapters — update the corresponding lists in this file (CLAUDE.md) and `cli/README.md`.
-2. **Add JSDoc to exported interfaces and functions.** Use Russian for comment text. Follow existing patterns: `config.ts` (section headers), `keymap.ts` (JSDoc), `conventions.ts` (numbered steps).
-3. **Comment non-obvious logic.** Complex algorithms, multi-step flows, deduplication, and scoring logic should have brief inline comments explaining "why", not "what".
-4. **Don't over-comment.** Simple getters, trivial one-liners, and self-documenting code don't need comments.
-5. **Version sync.** When bumping `package.json` version, also update version strings in `index.ts` and `mcp.ts`.
+Унифицированная `.agents/` директория для мультиагентных проектов:
+- `conventions.ts → initConventions()` — создать `.agents/`, symlinks, `AGENTS.md`
+- `conventions.ts → exitConventions()` — мигрировать расширения обратно, удалить symlinks
+- Health check: `.agents/` exists, `AGENTS.md` exists, symlinks valid
+- `generateProjectRules()` — автоанализ проекта (package.json, go.mod, etc.)
+
+## CLI: команды и флаги
+
+| Команда | Описание |
+|---------|----------|
+| `search [query]` | Поиск по каталогу. Поддерживает `type:query` |
+| `install [name]` | Установить расширение. `--scope`, `--agent`, `-y` (без подтверждения) |
+| `remove [name]` | Удалить расширение |
+| `move [name] [to]` | Переместить global ↔ project |
+| `list [agent]` | Список установленных. `--type` |
+| `info [name]` | Подробная информация |
+| `update [name]` | Обновить одно или все (`-U`) |
+| `config` | Управление конфигурацией: `set`, `get`, `reset` |
+| `setup-mcp` | Зарегистрировать MCP-сервер для агента |
+| `agents-conventions` | `enable` / `disable` режим conventions |
+| `help` | Справка по всем командам |
+
+**Специальные флаги:**
+- `-a <agent> [args...]` — запуск AI-агента через exec
+- `-A <agent> [args...]` — запуск через temp-скрипт
+- `-u [name]` / `-U` — сокращения для `update`
+- `--then` — цепочка двух команд
+
+## MCP-сервер: 7 инструментов
+
+| Tool | Назначение |
+|------|-----------|
+| `search_extensions` | Поиск. Параметры: query, agent, type, limit, offset |
+| `install_extension` | Установка. Разрешает зависимости автоматически |
+| `remove_extension` | Удаление. `delete_from_disk: false` — только из реестра |
+| `move_extension` | Перемещение global ↔ project |
+| `list_extensions` | Список установленных с фильтрами |
+| `suggest_extensions` | Рекомендации на основе контекста проекта |
+| `get_extension_info` | Полная информация + статус установки |
+
+## TUI: архитектура
+
+### Навигация
+
+- **3 таба:** Каталог (`1`) / Установленные (`2`) / Настройки (`3`)
+- **Screen stack:** `useNavigation` — push/pop вложенных экранов
+- **Глобальные хоткеи:** `Tab` (таб), `1-3` (прямой выбор), `Ctrl+Q` (выход)
+
+### Стартовая последовательность (App.tsx)
+
+4 последовательные проверки при запуске TUI:
+1. **Conventions health** — если agent=`agents-conventions`, проверить `.agents/`, symlinks
+2. **Project config** — предложить создать `.skill-hub.json` если глобальный конфиг, но есть проект
+3. **Extension sync** — missing/untracked расширения
+4. **Project conflicts** — расширения не для текущего проекта
+
+### Экраны (screens/)
+
+| Экран | Хоткеи | Назначение |
+|-------|--------|-----------|
+| CatalogScreen | `/` поиск, `i` установить, `Enter` детали | Каталог расширений |
+| InstalledScreen | `d` удалить, `m` переместить, `u` обновить, `U` все, `p` загрузить | Установленные |
+| SettingsScreen | `Tab` подвкладки, `←→` значения, `Enter` действие | Настройки |
+| UploadScreen | `Space` выбрать, `a` все, `s` scope, `b` ветка, `e` PR-заголовок | Загрузка в каталог |
+| DetailScreen | `i` установить | Карточка расширения |
+| InstalledDetailScreen | `d` удалить, `m` переместить, `u` обновить, `p` загрузить | Карточка установленного |
+| ContentScreen | `Esc` назад | Просмотр содержимого |
+| MoveScreen | `Enter` подтвердить | Перемещение скоупа |
+
+### Компоненты (components/)
+
+- **HintBar** — полоска подсказок внизу. `Hint = { key, description }`
+- **ExtensionSyncDialog** — модальный диалог синхронизации. Спиннер проверки доступа → кнопка `[p]` загрузить
+- **Confirm** — y/n подтверждение
+- **ScrollableBox** — прокручиваемый список с автопрокруткой к activeIndex
+- **TextEditModal** — редактирование длинных строк (URL, proxy) с историей
+
+### Хуки (hooks/)
+
+| Хук | Назначение |
+|-----|-----------|
+| `useRegistry` | CRUD операции с расширениями. Центральный стейт |
+| `useCatalog` | Поиск по каталогу, фильтрация, пагинация |
+| `useSettings` | Загрузка/сохранение конфига, resolveConfig() |
+| `useNavigation` | Stack навигация: pushScreen, popScreen, currentScreen |
+| `useBaseSetup` | Статус установки MCP/base-skill/self-update |
+| `useUploadAccess` | Async проверка write-доступа к каталогу (кеш) |
+| `useTerminalSize` | Размеры терминала с debounced resize |
+
+## Язык
+
+- **Документация и контент расширений** — на русском
+- **Идентификаторы, пути, технические термины** — на английском
+- **JSDoc-комментарии** — на русском
+
+## Стиль кода и паттерны
+
+### Общие правила
+
+1. **Документация синхронизирована с кодом.** При добавлении/удалении CLI-команд, MCP-инструментов, полей конфига — обновлять CLAUDE.md и README.md.
+2. **JSDoc на экспортируемых интерфейсах и функциях.** Текст на русском. Примеры: `config.ts` (заголовки секций), `keymap.ts`, `conventions.ts` (нумерованные шаги).
+3. **Комментарии для неочевидной логики.** «Почему», а не «что». Скоринг, дедупликация, multi-step flows.
+4. **Не переусердствовать.** Простые геттеры и self-documenting код не комментировать.
+5. **Версии в sync.** Bump `package.json` → обновить строки в `index.ts` и `mcp.ts`.
+
+### Ink/React паттерны
+
+- **НИКОГДА** не использовать `{stringVar && <Component>}` — пустая строка `''` это truthy `false` value. Использовать тернарный: `{stringVar ? <Component> : null}`. Иначе Ink бросает `Text string "" must be rendered inside <Text>`.
+- `false`, `null`, `undefined` безопасно возвращать из JSX. Пустая строка `''` — нет.
+- Использовать `<ScrollableBox>` для списков переменной длины.
+- `StatusContext` — единственный глобальный контекст. Тип: `setStatus(message, type)` где type: `'idle' | 'loading' | 'success' | 'error'`. Success/error авто-сбрасываются через 3 секунды.
+
+### Клавиатура
+
+- **normalizeInput()** (`keymap.ts`) — маппинг русских букв в латинские (й→q, ц→w, ...). Все хоткеи проходят через него.
+- **isCtrl()** — проверка Ctrl/Meta (Cmd на macOS).
+- Хоткей `u` занят под «обновить» в InstalledScreen. Для upload используется `p` (publish).
+
+### Git-операции
+
+- `simple-git` для всех git-операций.
+- Upload: всегда `git checkout main` в `finally` — иначе кеш сломается для остального CLI.
+- `git push --dry-run` для проверки write-доступа без модификации remote.
+- URL парсинг: HTTPS (`https://github.com/owner/repo.git`) и SSH (`git@github.com:owner/repo.git`).
+- **Нет предварительного `encodeURIComponent`** для branch/title в PR URL — `open`/`xdg-open` кодирует сам. Двойное кодирование ломает GitLab MR.
+
+### Конфигурация
+
+- `resolveConfig()` — мерджит проектный + глобальный конфиг. Проектный приоритетнее.
+- `resolveProject()` — ищет корень проекта, поднимаясь от CWD. Приоритет: агентские директории → `.skill-hub.json` → `.git`.
+- `pushHistory()` — добавляет URL/proxy в историю (max 6 записей).
+- При смене `registryUrl` — вызвать `fullCatalogReset()` (удалить кеш + очистить extensions из проектного конфига).
+
+### Тестирование
+
+- Jest, `ts-jest` для TypeScript
+- Тесты рядом с модулями: `upload.test.ts`, `git.test.ts`, `catalog.test.ts`
+- Моки: `jest.mock('simple-git')` для git-операций, `jest.mock('fs')` для файловых
+- Тест `getUploadCandidates` пропущен — требует мок адаптера без DI
