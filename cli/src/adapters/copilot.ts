@@ -35,7 +35,9 @@ export class CopilotAdapter implements AgentAdapter {
     }
     const vscodePath = process.platform === 'darwin'
       ? path.join(this.homeDir, 'Library', 'Application Support', 'Code', 'User')
-      : path.join(this.homeDir, '.config', 'Code', 'User');
+      : process.platform === 'win32'
+        ? path.join(process.env.APPDATA || path.join(this.homeDir, 'AppData', 'Roaming'), 'Code', 'User')
+        : path.join(this.homeDir, '.config', 'Code', 'User');
     return path.join(vscodePath, 'copilot-instructions.md');
   }
 

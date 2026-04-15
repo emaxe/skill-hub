@@ -8,6 +8,7 @@
  */
 import React, { useState, useCallback, useEffect } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
+import path from 'path';
 import { normalizeInput, isCtrl } from './keymap';
 import { Header, TabName } from './components/Header';
 import { HintBar, Hint } from './components/HintBar';
@@ -121,7 +122,7 @@ export const App: React.FC = () => {
           }
           const brokenSymlinks = status.symlinks.filter(s => !s.valid);
           for (const s of brokenSymlinks) {
-            const name = s.path.split('/').slice(-2).join('/');
+            const name = s.path.split(path.sep).slice(-2).join('/');
             issues.push({ label: `Битый симлинк: ${name}` });
           }
           if (issues.length > 0) {

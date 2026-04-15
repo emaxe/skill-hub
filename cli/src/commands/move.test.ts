@@ -9,8 +9,8 @@ import { moveExtension } from './move';
 let tmpDir: string;
 let homeDir: string;
 let projectDir: string;
-let origHome: string;
 let origCwd: string;
+let homedirSpy: jest.SpyInstance;
 
 const skillExt: Extension = {
   type: 'skill',
@@ -53,14 +53,14 @@ beforeEach(() => {
   projectDir = path.join(tmpDir, 'project');
   fs.mkdirSync(homeDir, { recursive: true });
   fs.mkdirSync(projectDir, { recursive: true });
-  origHome = process.env.HOME || '';
   origCwd = process.cwd();
-  process.env.HOME = homeDir;
+  // Мок os.homedir() вместо process.env.HOME — работает и на Windows (USERPROFILE)
+  homedirSpy = jest.spyOn(os, 'homedir').mockReturnValue(homeDir);
   process.chdir(projectDir);
 });
 
 afterEach(() => {
-  process.env.HOME = origHome;
+  homedirSpy.mockRestore();
   process.chdir(origCwd);
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });

@@ -5,6 +5,7 @@ import { resolveConfig, saveResolvedConfig } from './config';
 import { createRegistry } from './registry';
 import { getAdapter } from './adapters/get-adapter';
 import { AgentName, Extension } from './catalog';
+import { isWindows } from './platform';
 
 const SYMLINK_TARGETS: Array<{ dir: string; link: string; target: string }> = [
   { dir: '.claude', link: 'skills', target: path.join('..', '.agents', 'skills') },
@@ -132,7 +133,7 @@ function generateProjectRules(projectDir: string): string | null {
     const entries = fs.readdirSync(projectDir, { withFileTypes: true })
       .filter(e => !e.name.startsWith('.') && e.name !== 'node_modules')
       .slice(0, 15);
-    const dirs = entries.filter(e => e.isDirectory()).map(e => e.name + '/');
+    const dirs = entries.filter(e => e.isDirectory()).map(e => e.name + path.sep);
     if (dirs.length > 0) {
       sections.push('## Структура проекта\n');
       sections.push('```');
@@ -334,6 +335,45 @@ function installBootstrapSkills(
   }
 }
 
+/**
+ * Создаёт симлинк кроссплатформенно.
+ * Стратегия fallback на Windows: symlink('dir') → junction (не требует admin-прав) → копирование.
+ * @param target - относительный путь-цель симлинка
+ * @param linkPath - путь создаваемого симлинка
+ * @param baseDir - базовая директория для resolve абсолютного пути (нужен для junction)
+ */
+function createSymlinkCrossPlatform(target: string, linkPath: string, baseDir: string): void {
+  fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+
+  if (!isWindows) {
+    fs.symlinkSync(target, linkPath);
+    return;
+  }
+
+  // Windows: попытка symlink с типом 'dir'
+  try {
+    fs.symlinkSync(target, linkPath, 'dir');
+    return;
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code !== 'EPERM') throw err;
+  }
+
+  // Fallback: junction (не требует admin-прав, но нужен абсолютный путь)
+  try {
+    const absTarget = path.resolve(baseDir, target);
+    fs.symlinkSync(absTarget, linkPath, 'junction');
+    return;
+  } catch {
+    // junction тоже не удался — копируем
+  }
+
+  // Последний fallback: копирование директории
+  const absTarget = path.resolve(baseDir, target);
+  if (fs.existsSync(absTarget)) {
+    fs.cpSync(absTarget, linkPath, { recursive: true });
+  }
+}
+
 export async function enableConventions(projectDir: string = process.cwd()): Promise<EnableConventionsResult> {
   const { config, source, projectRoot } = resolveConfig();
 
@@ -418,9 +458,9 @@ export async function enableConventions(projectDir: string = process.cwd()): Pro
     if (fs.existsSync(linkPath)) {
       const stat = fs.lstatSync(linkPath);
       if (stat.isSymbolicLink()) {
-        // Уже симлинк — проверяем target
+        // Уже симлинк — проверяем target (нормализуем для кроссплатформенности)
         const currentTarget = fs.readlinkSync(linkPath);
-        if (currentTarget === s.target) continue; // уже корректный
+        if (path.normalize(currentTarget) === path.normalize(s.target)) continue; // уже корректный
         fs.unlinkSync(linkPath);
       } else if (stat.isDirectory()) {
         // Обычная директория — мигрируем содержимое в соответствующую .agents/ поддиректорию
@@ -436,7 +476,7 @@ export async function enableConventions(projectDir: string = process.cwd()): Pro
       }
     }
 
-    fs.symlinkSync(s.target, linkPath);
+    createSymlinkCrossPlatform(s.target, linkPath, path.dirname(linkPath));
   }
 
   // 4. Создание тонких указателей (если не существуют)

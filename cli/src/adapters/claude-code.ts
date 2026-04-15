@@ -7,6 +7,7 @@ import path from 'path';
 import os from 'os';
 import { Extension, ExtensionType } from '../catalog';
 import { AgentAdapter, ScanResult } from './types';
+import { pathsEqual } from '../platform';
 
 export class ClaudeCodeAdapter implements AgentAdapter {
   agentName = 'claude-code' as const;
@@ -113,7 +114,8 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     const seen = new Set(results.map(r => `${r.type}:${r.name}`));
     let dir = path.dirname(projectNorm);
 
-    while (dir !== homeNorm && dir !== path.dirname(dir)) {
+    // pathsEqual — case-insensitive на Windows (C:\Users\John ≠ c:\users\john)
+    while (!pathsEqual(dir, homeNorm) && dir !== path.dirname(dir)) {
       const base = path.join(dir, '.claude');
 
       const skillsDir = path.join(base, 'skills');

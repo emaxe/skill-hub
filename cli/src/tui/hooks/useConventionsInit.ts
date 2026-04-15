@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { spawn } from 'child_process';
 import { enableConventions } from '../../conventions';
 import { AiAgentsConfig } from '../../config';
+import { isWindows } from '../../platform';
 
 export type ConventionsInitStep = 'idle' | 'enabling' | 'selectAgent' | 'running' | 'done' | 'error';
 
@@ -90,7 +91,7 @@ export function useConventionsInit(): UseConventionsInitResult {
 
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn(binary, args, { stdio: 'pipe', env });
+      child = spawn(binary, args, { stdio: 'pipe', env, shell: isWindows });
       childRef.current = child;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -131,7 +132,8 @@ export function useConventionsInit(): UseConventionsInitResult {
 
   const cancel = useCallback(() => {
     if (childRef.current) {
-      childRef.current.kill('SIGTERM');
+      // На Windows kill() без аргумента вызывает TerminateProcess()
+      childRef.current.kill();
       childRef.current = null;
     }
     setStep('idle');
