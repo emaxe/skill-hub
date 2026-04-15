@@ -9,6 +9,7 @@
  * - Загрузка (Enter) — валидация → commit → push → ссылка PR
  */
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { spawn } from 'child_process';
 import { Box, Text, useInput } from 'ink';
 import { normalizeInput } from '../keymap';
 import { HintBar, Hint } from '../components/HintBar';
@@ -212,6 +213,14 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({
     }
   }, [candidates, selected, branchName, prTitle, agent, setStatus]);
 
+  // Открыть URL в браузере (кроссплатформенно)
+  const openUrl = useCallback((url: string) => {
+    const cmd = process.platform === 'darwin' ? 'open'
+      : process.platform === 'win32' ? 'start'
+      : 'xdg-open';
+    spawn(cmd, [url], { detached: true, stdio: 'ignore' }).unref();
+  }, []);
+
   // Клавиатурный ввод
   useInput((input, inputKey) => {
     if (phase === 'uploading') return;
@@ -241,9 +250,10 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({
 
     if (showConfirm) return;
 
-    // Фаза done/error — только Esc
+    // Фаза done/error — только Esc и o (открыть URL)
     if (phase === 'done' || phase === 'error') {
       if (inputKey.escape) onBack();
+      if (phase === 'done' && resultUrl && normalizeInput(input) === 'o') openUrl(resultUrl);
       return;
     }
 
@@ -357,7 +367,10 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({
         )}
 
         <Box marginTop={1}>
-          <HintBar hints={[{ key: 'Esc', description: 'назад' }]} />
+          <HintBar hints={[
+            ...(phase === 'done' && resultUrl ? [{ key: 'o', description: 'перейти к созданию merge request' }] : []),
+            { key: 'Esc', description: 'назад' },
+          ]} />
         </Box>
       </Box>
     );
