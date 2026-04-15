@@ -53,3 +53,55 @@ test('isInstalled: true после install, false после remove', async () =
   await adapter.remove(mockSkill, 'project');
   expect(adapter.isInstalled(mockSkill, 'project')).toBe(false);
 });
+
+describe('Copilot Adapter Windows path', () => {
+  const ORIGINAL_PLATFORM = process.platform;
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: ORIGINAL_PLATFORM });
+    delete process.env.APPDATA;
+  });
+
+  test('getInstallPath global на win32 использует APPDATA', () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    process.env.APPDATA = path.join(tmpHome, 'AppData', 'Roaming');
+
+    let CopilotAdapterWin: typeof CopilotAdapter;
+    jest.isolateModules(() => {
+      CopilotAdapterWin = require('./copilot').CopilotAdapter;
+    });
+
+    const adapter = new CopilotAdapterWin!(tmpProject, tmpHome);
+    const installPath = adapter.getInstallPath(mockSkill, 'global');
+    expect(installPath).toContain(path.join('AppData', 'Roaming', 'Code', 'User'));
+  });
+
+  test('getInstallPath global на win32 без APPDATA использует fallback', () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    delete process.env.APPDATA;
+
+    let CopilotAdapterWin: typeof CopilotAdapter;
+    jest.isolateModules(() => {
+      CopilotAdapterWin = require('./copilot').CopilotAdapter;
+    });
+
+    const adapter = new CopilotAdapterWin!(tmpProject, tmpHome);
+    const installPath = adapter.getInstallPath(mockSkill, 'global');
+    expect(installPath).toBe(
+      path.join(tmpHome, 'AppData', 'Roaming', 'Code', 'User', 'copilot-instructions.md')
+    );
+  });
+
+  test('getInstallPath global на darwin использует Library', () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+
+    let CopilotAdapterMac: typeof CopilotAdapter;
+    jest.isolateModules(() => {
+      CopilotAdapterMac = require('./copilot').CopilotAdapter;
+    });
+
+    const adapter = new CopilotAdapterMac!(tmpProject, tmpHome);
+    const installPath = adapter.getInstallPath(mockSkill, 'global');
+    expect(installPath).toContain(path.join('Library', 'Application Support', 'Code', 'User'));
+  });
+});

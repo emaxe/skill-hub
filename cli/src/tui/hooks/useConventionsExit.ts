@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import { disableConventions } from '../../conventions';
 import { AgentName } from '../../catalog';
 import { AiAgentsConfig } from '../../config';
+import { isWindows } from '../../platform';
 
 export type ConventionsExitStep = 'idle' | 'selectAgent' | 'running' | 'disabling' | 'done' | 'error';
 
@@ -93,7 +94,7 @@ export function useConventionsExit(): UseConventionsExitResult {
 
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn(binary, args, { stdio: 'pipe', env });
+      child = spawn(binary, args, { stdio: 'pipe', env, shell: isWindows });
       childRef.current = child;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -134,7 +135,8 @@ export function useConventionsExit(): UseConventionsExitResult {
 
   const cancel = useCallback(() => {
     if (childRef.current) {
-      childRef.current.kill('SIGTERM');
+      // На Windows kill() без аргумента вызывает TerminateProcess()
+      childRef.current.kill();
       childRef.current = null;
     }
     setStep('idle');

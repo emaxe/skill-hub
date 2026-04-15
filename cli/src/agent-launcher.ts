@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import chalk from 'chalk';
 import { resolveConfig } from './config';
+import { isWindows } from './platform';
 
 const AGENT_BINARIES: Record<string, string> = {
   'claude-code': 'claude',
@@ -48,6 +49,16 @@ function prepareEnv(agentName: string): [NodeJS.ProcessEnv, string | null] {
  * В ps виден только агент, не node.
  */
 function launchExec(binary: string, extraArgs: string[], env: NodeJS.ProcessEnv): never {
+  if (isWindows) {
+    // Windows: запуск через shell для корректного поиска бинарника в PATH
+    const result = spawnSync(binary, extraArgs, {
+      stdio: 'inherit',
+      env,
+      shell: true,
+    });
+    process.exit(result.status ?? 1);
+  }
+
   const result = spawnSync('sh', ['-c', 'exec "$0" "$@"', binary, ...extraArgs], {
     stdio: 'inherit',
     env,
@@ -61,6 +72,10 @@ function launchExec(binary: string, extraArgs: string[], env: NodeJS.ProcessEnv)
  * Скрипт самоудаляется после запуска. Полезно для отладки.
  */
 function launchScript(binary: string, extraArgs: string[], env: NodeJS.ProcessEnv, proxyUrl: string | null): never {
+  if (isWindows) {
+    return launchScriptWindows(binary, extraArgs, env, proxyUrl);
+  }
+
   const scriptName = `skill-hub-launch-${process.pid}.sh`;
   const scriptPath = path.join(os.tmpdir(), scriptName);
 
@@ -88,6 +103,43 @@ function launchScript(binary: string, extraArgs: string[], env: NodeJS.ProcessEn
   });
 
   // На случай если скрипт не смог самоудалиться
+  try { fs.unlinkSync(scriptPath); } catch {}
+
+  process.exit(result.status ?? 1);
+}
+
+/**
+ * Windows-вариант script-режима: генерирует .bat файл для cmd.exe.
+ * Скрипт самоудаляется через `del "%~f0"`.
+ */
+function launchScriptWindows(binary: string, extraArgs: string[], env: NodeJS.ProcessEnv, proxyUrl: string | null): never {
+  const scriptName = `skill-hub-launch-${process.pid}.bat`;
+  const scriptPath = path.join(os.tmpdir(), scriptName);
+
+  const lines: string[] = ['@echo off'];
+
+  if (proxyUrl) {
+    lines.push(`set "http_proxy=${proxyUrl}"`);
+    lines.push(`set "https_proxy=${proxyUrl}"`);
+    lines.push(`set "all_proxy=${proxyUrl}"`);
+  }
+
+  // Запуск бинарника, %* — все аргументы
+  lines.push(`"${binary}" %*`);
+  // Самоудаление скрипта
+  lines.push('del "%~f0"');
+
+  // .bat требует CRLF
+  fs.writeFileSync(scriptPath, lines.join('\r\n') + '\r\n');
+
+  console.log(chalk.gray(`Скрипт: ${scriptPath}`));
+
+  const result = spawnSync('cmd.exe', ['/c', scriptPath, ...extraArgs], {
+    stdio: 'inherit',
+    env,
+  });
+
+  // Fallback удаление если скрипт не смог самоудалиться
   try { fs.unlinkSync(scriptPath); } catch {}
 
   process.exit(result.status ?? 1);
