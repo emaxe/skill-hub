@@ -394,12 +394,12 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({
         <Text color={theme.accent}>{branchName.length > 30 ? branchName.slice(0, 30) + '…' : branchName}</Text>
       </Box>
 
-      {prTitle && (
+      {prTitle ? (
         <Box>
           <Text color={theme.muted}>PR: </Text>
           <Text color={theme.secondary}>{prTitle.length > 50 ? prTitle.slice(0, 50) + '…' : prTitle}</Text>
         </Box>
-      )}
+      ) : null}
 
       <Box marginTop={1} flexDirection="column">
         <Text color={theme.muted} dimColor>{'─'.repeat(50)}</Text>
