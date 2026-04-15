@@ -9,9 +9,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { AgentName } from '../../catalog';
-import { SkillHubConfig, AiAgentsConfig, ConfigSource, pushHistory, resolveProject, ResolvedProject } from '../../config';
+import { SkillHubConfig, AiAgentsConfig, ConfigSource, pushHistory, resolveProject, ResolvedProject, loadProjectExtensions } from '../../config';
 import { useStatus } from '../contexts/StatusContext';
-import { getCachePath, isCloned, resetCache, updateCache } from '../../git';
+import { getCachePath, isCloned, resetCache, fullCatalogReset, updateCache, ensureCache } from '../../git';
 import { HintBar } from '../components/HintBar';
 import { SubTabBar } from '../components/SubTabBar';
 import { theme } from '../theme';
@@ -24,6 +24,7 @@ import { checkExtensionSync } from '../../sync';
 import { checkProjectConflicts, ProjectConflict } from '../../sync';
 import { GeneralTab, AiAgentsTab, SetupTab } from './settings';
 import { ScrollableBox } from '../components/ScrollableBox';
+import { Confirm } from '../components/Confirm';
 
 const AGENTS: AgentName[] = ['claude-code', 'cursor', 'copilot', 'agents-conventions'];
 const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
@@ -80,6 +81,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   const [activeField, setActiveField] = useState<Field>('agent');
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>('general');
   const [editModal, setEditModal] = useState<'registryUrl' | 'aiProxy' | 'project' | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [pendingRegistryUrl, setPendingRegistryUrl] = useState<string | null>(null);
+  const [pendingResetContext, setPendingResetContext] = useState<'settings' | 'editModal' | null>(null);
+  const [pendingExtCount, setPendingExtCount] = useState(0);
 
   const cachePath = getCachePath();
   const cacheInstalled = isCloned(cachePath);
@@ -93,12 +98,27 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   const setup = useBaseSetup(localAgent);
   const [cacheUpdateState, setCacheUpdateState] = useState<InstallState>('idle');
 
+  /** Сброс кеша + автоматическая загрузка нового каталога */
+  const resetAndRedownload = () => {
+    fullCatalogReset();
+    setCacheUpdateState('loading');
+    ensureCache()
+      .then(() => {
+        setCacheUpdateState('success');
+        setStatus('Каталог загружен из нового URL', 'success');
+      })
+      .catch(() => {
+        setCacheUpdateState('error');
+        setStatus('Ошибка загрузки каталога', 'error');
+      });
+  };
+
   // Динамический список полей: зависит от подвкладки, агента, статуса setup и config source
   const fields = useMemo<Field[]>(() => {
     switch (activeSubTab) {
       case 'general': {
         const f: Field[] = ['agent', 'scope', 'project', 'registryUrl'];
-        if (cacheInstalled) f.push('updateCache');
+        f.push('updateCache');
         if (configSource === 'project') {
           f.push('saveAsGlobal', 'resetToGlobal', 'syncExtensions');
         } else if (hasProjectRoot) {
@@ -139,7 +159,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
 
   // --- Обработка клавиатуры: Tab(подвкладки), ↑↓(поле), ←→(значение), Enter(действие/сохранение) ---
   useInput((input, key) => {
-    if (showModal || editModal) return;
+    if (showModal || editModal || showResetConfirm) return;
 
     if (key.tab) {
       const idx = SETTINGS_SUBTABS.indexOf(activeSubTab);
@@ -312,10 +332,20 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         return;
       }
       const urlChanged = localRegistryUrl !== config.registryUrl;
+      if (urlChanged) {
+        const extCount = loadProjectExtensions().length;
+        if (extCount > 0) {
+          setPendingRegistryUrl(localRegistryUrl);
+          setPendingExtCount(extCount);
+          setPendingResetContext('settings');
+          setShowResetConfirm(true);
+          return;
+        }
+      }
       updateConfig({ agent: localAgent, defaultScope: localScope, registryUrl: localRegistryUrl, aiAgents: localAiAgents });
       if (urlChanged) {
-        resetCache();
-        setStatus('Настройки сохранены. Кэш сброшен.', 'success');
+        resetAndRedownload();
+        setStatus('Настройки сохранены. Загрузка каталога...', 'success');
       } else {
         setStatus('Настройки сохранены', 'success');
       }
@@ -332,6 +362,41 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     || activeField === 'createProjectConfig'
     || activeField === 'syncExtensions'
     || activeField === 'checkProjectConflicts';
+
+  if (showResetConfirm && pendingRegistryUrl !== null) {
+    return (
+      <Box flexDirection="column" padding={2}>
+        <Confirm
+          message={`Смена каталога очистит список расширений в .skill-hub.json (${pendingExtCount} шт.). Файлы на диске останутся. Продолжить?`}
+          onConfirm={() => {
+            setShowResetConfirm(false);
+            if (pendingResetContext === 'settings') {
+              updateConfig({ agent: localAgent, defaultScope: localScope, registryUrl: pendingRegistryUrl, aiAgents: localAiAgents });
+              resetAndRedownload();
+              setStatus('Настройки сохранены. Загрузка каталога...', 'success');
+            } else {
+              const newHistory = {
+                ...config.history,
+                registryUrl: pushHistory(config.history?.registryUrl, config.registryUrl),
+              };
+              updateConfig({ ...config, agent: localAgent, defaultScope: localScope, registryUrl: pendingRegistryUrl, aiAgents: localAiAgents, history: newHistory });
+              resetAndRedownload();
+              setStatus('Registry URL обновлён. Загрузка каталога...', 'success');
+            }
+            setPendingRegistryUrl(null);
+            setPendingResetContext(null);
+          }}
+          onCancel={() => {
+            setShowResetConfirm(false);
+            setLocalRegistryUrl(config.registryUrl);
+            setPendingRegistryUrl(null);
+            setPendingResetContext(null);
+            setStatus('Смена каталога отменена', 'idle');
+          }}
+        />
+      </Box>
+    );
+  }
 
   if (showModal) {
     const enabledAgents = (['claude-code', 'cursor', 'copilot'] as const)
@@ -412,10 +477,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
                 ...config.history,
                 registryUrl: pushHistory(config.history?.registryUrl, currentValue),
               };
+              if (urlChanged) {
+                const extCount = loadProjectExtensions().length;
+                if (extCount > 0) {
+                  setPendingRegistryUrl(newValue);
+                  setPendingExtCount(extCount);
+                  setPendingResetContext('editModal');
+                  setShowResetConfirm(true);
+                  setEditModal(null);
+                  return;
+                }
+              }
               updateConfig({ ...config, agent: localAgent, defaultScope: localScope, registryUrl: newValue, aiAgents: localAiAgents, history: newHistory });
               if (urlChanged) {
-                resetCache();
-                setStatus('Registry URL обновлён. Кэш сброшен.', 'success');
+                resetAndRedownload();
+                setStatus('Registry URL обновлён. Загрузка каталога...', 'success');
               } else {
                 setStatus('Registry URL сохранён', 'success');
               }

@@ -2,7 +2,7 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import simpleGit from 'simple-git';
-import { resolveConfig } from './config';
+import { resolveConfig, loadProjectExtensions, saveProjectExtensions, findProjectRoot } from './config';
 
 export function getRegistryUrl(): string {
   return resolveConfig().config.registryUrl;
@@ -21,6 +21,23 @@ export function resetCache(cachePath = getCachePath()): void {
   if (fs.existsSync(cachePath)) {
     fs.rmSync(cachePath, { recursive: true, force: true });
   }
+}
+
+/**
+ * Полный сброс при смене каталога: очищает массив extensions в .skill-hub.json
+ * (если проект найден), затем удаляет кеш каталога.
+ * Ошибки при очистке конфига выводят warning, но не блокируют сброс кеша.
+ */
+export function fullCatalogReset(cachePath = getCachePath()): void {
+  try {
+    const extensions = loadProjectExtensions();
+    if (extensions.length > 0) {
+      saveProjectExtensions([]);
+    }
+  } catch (err: any) {
+    console.warn(`⚠  Не удалось очистить extensions в .skill-hub.json: ${err.message || err}`);
+  }
+  resetCache(cachePath);
 }
 
 /**

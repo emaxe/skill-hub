@@ -10,6 +10,7 @@ import { readExtensionContent } from '../utils/readExtensionContent';
 import { ScrollableBox } from '../components/ScrollableBox';
 import { useStatus } from '../contexts/StatusContext';
 import { theme } from '../theme';
+import { ScanResult } from '../../adapters/types';
 
 export interface InstalledDetailScreenProps {
   entry: InstalledEntry;
@@ -23,14 +24,19 @@ export interface InstalledDetailScreenProps {
   onOpenContent: (title: string, content: string) => void;
   viewHeight: number;
   inputActive?: boolean;
+  /** Есть ли write-доступ к каталогу */
+  hasUploadAccess?: boolean;
+  /** Открыть экран загрузки с предвыбранным расширением */
+  onOpenUpload?: (preselected?: ScanResult[]) => void;
 }
 
-type Action = 'delete' | 'move' | 'update' | 'register';
+type Action = 'delete' | 'move' | 'update' | 'register' | 'upload';
 
 const SEP = <Text color={theme.muted} dimColor>{'─'.repeat(40)}</Text>;
 
 export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
   entry, agent, onBack, remove, move, update, install, defaultScope, onOpenContent, viewHeight, inputActive,
+  hasUploadAccess, onOpenUpload,
 }) => {
   const { catalog } = useCatalog();
   const { setStatus } = useStatus();
@@ -60,8 +66,12 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
     if (isManualWithCatalog) {
       list.push({ id: 'register', label: 'Установить из skill-hub (зарегистрировать)' });
     }
+    // Действие «Загрузить в каталог» — только если расширения нет в каталоге и есть доступ
+    if (!catalogExt && hasUploadAccess && onOpenUpload) {
+      list.push({ id: 'upload', label: 'Загрузить в каталог' });
+    }
     return list;
-  }, [entry.scope, entry.source, isManualWithCatalog, catalogExt, isParent, agent]);
+  }, [entry.scope, entry.source, isManualWithCatalog, catalogExt, isParent, agent, hasUploadAccess, onOpenUpload]);
 
   const makeExt = (): Extension => ({
     type: entry.type, name: entry.name,
@@ -108,6 +118,11 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
         install(catalogExt, agent, defaultScope)
           .then(() => { setStatus(`Зарегистрировано: ${entry.name}`, 'success'); onBack(); })
           .catch((err: unknown) => setStatus(String(err), 'error'));
+        return;
+      }
+      if (action === 'upload' && onOpenUpload) {
+        const preselected: ScanResult[] = [{ type: entry.type, name: entry.name, scope: entry.scope as 'global' | 'project', path: entry.path }];
+        onOpenUpload(preselected);
         return;
       }
     }

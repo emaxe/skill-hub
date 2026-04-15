@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { TabName } from '../components/Header';
 
-export type Screen = 'catalog' | 'installed' | 'settings' | 'detail' | 'move' | 'installedDetail' | 'contentView';
+export type Screen = 'catalog' | 'installed' | 'settings' | 'detail' | 'move' | 'installedDetail' | 'contentView' | 'upload';
 
 export interface NavigationState {
   activeTab: TabName;
