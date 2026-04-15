@@ -33,6 +33,8 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+Object.defineProperty(exports, "__esModule", { value: true });
+const system_check_1 = require("./system-check");
 /**
  * Транслирует сокращения -u / -U в команду update.
  * -u [name] → update [name]
@@ -143,6 +145,11 @@ async function executeArgs(argv) {
 }
 // Точка входа: поддержка --then для цепочки команд
 (async () => {
+    // Проверка системных зависимостей перед любыми командами
+    const depErrors = (0, system_check_1.checkSystemDependencies)();
+    if ((0, system_check_1.printDependencyErrors)(depErrors)) {
+        process.exit(1);
+    }
     const thenIdx = process.argv.indexOf('--then');
     try {
         if (thenIdx !== -1) {

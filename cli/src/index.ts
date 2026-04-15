@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { checkSystemDependencies, printDependencyErrors } from './system-check';
+
 /**
  * Транслирует сокращения -u / -U в команду update.
  * -u [name] → update [name]
@@ -120,6 +122,12 @@ async function executeArgs(argv: string[]): Promise<void> {
 
 // Точка входа: поддержка --then для цепочки команд
 (async () => {
+  // Проверка системных зависимостей перед любыми командами
+  const depErrors = checkSystemDependencies();
+  if (printDependencyErrors(depErrors)) {
+    process.exit(1);
+  }
+
   const thenIdx = process.argv.indexOf('--then');
   try {
     if (thenIdx !== -1) {
