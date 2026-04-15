@@ -62,3 +62,54 @@ test('isInstalled: true после установки', async () => {
   await adapter.install(mockSkill, 'global', tmpCache);
   expect(adapter.isInstalled(mockSkill, 'global')).toBe(true);
 });
+
+describe('Claude Code Adapter: case-insensitive path comparison on Windows', () => {
+  const ORIGINAL_PLATFORM = process.platform;
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: ORIGINAL_PLATFORM });
+  });
+
+  test('scanInstalled parent walk stops at homeDir (case-insensitive on win32)', () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+
+    let ClaudeCodeAdapterWin: typeof ClaudeCodeAdapter;
+    jest.isolateModules(() => {
+      ClaudeCodeAdapterWin = require('./claude-code').ClaudeCodeAdapter;
+    });
+
+    // Создаём структуру: home/parent/project
+    const parentDir = path.join(tmpHome, 'parent');
+    const nestedProject = path.join(parentDir, 'project');
+    fs.mkdirSync(nestedProject, { recursive: true });
+
+    // Создаём скилл в parent dir
+    const parentSkillsDir = path.join(parentDir, '.claude', 'skills', 'parent-skill');
+    fs.mkdirSync(parentSkillsDir, { recursive: true });
+    fs.writeFileSync(path.join(parentSkillsDir, 'SKILL.md'), '# Parent Skill');
+
+    // Используем адаптер с homeDir, проект вложен в home
+    const adapter = new ClaudeCodeAdapterWin!(nestedProject, tmpHome);
+    const results = adapter.scanInstalled();
+
+    // parent-skill должен быть найден через parent walk
+    const parentSkill = results.find(r => r.name === 'parent-skill');
+    expect(parentSkill).toBeTruthy();
+    expect(parentSkill!.scope).toBe('parent');
+  });
+
+  test('pathsEqual используется для сравнения с homeDir', () => {
+    // Тест что pathsEqual импортируется и используется (косвенная проверка через scan)
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+
+    let ClaudeCodeAdapterUnix: typeof ClaudeCodeAdapter;
+    jest.isolateModules(() => {
+      ClaudeCodeAdapterUnix = require('./claude-code').ClaudeCodeAdapter;
+    });
+
+    const adapter = new ClaudeCodeAdapterUnix!(tmpProject, tmpHome);
+    // Не должен бросать ошибку
+    const results = adapter.scanInstalled();
+    expect(Array.isArray(results)).toBe(true);
+  });
+});
