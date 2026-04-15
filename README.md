@@ -16,6 +16,31 @@ Skill-Hub автоматически определяет активного а�
 skill-hub config set agent cursor
 ```
 
+## Поддерживаемые платформы
+
+| ОС | Статус | Примечания |
+|----|--------|-----------|
+| **macOS** | Полная поддержка | — |
+| **Linux** | Полная поддержка | — |
+| **Windows** | Полная поддержка | cmd.exe, PowerShell, Windows Terminal |
+
+### Windows
+
+```powershell
+npm install -g @emaxe/skill-hub
+```
+
+Особенности работы на Windows:
+
+| Компонент | Поведение |
+|-----------|-----------|
+| Запуск агентов `-A` | Генерирует `.bat`-скрипт (CRLF) вместо `.sh`; самоудаляется через `del "%~f0"` |
+| Copilot-адаптер | Ищет конфиг VS Code в `%APPDATA%\Code\User\` |
+| `agents-conventions enable` | Создаёт symlinks типа `dir` → fallback `junction` → fallback копирование директории |
+| Сравнение путей | Case-insensitive (актуально для Claude Code адаптера) |
+
+> **Примечание:** Git Bash и WSL не являются целевой платформой. Рекомендуется нативный Windows.
+
 ## Что такое расширения?
 
 Skill-Hub управляет тремя типами расширений:

@@ -39,6 +39,8 @@ cli/
 │   ├── upload.ts             # Загрузка расширений в каталог (git push + PR URL)
 │   ├── sync.ts               # Синхронизация расширений: missing/untracked detection
 │   ├── conventions.ts        # Режим agents-conventions: init/exit/health
+│   ├── platform.ts           # Платформенный хелпер: isWindows, isMac, isLinux, getAppData()
+│   ├── agent-launcher.ts     # Запуск AI-агентов: exec (-a) и script (-A) режимы
 │   ├── detect-agent.ts       # Автодетекция агента по env vars / директориям
 │   ├── keymap.ts             # Нормализация русской раскладки → латинская для хоткеев
 │   ├── adapters/             # Адаптеры агентов (claude-code, cursor, copilot, conventions)
@@ -328,3 +330,22 @@ interface SkillHubConfig {
 - Тесты рядом с модулями: `upload.test.ts`, `git.test.ts`, `catalog.test.ts`
 - Моки: `jest.mock('simple-git')` для git-операций, `jest.mock('fs')` для файловых
 - Тест `getUploadCandidates` пропущен — требует мок адаптера без DI
+
+### Windows и кроссплатформенность
+
+Для платформо-зависимого кода использовать хелпер `platform.ts`:
+
+```typescript
+import { isWindows, isMac, isLinux, getAppData } from './platform';
+```
+
+**Ключевые правила:**
+
+- **Никогда не использовать** `process.platform === 'win32'` inline — только через `isWindows` из `platform.ts`
+- **Agent Launcher** (`agent-launcher.ts`): на Windows генерирует `.bat` с CRLF (`\r\n`), `@echo off`, `set VAR=value`, самоудаление через `del "%~f0"`
+- **Symlinks** (`conventions.ts`): стратегия `dir` → `junction` → fallback-копирование при `EPERM`
+- **Сравнение путей**: использовать `pathsEqual()` из `platform.ts` — case-insensitive на Windows
+- **Сигналы**: `child.kill()` без аргумента (не `SIGTERM`) — на Windows `SIGTERM` не поддерживается
+- **Spawn**: добавлять `shell: true` при `isWindows` для корректного поиска бинарников в PATH
+- **Пути**: всегда `path.join()`, `path.sep`, `path.basename()` — никогда не хардкодить `/` или `\\`
+- **Тесты**: мокать `process.platform` через `jest.replaceProperty(process, 'platform', 'win32')`; мокать `os.homedir()` вместо `process.env.HOME`

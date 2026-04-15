@@ -5,6 +5,16 @@
 ## [0.1.9] — 2026-04-15
 
 ### Добавлено
+- **Поддержка Windows** — нативная работа CLI на Windows (cmd.exe, PowerShell, Windows Terminal)
+  - Хелпер `platform.ts` — `isWindows`, `isMac`, `isLinux`, `getAppData()`
+  - Agent Launcher (`-a` / `-A`): генерация `.bat`-скриптов с CRLF вместо `.sh`
+  - Conventions symlinks: тип `dir` → fallback `junction` → fallback копирование директории
+  - Copilot-адаптер: путь VS Code конфига через `%APPDATA%\Code\User\` на Windows
+  - Claude Code адаптер: case-insensitive сравнение путей (`pathsEqual()`)
+  - `kill()` без `SIGTERM` в хуках conventions (SIGTERM не поддерживается на Windows)
+  - `shell: true` при запуске процессов на Windows
+  - Кроссплатформенный разбор путей через `path.basename()` / `path.dirname()`
+  - Unit-тесты с моком `process.platform = 'win32'` для всех изменённых модулей
 - **Загрузка расширений в каталог** — экран `UploadScreen` для выбора, валидации и push расширений в репозиторий каталога
   - Проверка write-доступа к каталогу (`git push --dry-run`)
   - Валидация frontmatter (name, description, version, author, kebab-case)
