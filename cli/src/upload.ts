@@ -414,16 +414,20 @@ export function generatePrUrl(
     };
   }
 
-  const encTitle = encodeURIComponent(title);
-  const encBody = encodeURIComponent(body);
+  // Для GitLab и GitHub не используем encodeURIComponent — macOS open и xdg-open
+  // сами кодируют спецсимволы. Предварительное кодирование вызывает двойное
+  // энкодирование: %2F → %252F, и GitLab получает несуществующую ветку.
+  // Заменяем только символы, которые реально ломают структуру URL.
+  const safeTitle = title.replace(/[#&?]/g, encodeURIComponent as any);
+  const safeBody = body.replace(/[#&?]/g, encodeURIComponent as any);
 
   if (platform === 'github') {
-    const url = `https://${parsed.host}/${parsed.owner}/${parsed.repo}/compare/main...${branch}?expand=1&title=${encTitle}&body=${encBody}`;
+    const url = `https://${parsed.host}/${parsed.owner}/${parsed.repo}/compare/main...${branch}?expand=1&title=${safeTitle}&body=${safeBody}`;
     return { platform, url, instruction: 'Откройте ссылку для создания Pull Request на GitHub.' };
   }
 
   if (platform === 'gitlab') {
-    const url = `https://${parsed.host}/${parsed.owner}/${parsed.repo}/-/merge_requests/new?merge_request[source_branch]=${encodeURIComponent(branch)}&merge_request[title]=${encTitle}`;
+    const url = `https://${parsed.host}/${parsed.owner}/${parsed.repo}/-/merge_requests/new?merge_request[source_branch]=${branch}&merge_request[title]=${safeTitle}`;
     return { platform, url, instruction: 'Откройте ссылку для создания Merge Request на GitLab.' };
   }
 
