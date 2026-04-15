@@ -372,10 +372,7 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({
     { key: '↑↓', description: 'навигация' },
     { key: 'Space', description: 'выбрать' },
     { key: 'a', description: 'все' },
-    { key: 's', description: `scope: ${scope}` },
     { key: 'c', description: 'содержимое' },
-    { key: 'b', description: 'ветка' },
-    { key: 'e', description: 'заголовок PR' },
     ...(selected.size > 0 ? [{ key: 'Enter', description: 'загрузить' }] : []),
     { key: 'Esc', description: 'назад' },
   ];
@@ -385,18 +382,22 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({
       <Text bold color={theme.primary}>Загрузка расширений в каталог</Text>
 
       <Box marginTop={1} flexDirection="row">
-        <Text color={theme.muted}>Scope: </Text>
+        <Text color={theme.muted}>Scope </Text>
         <Text color={theme.warning} bold>[s]</Text>
-        <Text color={theme.muted}> </Text>
+        <Text color={theme.muted}>: </Text>
         <Text color={scope === 'project' ? theme.warning : theme.success} bold>{scope}</Text>
         <Text color={theme.muted}>  │  </Text>
-        <Text color={theme.muted}>Ветка: </Text>
+        <Text color={theme.muted}>Ветка </Text>
+        <Text color={theme.warning} bold>[b]</Text>
+        <Text color={theme.muted}>: </Text>
         <Text color={theme.accent}>{branchName.length > 30 ? branchName.slice(0, 30) + '…' : branchName}</Text>
       </Box>
 
       {prTitle ? (
         <Box>
-          <Text color={theme.muted}>PR: </Text>
+          <Text color={theme.muted}>PR </Text>
+          <Text color={theme.warning} bold>[e]</Text>
+          <Text color={theme.muted}>: </Text>
           <Text color={theme.secondary}>{prTitle.length > 50 ? prTitle.slice(0, 50) + '…' : prTitle}</Text>
         </Box>
       ) : null}
