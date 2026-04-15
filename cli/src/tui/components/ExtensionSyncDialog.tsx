@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import { theme } from '../theme';
 import { ProjectExtensionRecord } from '../../config';
@@ -12,6 +12,8 @@ interface Props {
   onDismiss: () => void;
   /** Есть ли write-доступ к каталогу */
   hasUploadAccess?: boolean;
+  /** Идёт проверка доступа */
+  loadingUploadAccess?: boolean;
   /** Открыть экран загрузки */
   onOpenUpload?: (preselected?: ScanResult[]) => void;
 }
@@ -19,12 +21,22 @@ interface Props {
 const BG = '#1e1e2e';
 const BORDER_COLOR = theme.warning;
 
-export const ExtensionSyncDialog: React.FC<Props> = ({ missing, untracked, onSync, onDismiss, hasUploadAccess, onOpenUpload }) => {
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+export const ExtensionSyncDialog: React.FC<Props> = ({ missing, untracked, onSync, onDismiss, hasUploadAccess, loadingUploadAccess, onOpenUpload }) => {
   const { stdout } = useStdout();
   const innerWidth = Math.min(58, (stdout?.columns ?? 80) - 12);
   const hasActionable = missing.length > 0 || untracked.some(e => e.inCatalog);
   const uploadable = untracked.filter(e => !e.inCatalog);
   const canUpload = hasUploadAccess && onOpenUpload && uploadable.length > 0;
+  const showUploadLoading = loadingUploadAccess && onOpenUpload && uploadable.length > 0;
+
+  const [spinnerIdx, setSpinnerIdx] = useState(0);
+  useEffect(() => {
+    if (!showUploadLoading) return;
+    const t = setInterval(() => setSpinnerIdx(i => (i + 1) % SPINNER_FRAMES.length), 80);
+    return () => clearInterval(t);
+  }, [showUploadLoading]);
 
   useInput((input, key) => {
     if (key.return && hasActionable) onSync();
@@ -143,7 +155,17 @@ export const ExtensionSyncDialog: React.FC<Props> = ({ missing, untracked, onSyn
   }
 
   // Подсказка для загрузки в каталог (если есть доступ и есть расширения не из каталога)
-  if (canUpload) {
+  if (showUploadLoading) {
+    lines.push({
+      text: (
+        <Text backgroundColor={BG} color={theme.muted}>
+          <Text backgroundColor={BG} color={theme.warning}>{SPINNER_FRAMES[spinnerIdx]}</Text>
+          {' проверка доступа к каталогу'}
+          {' '.repeat(Math.max(0, innerWidth - stripAnsi('• проверка доступа к каталогу').length))}
+        </Text>
+      ),
+    });
+  } else if (canUpload) {
     lines.push({
       text: (
         <Text backgroundColor={BG} color={theme.muted}>

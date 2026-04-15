@@ -564,6 +564,7 @@ export const App: React.FC = () => {
                 onSync={handleSync}
                 onDismiss={handleDismissSync}
                 hasUploadAccess={uploadAccess.hasAccess}
+                loadingUploadAccess={uploadAccess.loading}
                 onOpenUpload={handleOpenUpload}
               />
             </Box>
