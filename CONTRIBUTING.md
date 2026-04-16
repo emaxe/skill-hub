@@ -57,30 +57,36 @@ cd cli && npm test
 cli/
 ├── src/
 │   ├── commands/        # CLI commands (search, install, remove, etc.)
-│   ├── adapters/        # Agent adapters (claude-code, cursor, copilot)
+│   ├── adapters/        # Agent adapters (claude-code, cursor, copilot, codex, agents-conventions)
 │   │   ├── types.ts     # AgentAdapter interface
 │   │   ├── get-adapter.ts # Adapter factory
 │   │   ├── claude-code.ts
 │   │   ├── cursor.ts
-│   │   └── copilot.ts
+│   │   ├── copilot.ts
+│   │   ├── codex.ts
+│   │   └── agents-conventions.ts
 │   ├── tui/             # Interactive TUI (Ink/React)
 │   ├── base-setup.ts    # MCP + base skill setup logic
 │   ├── catalog.ts       # Catalog types, platform filtering
 │   ├── config.ts        # Config file management (~/.skill-hub/config.json)
+│   ├── conventions.ts   # Agents-conventions mode (init/exit/health/bootstrap)
 │   ├── detect-agent.ts  # Auto-detection of active agent
 │   ├── registry.ts      # Per-agent installation tracking
 │   ├── git.ts           # Cache (git clone/pull) management
 │   ├── mcp.ts           # MCP server
+│   ├── platform.ts      # Platform helpers (isWindows, isMac, getAppData)
 │   └── index.ts         # CLI entry point
 └── base-skills/         # Bundled base skills shipped with the npm package
     ├── claude-code/SKILL.md
     ├── cursor/SKILL.md
-    └── copilot/SKILL.md
+    ├── copilot/SKILL.md
+    ├── codex/SKILL.md
+    └── agents-conventions/SKILL.md
 ```
 
 ### Agent Adapters
 
-Each supported agent (Claude Code, Cursor, Copilot) has its own adapter implementing the `AgentAdapter` interface. Adapters handle platform-specific logic: file paths, extension format conversion (e.g., `.mdc` for Cursor rules), and scope directory resolution. When adding a new agent, create a new adapter in `cli/src/adapters/` and register it in `get-adapter.ts`.
+Each supported agent (Claude Code, Cursor, Copilot, Codex) has its own adapter implementing the `AgentAdapter` interface. Additionally, `agents-conventions` mode has its own adapter for the unified `.agents/` directory. Adapters handle platform-specific logic: file paths, extension format conversion (e.g., `.mdc` for Cursor rules), and scope directory resolution. When adding a new agent, create a new adapter in `cli/src/adapters/` and register it in `get-adapter.ts`.
 
 ## Questions?
 

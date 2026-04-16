@@ -330,7 +330,8 @@ skill-hub agents-conventions enable
 - Создаётся `AGENTS.md` (общие правила проекта)
 - Создаются symlinks: `.claude/` → `.agents/`, `.cursor/` → `.agents/`, `.codex/` → `.agents/`
 - Для Copilot создаётся thin pointer в `.github/copilot-instructions.md`
-- Устанавливаются bootstrap-скиллы
+- Bootstrap-скилл `agents-conventions` устанавливается глобально во все AI-агенты
+- Скиллы `init-agents` / `exit-agents` устанавливаются в `~/.skill-hub/bootstrap/`
 
 ### Выключение
 
@@ -517,7 +518,7 @@ cd cli && npm run build       # сборка
 npm link                      # глобальная линковка
 skill-hub search git          # тестирование
 npm unlink -g @emaxe/skill-hub # удалить линк
-cd cli && npm test            # тесты (82 теста)
+cd cli && npm test            # тесты (127 тестов)
 ```
 
 При изменениях в исходниках достаточно пересобрать (`npm run build`) — линк обновится автоматически.

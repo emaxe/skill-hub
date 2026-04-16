@@ -18,7 +18,7 @@ Skill-Hub — менеджер расширений для AI-агентов (Cl
 
 ```bash
 cd cli && npm run build          # сборка (tsc)
-cd cli && npm test               # Jest-тесты (82 теста)
+cd cli && npm test               # Jest-тесты (127 тестов)
 npm link                         # глобальная линковка для локального тестирования
 npm unlink -g @emaxe/skill-hub   # удалить линк
 skill-hub search git             # проверить CLI
@@ -45,6 +45,7 @@ cli/
 │   ├── keymap.ts             # Нормализация русской раскладки → латинская для хоткеев
 │   ├── adapters/             # Адаптеры агентов (claude-code, cursor, copilot, codex, conventions)
 │   │   ├── types.ts          # AgentAdapter interface, ScanResult
+│   │   ├── get-adapter.ts    # Фабрика адаптеров по имени агента
 │   │   ├── claude-code.ts
 │   │   ├── cursor.ts
 │   │   ├── copilot.ts
@@ -65,7 +66,10 @@ cli/
 │       │   ├── useNavigation.ts   # Screen stack navigation
 │       │   ├── useBaseSetup.ts    # MCP/base-skill setup status
 │       │   ├── useUploadAccess.ts # Async проверка write-доступа к каталогу
-│       │   └── useTerminalSize.ts # Размер терминала + debounced resize
+│       │   ├── useTerminalSize.ts # Размер терминала + debounced resize
+│       │   ├── useConventionsInit.ts  # Init conventions flow (dynamic paths)
+│       │   ├── useConventionsExit.ts  # Exit conventions flow (dynamic paths)
+│       │   └── useKeymap.ts       # Хоткеи per-screen
 │       ├── screens/
 │       │   ├── CatalogScreen.tsx        # Таб «Каталог» — поиск, фильтры, установка
 │       │   ├── InstalledScreen.tsx       # Таб «Установленные» — список, удаление, обновление
@@ -86,7 +90,16 @@ cli/
 │           ├── FilterBar.tsx            # Фильтры (тип, скоуп)
 │           ├── TextEditModal.tsx        # Редактирование длинных строк (URL, proxy)
 │           ├── InitConventionsModal.tsx # Модалка включения conventions
-│           └── ExitConventionsModal.tsx # Модалка выключения conventions
+│           ├── ExitConventionsModal.tsx # Модалка выключения conventions
+│           ├── ConventionsWarningDialog.tsx # Предупреждения conventions health
+│           ├── GitCredentialsDialog.tsx    # Диалог git-аутентификации
+│           ├── ProjectConfigDialog.tsx    # Диалог создания проектного конфига
+│           ├── ProjectConflictDialog.tsx  # Конфликт расширений между проектами
+│           ├── Header.tsx                 # Заголовок приложения
+│           ├── InfoBar.tsx                # Информационная панель
+│           ├── StatusBar.tsx              # Строка статуса
+│           ├── SubTabBar.tsx              # Подвкладки
+│           └── Separator.tsx              # Визуальный разделитель
 ├── base-skills/              # Бутстрап-скиллы для каждого агента
 └── dist/                     # Скомпилированный JS
 ```
@@ -195,7 +208,8 @@ interface SkillHubConfig {
 
 Унифицированная `.agents/` директория для мультиагентных проектов:
 - `conventions.ts → initConventions()` — создать `.agents/`, symlinks, `AGENTS.md`
-- `conventions.ts → exitConventions()` — мигрировать расширения обратно, удалить symlinks
+- `conventions.ts → exitConventions()` — мигрировать расширения обратно, удалить symlinks, `removeAgentsConventionsGlobal()`
+- `conventions.ts → ensureConventionsStructure()` — идемпотентное восстановление: dirs, symlinks, pointers, bootstrap, AGENTS.md
 - Health check: `.agents/` exists, `AGENTS.md` exists, symlinks valid
 - `generateProjectRules()` — автоанализ проекта (package.json, go.mod, etc.)
 
@@ -291,6 +305,9 @@ interface SkillHubConfig {
 | `useBaseSetup` | Статус установки MCP/base-skill/self-update |
 | `useUploadAccess` | Async проверка write-доступа к каталогу (кеш) |
 | `useTerminalSize` | Размеры терминала с debounced resize |
+| `useConventionsInit` | Init conventions flow: динамические пути к `~/.skill-hub/bootstrap/init-agents/` |
+| `useConventionsExit` | Exit conventions flow: динамические пути к `~/.skill-hub/bootstrap/exit-agents/` |
+| `useKeymap` | Хоткеи per-screen |
 
 ## Язык
 

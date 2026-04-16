@@ -2,6 +2,18 @@
 
 Все заметные изменения в проекте документируются здесь.
 
+## [Unreleased]
+
+### Изменено
+- **Глобальная установка `agents-conventions`** — bootstrap-скилл теперь ставится глобально во все 4 AI-агента (claude-code, cursor — копия директории; copilot, codex — marker-injection). Удаляется при `disable`.
+- **`init-agents` / `exit-agents` → `~/.skill-hub/bootstrap/`** — перенесены из проектного `.agents/skills/` в глобальную директорию; не регистрируются в registry.
+- **`skill-hub -U` — полная реконсиляция** — при запуске восстанавливает структуру conventions (каталоги, symlinks, pointers, bootstrap), доустанавливает расширения из `.skill-hub.json`, затем обновляет существующие.
+
+### Добавлено
+- `ensureConventionsStructure()` — идемпотентная функция для восстановления `.agents/` структуры, symlinks, thin pointers, bootstrap-скиллов, `AGENTS.md`.
+- `installAgentsConventionsGlobal()` / `removeAgentsConventionsGlobal()` — установка/удаление `agents-conventions` во все AI-агенты.
+- Marker-injection (`<!-- skill-hub: agents-conventions -->`) для copilot/codex глобальных конфигов.
+
 ## [0.1.11] — 2026-04-15
 
 ### Добавлено
