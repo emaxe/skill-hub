@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { spawn } from 'child_process';
+import path from 'path';
+import os from 'os';
 import { enableConventions } from '../../conventions';
 import { AiAgentsConfig } from '../../config';
 import { isWindows } from '../../platform';
@@ -26,14 +28,23 @@ const AGENT_BINARIES: Record<string, string> = {
   'copilot': 'copilot',
 };
 
-// Промпт ссылается на установленный скилл init-agents
-const INIT_PROMPT = 'Прочитай скилл .agents/skills/init-agents/SKILL.md и выполни все описанные в нём задачи для AI-агента.';
+/** Абсолютный путь к bootstrap-скиллу init-agents */
+function getInitSkillPath(): string {
+  return path.join(os.homedir(), '.skill-hub', 'bootstrap', 'init-agents', 'SKILL.md');
+}
 
-const AUTO_ANALYSIS_ARGS: Record<string, string[]> = {
-  'claude-code': ['--dangerously-skip-permissions', '-p', INIT_PROMPT, '--model', 'sonnet'],
-  'cursor': ['-p', INIT_PROMPT, '--model', 'composer-2', '--force', '--output-format', 'stream-json'],
-  'copilot': ['-p', INIT_PROMPT, '--model', 'claude-sonnet-4.6', '--allow-all', '--no-ask-user'],
-};
+function getInitPrompt(): string {
+  return `Прочитай скилл ${getInitSkillPath()} и выполни все описанные в нём задачи для AI-агента.`;
+}
+
+function getAutoAnalysisArgs(): Record<string, string[]> {
+  const prompt = getInitPrompt();
+  return {
+    'claude-code': ['--dangerously-skip-permissions', '-p', prompt, '--model', 'sonnet'],
+    'cursor': ['-p', prompt, '--model', 'composer-2', '--force', '--output-format', 'stream-json'],
+    'copilot': ['-p', prompt, '--model', 'claude-sonnet-4.6', '--allow-all', '--no-ask-user'],
+  };
+}
 
 const MAX_OUTPUT_LINES = 20;
 
@@ -78,7 +89,7 @@ export function useConventionsInit(): UseConventionsInitResult {
     lineBufferRef.current = '';
 
     const binary = AGENT_BINARIES[agentName];
-    const args = AUTO_ANALYSIS_ARGS[agentName];
+    const args = getAutoAnalysisArgs()[agentName];
     const env = { ...process.env };
 
     const agentCfg = aiAgentsConfig.agents[agentName as keyof typeof aiAgentsConfig.agents];

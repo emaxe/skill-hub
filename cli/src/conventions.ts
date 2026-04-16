@@ -295,8 +295,9 @@ export function getConventionsStatus(projectDir: string = process.cwd()): Conven
 }
 
 /**
- * Устанавливает/обновляет bootstrap-скиллы из бандла CLI в .agents/skills/.
- * Всегда перезаписывает файлы, чтобы гарантировать актуальную версию.
+ * Устанавливает/обновляет bootstrap-скиллы из бандла CLI.
+ * `agents-conventions` → `.agents/skills/` (проектный, в registry).
+ * `init-agents`/`exit-agents` → `~/.skill-hub/bootstrap/` (глобальные, без registry).
  */
 function installBootstrapSkills(
   projectDir: string,
@@ -304,15 +305,24 @@ function installBootstrapSkills(
   conventionsAdapter: ReturnType<typeof getAdapter>,
 ): void {
   const bundleDir = path.join(__dirname, '..', 'base-skills', 'agents-conventions');
-  const bootstrapSkills = ['agents-conventions', 'init-agents', 'exit-agents'];
 
-  for (const skillName of bootstrapSkills) {
+  // init-agents / exit-agents → глобальный ~/.skill-hub/bootstrap/
+  const globalBootstrapDir = path.join(os.homedir(), '.skill-hub', 'bootstrap');
+  for (const skillName of ['init-agents', 'exit-agents']) {
     const srcDir = path.join(bundleDir, skillName);
     if (!fs.existsSync(srcDir)) continue;
 
+    const destDir = path.join(globalBootstrapDir, skillName);
+    fs.mkdirSync(destDir, { recursive: true });
+    fs.cpSync(srcDir, destDir, { recursive: true });
+  }
+
+  // agents-conventions → .agents/skills/ (без изменений)
+  const acSrcDir = path.join(bundleDir, 'agents-conventions');
+  if (fs.existsSync(acSrcDir)) {
     const ext: Extension = {
       type: 'skill',
-      name: skillName,
+      name: 'agents-conventions',
       description: '',
       tags: [],
       version: '0.0.0',
@@ -326,14 +336,13 @@ function installBootstrapSkills(
     const destPath = conventionsAdapter.getInstallPath(ext, 'project');
     const destDir = path.dirname(destPath);
 
-    // Всегда перезаписываем — гарантируем актуальную версию из бандла CLI
     fs.mkdirSync(destDir, { recursive: true });
-    fs.cpSync(srcDir, destDir, { recursive: true });
+    fs.cpSync(acSrcDir, destDir, { recursive: true });
 
-    if (!reg.isInstalled(skillName, 'skill', 'agents-conventions')) {
+    if (!reg.isInstalled('agents-conventions', 'skill', 'agents-conventions')) {
       reg.add({
         type: 'skill',
-        name: skillName,
+        name: 'agents-conventions',
         version: '0.0.0',
         agent: 'agents-conventions',
         scope: 'project',
@@ -760,15 +769,13 @@ export async function disableConventions(
     }
   }
 
-  // 7. Удаление bootstrap-скиллов
-  const bootstrapSkills = ['agents-conventions', 'init-agents', 'exit-agents'];
-  for (const skillName of bootstrapSkills) {
-    const skillDir = path.join(projectDir, '.agents', 'skills', skillName);
-    if (fs.existsSync(skillDir)) {
-      fs.rmSync(skillDir, { recursive: true, force: true });
-    }
-    reg.remove(skillName, 'skill', 'agents-conventions');
+  // 7. Удаление bootstrap-скиллов из .agents/skills/ (только agents-conventions)
+  // init-agents/exit-agents живут в ~/.skill-hub/bootstrap/ — не трогаем
+  const skillDir = path.join(projectDir, '.agents', 'skills', 'agents-conventions');
+  if (fs.existsSync(skillDir)) {
+    fs.rmSync(skillDir, { recursive: true, force: true });
   }
+  reg.remove('agents-conventions', 'skill', 'agents-conventions');
 
   // 8. Обновление конфига
   config.agent = targetAgent;

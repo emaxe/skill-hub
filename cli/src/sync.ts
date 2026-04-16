@@ -12,7 +12,7 @@ import { filterRecordsByDirectory } from './path-filter';
 import { getCachePath } from './git';
 
 /** Базовые скиллы, встроенные в CLI — не участвуют в синхронизации с каталогом */
-const BASE_SKILLS = new Set(['agents-conventions', 'init-agents', 'exit-agents', 'skill-hub']);
+const BASE_SKILLS = new Set(['agents-conventions', 'skill-hub']);
 
 export interface UntrackedExtension {
   type: ExtensionType;

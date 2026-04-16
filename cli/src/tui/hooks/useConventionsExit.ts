@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { spawn } from 'child_process';
+import path from 'path';
+import os from 'os';
 import { disableConventions } from '../../conventions';
 import { AgentName } from '../../catalog';
 import { AiAgentsConfig } from '../../config';
@@ -27,13 +29,23 @@ const AGENT_BINARIES: Record<string, string> = {
   'copilot': 'copilot',
 };
 
-const EXIT_PROMPT = 'Прочитай скилл .agents/skills/exit-agents/SKILL.md и выполни все описанные в нём задачи для AI-агента.';
+/** Абсолютный путь к bootstrap-скиллу exit-agents */
+function getExitSkillPath(): string {
+  return path.join(os.homedir(), '.skill-hub', 'bootstrap', 'exit-agents', 'SKILL.md');
+}
 
-const EXIT_ARGS: Record<string, string[]> = {
-  'claude-code': ['--dangerously-skip-permissions', '-p', EXIT_PROMPT, '--model', 'sonnet'],
-  'cursor': ['-p', EXIT_PROMPT, '--model', 'composer-2', '--force', '--output-format', 'stream-json'],
-  'copilot': ['-p', EXIT_PROMPT, '--model', 'claude-sonnet-4.6', '--allow-all', '--no-ask-user'],
-};
+function getExitPrompt(): string {
+  return `Прочитай скилл ${getExitSkillPath()} и выполни все описанные в нём задачи для AI-агента.`;
+}
+
+function getExitArgs(): Record<string, string[]> {
+  const prompt = getExitPrompt();
+  return {
+    'claude-code': ['--dangerously-skip-permissions', '-p', prompt, '--model', 'sonnet'],
+    'cursor': ['-p', prompt, '--model', 'composer-2', '--force', '--output-format', 'stream-json'],
+    'copilot': ['-p', prompt, '--model', 'claude-sonnet-4.6', '--allow-all', '--no-ask-user'],
+  };
+}
 
 const MAX_OUTPUT_LINES = 20;
 
@@ -81,7 +93,7 @@ export function useConventionsExit(): UseConventionsExitResult {
     lineBufferRef.current = '';
 
     const binary = AGENT_BINARIES[agentName];
-    const args = EXIT_ARGS[agentName];
+    const args = getExitArgs()[agentName];
     const env = { ...process.env };
 
     const agentCfg = aiAgentsConfig.agents[agentName as keyof typeof aiAgentsConfig.agents];

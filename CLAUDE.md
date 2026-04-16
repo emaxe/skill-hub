@@ -199,6 +199,10 @@ interface SkillHubConfig {
 - Health check: `.agents/` exists, `AGENTS.md` exists, symlinks valid
 - `generateProjectRules()` — автоанализ проекта (package.json, go.mod, etc.)
 
+**Bootstrap-скиллы:**
+- `agents-conventions` → `.agents/skills/agents-conventions/` (проектный, регистрируется в registry)
+- `init-agents`, `exit-agents` → `~/.skill-hub/bootstrap/{name}/` (глобальные, без registry — системные файлы, общие для всех проектов)
+
 **Symlink targets (`SYMLINK_TARGETS`):** `.claude/skills`, `.cursor/skills`, `.codex/` → `.agents/`
 
 **Thin pointers (`ROOT_AI_CONFIGS`):** `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`, `.codex/AGENTS.md` → указывают на `AGENTS.md`
