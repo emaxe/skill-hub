@@ -6,6 +6,7 @@ import { createRegistry } from './registry';
 import { getAdapter } from './adapters/get-adapter';
 import { AgentName, Extension } from './catalog';
 import { isWindows } from './platform';
+import { stripFrontmatter } from './frontmatter';
 
 const SYMLINK_TARGETS: Array<{ dir: string; link: string; target: string }> = [
   { dir: '.claude', link: 'skills', target: path.join('..', '.agents', 'skills') },
@@ -295,52 +296,120 @@ export function getConventionsStatus(projectDir: string = process.cwd()): Conven
 }
 
 /**
- * Устанавливает/обновляет bootstrap-скиллы из бандла CLI в .agents/skills/.
- * Всегда перезаписывает файлы, чтобы гарантировать актуальную версию.
+ * Устанавливает/обновляет bootstrap-скиллы из бандла CLI.
+ * `agents-conventions` → глобально во все поддерживаемые AI-агенты (без registry).
+ * `init-agents`/`exit-agents` → `~/.skill-hub/bootstrap/` (глобальные, без registry).
  */
-function installBootstrapSkills(
-  projectDir: string,
-  reg: ReturnType<typeof createRegistry>,
-  conventionsAdapter: ReturnType<typeof getAdapter>,
-): void {
+function installBootstrapSkills(): void {
   const bundleDir = path.join(__dirname, '..', 'base-skills', 'agents-conventions');
-  const bootstrapSkills = ['agents-conventions', 'init-agents', 'exit-agents'];
 
-  for (const skillName of bootstrapSkills) {
+  // init-agents / exit-agents → глобальный ~/.skill-hub/bootstrap/
+  const globalBootstrapDir = path.join(os.homedir(), '.skill-hub', 'bootstrap');
+  for (const skillName of ['init-agents', 'exit-agents']) {
     const srcDir = path.join(bundleDir, skillName);
     if (!fs.existsSync(srcDir)) continue;
 
-    const ext: Extension = {
-      type: 'skill',
-      name: skillName,
-      description: '',
-      tags: [],
-      version: '0.0.0',
-      scope: 'project',
-      platforms: { 'claude-code': null },
-      path: '',
-      dependencies: [],
-      projects: [],
-    };
-
-    const destPath = conventionsAdapter.getInstallPath(ext, 'project');
-    const destDir = path.dirname(destPath);
-
-    // Всегда перезаписываем — гарантируем актуальную версию из бандла CLI
+    const destDir = path.join(globalBootstrapDir, skillName);
     fs.mkdirSync(destDir, { recursive: true });
     fs.cpSync(srcDir, destDir, { recursive: true });
+  }
 
-    if (!reg.isInstalled(skillName, 'skill', 'agents-conventions')) {
-      reg.add({
-        type: 'skill',
-        name: skillName,
-        version: '0.0.0',
-        agent: 'agents-conventions',
-        scope: 'project',
-        path: destPath,
-      });
+  // agents-conventions → глобально во все AI-агенты
+  installAgentsConventionsGlobal();
+}
+
+// Маркеры для copilot/codex marker-based injection
+const AC_MARKER_START = '<!-- skill-hub: agents-conventions -->';
+const AC_MARKER_END = '<!-- /skill-hub: agents-conventions -->';
+
+/**
+ * Устанавливает скилл agents-conventions глобально во все поддерживаемые AI-агенты.
+ * claude-code, cursor — копия директории в ~/.{agent}/skills/.
+ * copilot — marker-injection в глобальный copilot-instructions.md.
+ * codex — marker-injection в ~/.codex/AGENTS.md.
+ */
+function installAgentsConventionsGlobal(): void {
+  const bundleDir = path.join(__dirname, '..', 'base-skills', 'agents-conventions', 'agents-conventions');
+  if (!fs.existsSync(bundleDir)) return;
+
+  const homeDir = os.homedir();
+  const skillMdPath = path.join(bundleDir, 'SKILL.md');
+  if (!fs.existsSync(skillMdPath)) return;
+
+  // claude-code и cursor — копируем директорию целиком (SKILL.md + assets/)
+  for (const agentDir of ['.claude', '.cursor']) {
+    const destDir = path.join(homeDir, agentDir, 'skills', 'agents-conventions');
+    fs.mkdirSync(destDir, { recursive: true });
+    fs.cpSync(bundleDir, destDir, { recursive: true });
+  }
+
+  // copilot и codex — marker-based injection
+  const rawContent = fs.readFileSync(skillMdPath, 'utf-8');
+  const content = stripFrontmatter(rawContent);
+  const section = `\n${AC_MARKER_START}\n${content}\n${AC_MARKER_END}\n`;
+
+  // copilot: глобальный copilot-instructions.md
+  const copilotPath = process.platform === 'darwin'
+    ? path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'copilot-instructions.md')
+    : process.platform === 'win32'
+      ? path.join(process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming'), 'Code', 'User', 'copilot-instructions.md')
+      : path.join(homeDir, '.config', 'Code', 'User', 'copilot-instructions.md');
+  injectMarkerSection(copilotPath, section);
+
+  // codex: ~/.codex/AGENTS.md
+  const codexPath = path.join(homeDir, '.codex', 'AGENTS.md');
+  injectMarkerSection(codexPath, section);
+}
+
+/**
+ * Удаляет скилл agents-conventions из всех глобальных расположений AI-агентов.
+ */
+function removeAgentsConventionsGlobal(): void {
+  const homeDir = os.homedir();
+
+  // claude-code и cursor — удаляем директорию
+  for (const agentDir of ['.claude', '.cursor']) {
+    const skillDir = path.join(homeDir, agentDir, 'skills', 'agents-conventions');
+    if (fs.existsSync(skillDir)) {
+      fs.rmSync(skillDir, { recursive: true, force: true });
     }
   }
+
+  // copilot — убираем секцию из copilot-instructions.md
+  const copilotPath = process.platform === 'darwin'
+    ? path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'copilot-instructions.md')
+    : process.platform === 'win32'
+      ? path.join(process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming'), 'Code', 'User', 'copilot-instructions.md')
+      : path.join(homeDir, '.config', 'Code', 'User', 'copilot-instructions.md');
+  removeMarkerSection(copilotPath);
+
+  // codex — убираем секцию из ~/.codex/AGENTS.md
+  const codexPath = path.join(homeDir, '.codex', 'AGENTS.md');
+  removeMarkerSection(codexPath);
+}
+
+/** Вставляет/обновляет marker-секцию agents-conventions в файле */
+function injectMarkerSection(filePath: string, section: string): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
+  const cleaned = removeMarkerContent(existing);
+  fs.writeFileSync(filePath, cleaned + section);
+}
+
+/** Удаляет marker-секцию agents-conventions из файла */
+function removeMarkerSection(filePath: string): void {
+  if (!fs.existsSync(filePath)) return;
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const cleaned = removeMarkerContent(content);
+  fs.writeFileSync(filePath, cleaned);
+}
+
+/** Вырезает текст между маркерами agents-conventions (включая сами маркеры) */
+function removeMarkerContent(content: string): string {
+  const startIdx = content.indexOf(AC_MARKER_START);
+  const endIdx = content.indexOf(AC_MARKER_END);
+  if (startIdx === -1) return content;
+  return content.slice(0, startIdx) + content.slice(endIdx + AC_MARKER_END.length);
 }
 
 /**
@@ -392,10 +461,7 @@ export async function enableConventions(projectDir: string = process.cwd()): Pro
   if (config.agent === 'agents-conventions') {
     const status = getConventionsStatus(projectDir);
     if (status.isHealthy) {
-      const registryDir = path.join(os.homedir(), '.skill-hub');
-      const reg = createRegistry(registryDir);
-      const conventionsAdapter = getAdapter('agents-conventions');
-      installBootstrapSkills(projectDir, reg, conventionsAdapter);
+      installBootstrapSkills();
       const projectRulesPath = path.join(projectDir, '.agents', 'rules', 'project-rules.md');
       return { needsAutoAnalysis: !fs.existsSync(projectRulesPath) };
     }
@@ -579,7 +645,7 @@ export async function enableConventions(projectDir: string = process.cwd()): Pro
   saveResolvedConfig(config, source, projectRoot);
 
   // 7. Установка/обновление bootstrap-скиллов из бандла CLI
-  installBootstrapSkills(projectDir, reg, conventionsAdapter);
+  installBootstrapSkills();
 
   // 8. Создание AGENTS.md (если отсутствует)
   const agentsMdPath = path.join(projectDir, 'AGENTS.md');
@@ -760,15 +826,15 @@ export async function disableConventions(
     }
   }
 
-  // 7. Удаление bootstrap-скиллов
-  const bootstrapSkills = ['agents-conventions', 'init-agents', 'exit-agents'];
-  for (const skillName of bootstrapSkills) {
-    const skillDir = path.join(projectDir, '.agents', 'skills', skillName);
-    if (fs.existsSync(skillDir)) {
-      fs.rmSync(skillDir, { recursive: true, force: true });
-    }
-    reg.remove(skillName, 'skill', 'agents-conventions');
+  // 7. Удаление скилла agents-conventions из всех глобальных расположений
+  // init-agents/exit-agents живут в ~/.skill-hub/bootstrap/ — не трогаем
+  removeAgentsConventionsGlobal();
+  // Также убираем из .agents/skills/ если ещё остался (legacy)
+  const acProjectDir = path.join(projectDir, '.agents', 'skills', 'agents-conventions');
+  if (fs.existsSync(acProjectDir)) {
+    fs.rmSync(acProjectDir, { recursive: true, force: true });
   }
+  reg.remove('agents-conventions', 'skill', 'agents-conventions');
 
   // 8. Обновление конфига
   config.agent = targetAgent;
@@ -791,5 +857,73 @@ export async function deleteConventionsArtifacts(projectDir: string = process.cw
   const agentsMd = path.join(projectDir, 'AGENTS.md');
   if (fs.existsSync(agentsMd)) {
     fs.unlinkSync(agentsMd);
+  }
+}
+
+/**
+ * Идемпотентное восстановление структуры agents-conventions:
+ * директории, симлинки, тонкие указатели, bootstrap-скиллы, AGENTS.md.
+ * Не выполняет миграцию расширений — только гарантирует наличие инфраструктуры.
+ */
+export function ensureConventionsStructure(projectDir: string = process.cwd()): void {
+  // 1. Директории
+  const dirs = [
+    path.join(projectDir, '.agents', 'skills'),
+    path.join(projectDir, '.agents', 'agents'),
+    path.join(projectDir, '.agents', 'commands'),
+    path.join(projectDir, '.agents', 'rules'),
+    path.join(projectDir, '.claude'),
+    path.join(projectDir, '.github', 'instructions'),
+    path.join(projectDir, '.cursor', 'rules'),
+  ];
+  for (const dir of dirs) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  // 2. Симлинки (идемпотентно)
+  for (const s of SYMLINK_TARGETS) {
+    const linkPath = path.join(projectDir, s.dir, s.link);
+
+    if (fs.existsSync(linkPath)) {
+      try {
+        const stat = fs.lstatSync(linkPath);
+        if (stat.isSymbolicLink()) {
+          const currentTarget = fs.readlinkSync(linkPath);
+          if (path.normalize(currentTarget) === path.normalize(s.target)) continue;
+          fs.unlinkSync(linkPath);
+        } else if (stat.isDirectory()) {
+          // Обычная директория с контентом — мигрируем в .agents/ и удаляем
+          const entries = fs.readdirSync(linkPath, { withFileTypes: true });
+          for (const entry of entries) {
+            const src = path.join(linkPath, entry.name);
+            const dest = path.join(projectDir, '.agents', s.link, entry.name);
+            if (!fs.existsSync(dest)) {
+              fs.cpSync(src, dest, { recursive: true });
+            }
+          }
+          fs.rmSync(linkPath, { recursive: true });
+        }
+      } catch { /* ignore stat failures */ }
+    }
+
+    createSymlinkCrossPlatform(s.target, linkPath, path.dirname(linkPath));
+  }
+
+  // 3. Тонкие указатели
+  for (const p of THIN_POINTERS) {
+    const fullPath = path.join(projectDir, p.filePath);
+    if (!fs.existsSync(fullPath)) {
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, p.content);
+    }
+  }
+
+  // 4. Bootstrap-скиллы
+  installBootstrapSkills();
+
+  // 5. AGENTS.md
+  const agentsMdPath = path.join(projectDir, 'AGENTS.md');
+  if (!fs.existsSync(agentsMdPath)) {
+    fs.writeFileSync(agentsMdPath, AGENTS_MD_TEMPLATE);
   }
 }
