@@ -200,7 +200,7 @@ interface SkillHubConfig {
 - `generateProjectRules()` — автоанализ проекта (package.json, go.mod, etc.)
 
 **Bootstrap-скиллы:**
-- `agents-conventions` → `.agents/skills/agents-conventions/` (проектный, регистрируется в registry)
+- `agents-conventions` → глобально во все AI-агенты: `~/.claude/skills/`, `~/.cursor/skills/` (копия), copilot/codex (marker-injection). Без registry.
 - `init-agents`, `exit-agents` → `~/.skill-hub/bootstrap/{name}/` (глобальные, без registry — системные файлы, общие для всех проектов)
 
 **Symlink targets (`SYMLINK_TARGETS`):** `.claude/skills`, `.cursor/skills`, `.codex/` → `.agents/`

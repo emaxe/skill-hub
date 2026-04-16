@@ -4,29 +4,25 @@
 
 Bootstrap-скиллы `init-agents` и `exit-agents` используются при включении/выключении режима agents-conventions. Сейчас они копируются из бандла CLI (`cli/base-skills/agents-conventions/`) в `.agents/skills/` — ту же директорию, где хранятся обычные пользовательские скиллы. Это создаёт путаницу: системные скиллы визуально не отличимы от установленных пользователем.
 
-**Цель:** Перенести `init-agents` и `exit-agents` в глобальное расположение `~/.skill-hub/bootstrap/`, отделив их от пользовательских скиллов. Скилл `agents-conventions` остаётся в `.agents/skills/` без изменений.
+**Цель:** Перенести все bootstrap-скиллы из проектного scope в глобальные расположения, отделив их от пользовательских скиллов.
 
-### Текущий flow
+### Итоговый flow
 
-1. `enableConventions()` → `installBootstrapSkills()` — копирует все 3 скилла в `.agents/skills/{name}/`
-2. TUI hooks (`useConventionsInit.ts`, `useConventionsExit.ts`) — формируют промпт с путём `.agents/skills/init-agents/SKILL.md` и передают AI-агенту
-3. `disableConventions()` — удаляет все 3 скилла из `.agents/skills/`
-4. `sync.ts` — исключает `init-agents`, `exit-agents` из синхронизации через `BASE_SKILLS`
-
-### Целевой flow
-
-1. `enableConventions()` → `installBootstrapSkills()` — копирует `init-agents` и `exit-agents` в `~/.skill-hub/bootstrap/`, а `agents-conventions` по-прежнему в `.agents/skills/`
+1. `enableConventions()` → `installBootstrapSkills()`:
+   - `init-agents`/`exit-agents` → `~/.skill-hub/bootstrap/{name}/`
+   - `agents-conventions` → глобально во все AI-агенты (`~/.claude/skills/`, `~/.cursor/skills/`, copilot/codex через marker-injection)
 2. TUI hooks — формируют промпт с **абсолютным путём** к `~/.skill-hub/bootstrap/{name}/SKILL.md`
-3. `disableConventions()` — **не удаляет** `init-agents`/`exit-agents` из `~/.skill-hub/bootstrap/` (они глобальные, общие для всех проектов); удаляет только `agents-conventions` из `.agents/skills/`
-4. `sync.ts` — `init-agents` и `exit-agents` больше не появляются в `.agents/skills/`, можно убрать из `BASE_SKILLS` (но `agents-conventions` и `skill-hub` остаются)
+3. `disableConventions()` — удаляет `agents-conventions` из всех глобальных расположений; **не удаляет** `init-agents`/`exit-agents` из `~/.skill-hub/bootstrap/`
+4. `sync.ts` — `init-agents` и `exit-agents` убраны из `BASE_SKILLS`; `agents-conventions` и `skill-hub` остаются
+5. `skill-hub -U` — полная реконсиляция: восстановление структуры conventions + установка расширений из `.skill-hub.json`
 
 ## Требования
 
 - **REQ-1:** `init-agents` и `exit-agents` должны копироваться в `~/.skill-hub/bootstrap/init-agents/SKILL.md` и `~/.skill-hub/bootstrap/exit-agents/SKILL.md` при вызове `enableConventions()`.
-- **REQ-2:** `agents-conventions` продолжает устанавливаться в `.agents/skills/agents-conventions/` без изменений.
+- **REQ-2:** `agents-conventions` устанавливается глобально во все поддерживаемые AI-агенты (claude-code, cursor — копия директории; copilot, codex — marker-injection).
 - **REQ-3:** Промпты в `useConventionsInit.ts` и `useConventionsExit.ts` должны использовать абсолютный путь к `~/.skill-hub/bootstrap/{name}/SKILL.md` вместо относительного `.agents/skills/{name}/SKILL.md`.
 - **REQ-4:** При `disableConventions()` НЕ удалять `init-agents`/`exit-agents` из `~/.skill-hub/bootstrap/` — они глобальные и используются всеми проектами.
-- **REQ-5:** При `disableConventions()` продолжать удалять `agents-conventions` из `.agents/skills/`.
+- **REQ-5:** При `disableConventions()` удалять `agents-conventions` из всех глобальных расположений AI-агентов.
 - **REQ-6:** `init-agents` и `exit-agents` НЕ должны регистрироваться в реестре (registry) как установленные расширения — это системные файлы, не пользовательские.
 - **REQ-7:** `sync.ts` — убрать `init-agents` и `exit-agents` из `BASE_SKILLS` (они больше не в `.agents/skills/` и не конфликтуют с синхронизацией). `agents-conventions` и `skill-hub` остаются.
 - **REQ-8:** `getConventionsStatus()` — `extensionCount` не должен включать `init-agents`/`exit-agents` (они больше не в `.agents/skills/`, так что это решается автоматически).
@@ -35,10 +31,15 @@ Bootstrap-скиллы `init-agents` и `exit-agents` используются �
 
 ## Ограничения
 
-- **Не входит в скоуп:** перенос скилла `agents-conventions` — он остаётся в `.agents/skills/`.
-- **Не входит в скоуп:** изменение base-skills для других агентов (`claude-code`, `cursor`, `copilot`, `codex` в `base-setup.ts`) — эта фича только про conventions bootstrap.
+- **~~Не входит в скоуп:~~ перенос скилла `agents-conventions`** — реализован в ходе фичи (глобальная установка во все агенты).
+- **~~Не входит в скоуп:~~ изменение base-skills для других агентов** — `agents-conventions` теперь устанавливается глобально во все 4 агента.
 - **Не входит в скоуп:** изменение содержимого SKILL.md файлов `init-agents`/`exit-agents` — только перенос расположения.
 - **Кроссплатформенность:** `~/.skill-hub/` уже используется как кеш каталога, путь формируется через `os.homedir()`. Нет специфичных проблем.
+
+## Отклонения от плана
+
+1. **`agents-conventions` — глобальная установка.** Изначально планировалось оставить в `.agents/skills/` (проектный scope). В ходе реализации переделано на глобальную установку во все 4 AI-агента (claude-code, cursor — копия директории; copilot, codex — marker-injection) — без регистрации в registry.
+2. **`skill-hub -U` — полная реконсиляция.** Добавлена функция `ensureConventionsStructure()` и логика восстановления расширений из `.skill-hub.json` в команде `update`. Не входило в исходный план.
 
 ## Макеты и референсы
 
