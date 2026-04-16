@@ -83,6 +83,12 @@ export async function checkCatalogWriteAccess(registryUrl?: string): Promise<Acc
       return { hasAccess: false, error: 'Нет прав на запись в репозиторий каталога.' };
     }
 
+    if (msg.includes('could not read Username') || msg.includes('could not read Password') ||
+        msg.includes('Authentication failed') || msg.includes('terminal prompts disabled') ||
+        msg.includes('HTTP Basic: Access denied') || msg.includes('Invalid username or password')) {
+      return { hasAccess: false, error: 'Требуется аутентификация. Настройте git credentials для доступа к каталогу.' };
+    }
+
     if (msg.includes('Could not resolve') || msg.includes('unable to access') ||
         msg.includes('Connection refused') || msg.includes('Network is unreachable') ||
         msg.includes('fatal: repository') || msg.includes('not found')) {

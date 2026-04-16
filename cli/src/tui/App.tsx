@@ -34,12 +34,13 @@ import { ConventionsWarningDialog, ConventionsIssue } from './components/Convent
 import { ProjectConfigDialog } from './components/ProjectConfigDialog';
 import { ExtensionSyncDialog } from './components/ExtensionSyncDialog';
 import { ProjectConflictDialog } from './components/ProjectConflictDialog';
+import { GitCredentialsDialog, GitCredentials } from './components/GitCredentialsDialog';
 import { Extension, loadCatalog } from '../catalog';
 import { InstalledEntry } from './hooks/useRegistry';
 import { getConventionsStatus } from '../conventions';
 import { ProjectExtensionRecord, addProjectExtension, resolveProject, ResolvedProject } from '../config';
 import { checkExtensionSync, UntrackedExtension, checkProjectConflicts, ProjectConflict } from '../sync';
-import { getCachePath, ensureCache } from '../git';
+import { getCachePath, ensureCache, ensureCacheWithCredentials, GitAuthError } from '../git';
 import { ScanResult } from '../adapters/types';
 
 const TABS: TabName[] = ['catalog', 'installed', 'settings'];
@@ -98,12 +99,18 @@ export const App: React.FC = () => {
   const [projectConflicts, setProjectConflicts] = useState<ProjectConflict[]>([]);
   const [resolvedProject, setResolvedProject] = useState<ResolvedProject>(() => resolveProject());
 
+  // Состояние диалога ввода учётных данных git
+  const [showGitCredentials, setShowGitCredentials] = useState(false);
+  const [gitCredentialsUrl, setGitCredentialsUrl] = useState('');
+  /** Callback, который нужно повторить после успешного ввода credentials */
+  const [gitCredentialsPending, setGitCredentialsPending] = useState<((creds: GitCredentials) => Promise<void>) | null>(null);
+
   // Фазы стартовых проверок — выполняются последовательно, каждая ждёт закрытия диалога
   type StartupPhase = 'conventions' | 'projectConfig' | 'sync' | 'conflicts' | 'done';
   const [startupPhase, setStartupPhase] = useState<StartupPhase>('conventions');
 
   // Флаг: активен ли какой-либо диалог — блокирует ввод на фоновых экранах
-  const dialogActive = showConventionsWarning || showProjectConfigDialog || showSyncDialog || showProjectConflictDialog;
+  const dialogActive = showConventionsWarning || showProjectConfigDialog || showSyncDialog || showProjectConflictDialog || showGitCredentials;
 
   useEffect(() => {
     if (startupPhase === 'done') return;
@@ -267,15 +274,57 @@ export const App: React.FC = () => {
       } else {
         setStatus('Расширения не найдены в каталоге', 'error');
       }
+      setStartupPhase(prev => prev === 'sync' ? 'conflicts' : prev);
     } catch (err) {
+      if (err instanceof GitAuthError) {
+        // Показываем диалог учётных данных, сохраняем pending-операцию для повтора
+        setGitCredentialsUrl(err.url);
+        setGitCredentialsPending(() => async (creds: GitCredentials) => {
+          await ensureCacheWithCredentials(creds.username, creds.password);
+          // После успешного ensureCache повторяем установку расширений
+          const cachePath = getCachePath();
+          const catalog = loadCatalog(cachePath);
+          let installedCount = 0;
+          for (const ext of missingExtensions) {
+            const fullExt = catalog.extensions.find(e => e.name === ext.name && e.type === ext.type);
+            if (fullExt) {
+              await registry.install(fullExt, agent, ext.scope);
+              installedCount++;
+            }
+          }
+          if (installedCount > 0) {
+            setStatus(`Синхронизация: установлено ${installedCount}`, 'success');
+          }
+          setStartupPhase(prev => prev === 'sync' ? 'conflicts' : prev);
+        });
+        setShowGitCredentials(true);
+        return;
+      }
       setStatus(`Ошибка синхронизации: ${String(err)}`, 'error');
-    } finally {
       setStartupPhase(prev => prev === 'sync' ? 'conflicts' : prev);
     }
   }, [missingExtensions, untrackedExtensions, agent, registry, setStatus]);
 
   const handleDismissSync = useCallback(() => {
     setShowSyncDialog(false);
+    setStartupPhase(prev => prev === 'sync' ? 'conflicts' : prev);
+  }, []);
+
+  const handleGitCredentialsConfirm = useCallback(async (creds: GitCredentials) => {
+    setShowGitCredentials(false);
+    const pending = gitCredentialsPending;
+    setGitCredentialsPending(null);
+    if (!pending) return;
+    try {
+      await pending(creds);
+    } catch (err) {
+      setStatus(`Ошибка аутентификации: ${String(err)}`, 'error');
+    }
+  }, [gitCredentialsPending, setStatus]);
+
+  const handleGitCredentialsCancel = useCallback(() => {
+    setShowGitCredentials(false);
+    setGitCredentialsPending(null);
     setStartupPhase(prev => prev === 'sync' ? 'conflicts' : prev);
   }, []);
 
@@ -577,6 +626,15 @@ export const App: React.FC = () => {
                 currentProject={resolvedProject.project}
                 onRemove={handleRemoveProjectConflicts}
                 onDismiss={handleDismissProjectConflicts}
+              />
+            </Box>
+          )}
+          {showGitCredentials && (
+            <Box position="absolute" marginTop={2} marginLeft={2}>
+              <GitCredentialsDialog
+                url={gitCredentialsUrl}
+                onConfirm={handleGitCredentialsConfirm}
+                onCancel={handleGitCredentialsCancel}
               />
             </Box>
           )}

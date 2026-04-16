@@ -5,7 +5,7 @@
 **Git-ветка:** `feature/relocate-base-skills`
 **Базовая ветка для merge:** `update`
 **Дата начала:** 2026-04-16
-**Статус:** In Progress
+**Статус:** Done
 
 ## Краткое описание
 
