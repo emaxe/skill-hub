@@ -800,3 +800,74 @@ export async function deleteConventionsArtifacts(projectDir: string = process.cw
     fs.unlinkSync(agentsMd);
   }
 }
+
+/**
+ * Идемпотентное восстановление структуры agents-conventions:
+ * директории, симлинки, тонкие указатели, bootstrap-скиллы, AGENTS.md.
+ * Не выполняет миграцию расширений — только гарантирует наличие инфраструктуры.
+ */
+export function ensureConventionsStructure(projectDir: string = process.cwd()): void {
+  // 1. Директории
+  const dirs = [
+    path.join(projectDir, '.agents', 'skills'),
+    path.join(projectDir, '.agents', 'agents'),
+    path.join(projectDir, '.agents', 'commands'),
+    path.join(projectDir, '.agents', 'rules'),
+    path.join(projectDir, '.claude'),
+    path.join(projectDir, '.github', 'instructions'),
+    path.join(projectDir, '.cursor', 'rules'),
+  ];
+  for (const dir of dirs) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  // 2. Симлинки (идемпотентно)
+  for (const s of SYMLINK_TARGETS) {
+    const linkPath = path.join(projectDir, s.dir, s.link);
+
+    if (fs.existsSync(linkPath)) {
+      try {
+        const stat = fs.lstatSync(linkPath);
+        if (stat.isSymbolicLink()) {
+          const currentTarget = fs.readlinkSync(linkPath);
+          if (path.normalize(currentTarget) === path.normalize(s.target)) continue;
+          fs.unlinkSync(linkPath);
+        } else if (stat.isDirectory()) {
+          // Обычная директория с контентом — мигрируем в .agents/ и удаляем
+          const entries = fs.readdirSync(linkPath, { withFileTypes: true });
+          for (const entry of entries) {
+            const src = path.join(linkPath, entry.name);
+            const dest = path.join(projectDir, '.agents', s.link, entry.name);
+            if (!fs.existsSync(dest)) {
+              fs.cpSync(src, dest, { recursive: true });
+            }
+          }
+          fs.rmSync(linkPath, { recursive: true });
+        }
+      } catch { /* ignore stat failures */ }
+    }
+
+    createSymlinkCrossPlatform(s.target, linkPath, path.dirname(linkPath));
+  }
+
+  // 3. Тонкие указатели
+  for (const p of THIN_POINTERS) {
+    const fullPath = path.join(projectDir, p.filePath);
+    if (!fs.existsSync(fullPath)) {
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, p.content);
+    }
+  }
+
+  // 4. Bootstrap-скиллы
+  const registryDir = path.join(os.homedir(), '.skill-hub');
+  const reg = createRegistry(registryDir);
+  const conventionsAdapter = getAdapter('agents-conventions');
+  installBootstrapSkills(projectDir, reg, conventionsAdapter);
+
+  // 5. AGENTS.md
+  const agentsMdPath = path.join(projectDir, 'AGENTS.md');
+  if (!fs.existsSync(agentsMdPath)) {
+    fs.writeFileSync(agentsMdPath, AGENTS_MD_TEMPLATE);
+  }
+}
