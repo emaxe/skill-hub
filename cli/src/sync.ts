@@ -1,5 +1,5 @@
 // --- Проверка синхронизации расширений ---
-// Сравнивает .skill-hub.json (декларативный список) с фактически установленными расширениями.
+// Сравнивает проектный конфиг (декларативный список) с фактически установленными расширениями.
 
 import fs from 'fs';
 import os from 'os';
@@ -25,13 +25,20 @@ export interface UntrackedExtension {
   catalogVersion?: string;
 }
 
+export interface MissingExtension extends ProjectExtensionRecord {
+  /** Есть ли расширение в каталоге */
+  inCatalog: boolean;
+  /** Версия из каталога (если есть) */
+  catalogVersion?: string;
+}
+
 export interface SyncResult {
-  missing: ProjectExtensionRecord[];
+  missing: MissingExtension[];
   untracked: UntrackedExtension[];
 }
 
 /**
- * Проверяет, все ли расширения из .skill-hub.json установлены.
+ * Проверяет, все ли расширения из проектного конфига установлены.
  * Сверяет реестр (installed.json) и файловую систему (scan) с декларативным списком проекта.
  */
 export function checkExtensionSync(agent: AgentName): SyncResult {
@@ -68,20 +75,7 @@ export function checkExtensionSync(agent: AgentName): SyncResult {
     // ignore scan failures
   }
 
-  // Прямая проверка: расширения из конфига, которых нет на диске (кроме базовых скиллов)
-  const missing = projectExtensions.length > 0
-    ? projectExtensions.filter(e => !installedSet.has(`${e.type}:${e.name}`) && !BASE_SKILLS.has(e.name))
-    : [];
-
-  // Обратная проверка: расширения на диске (project scope), которых нет в конфиге
-  const declaredSet = new Set(
-    projectExtensions.map(e => `${e.type}:${e.name}`)
-  );
-  const untrackedRaw = localScanned.filter(
-    e => !declaredSet.has(`${e.type}:${e.name}`) && !BASE_SKILLS.has(e.name)
-  );
-
-  // Проверяем наличие в каталоге и берём актуальную версию
+  // Загружаем каталог один раз — используется и для missing, и для untracked
   let catalogMap: Map<string, string> | null = null;
   try {
     const cachePath = getCachePath();
@@ -94,6 +88,25 @@ export function checkExtensionSync(agent: AgentName): SyncResult {
   } catch {
     // каталог может быть недоступен
   }
+
+  // Прямая проверка: расширения из конфига, которых нет на диске (кроме базовых скиллов)
+  const missingRaw = projectExtensions.length > 0
+    ? projectExtensions.filter(e => !installedSet.has(`${e.type}:${e.name}`) && !BASE_SKILLS.has(e.name))
+    : [];
+
+  const missing: MissingExtension[] = missingRaw.map(e => {
+    const key = `${e.type}:${e.name}`;
+    const catalogVersion = catalogMap?.get(key);
+    return { ...e, inCatalog: !!catalogVersion, catalogVersion };
+  });
+
+  // Обратная проверка: расширения на диске (project scope), которых нет в конфиге
+  const declaredSet = new Set(
+    projectExtensions.map(e => `${e.type}:${e.name}`)
+  );
+  const untrackedRaw = localScanned.filter(
+    e => !declaredSet.has(`${e.type}:${e.name}`) && !BASE_SKILLS.has(e.name)
+  );
 
   const untracked: UntrackedExtension[] = untrackedRaw.map(e => {
     const key = `${e.type}:${e.name}`;

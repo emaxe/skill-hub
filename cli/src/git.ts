@@ -65,7 +65,7 @@ export function resetCache(cachePath = getCachePath()): void {
 }
 
 /**
- * Полный сброс при смене каталога: очищает массив extensions в .skill-hub.json
+ * Полный сброс при смене каталога: очищает массив extensions в проектном конфиге
  * (если проект найден), затем удаляет кеш каталога.
  * Ошибки при очистке конфига выводят warning, но не блокируют сброс кеша.
  */
@@ -76,7 +76,7 @@ export function fullCatalogReset(cachePath = getCachePath()): void {
       saveProjectExtensions([]);
     }
   } catch (err: any) {
-    console.warn(`⚠  Не удалось очистить extensions в .skill-hub.json: ${err.message || err}`);
+    console.warn(`⚠  Не удалось очистить extensions в проектном конфиге: ${err.message || err}`);
   }
   resetCache(cachePath);
 }

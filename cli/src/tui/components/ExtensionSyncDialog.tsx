@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import { theme } from '../theme';
-import { ProjectExtensionRecord } from '../../config';
-import { UntrackedExtension } from '../../sync';
+import { MissingExtension, UntrackedExtension } from '../../sync';
 import { ScanResult } from '../../adapters/types';
 
 interface Props {
-  missing: ProjectExtensionRecord[];
+  missing: MissingExtension[];
   untracked: UntrackedExtension[];
   onSync: () => void;
   onDismiss: () => void;
@@ -26,7 +25,7 @@ const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
 export const ExtensionSyncDialog: React.FC<Props> = ({ missing, untracked, onSync, onDismiss, hasUploadAccess, loadingUploadAccess, onOpenUpload }) => {
   const { stdout } = useStdout();
   const innerWidth = Math.min(58, (stdout?.columns ?? 80) - 12);
-  const hasActionable = missing.length > 0 || untracked.some(e => e.inCatalog);
+  const hasActionable = missing.some(e => e.inCatalog) || untracked.some(e => e.inCatalog);
   const uploadable = untracked.filter(e => !e.inCatalog);
   const canUpload = hasUploadAccess && onOpenUpload && uploadable.length > 0;
   const showUploadLoading = loadingUploadAccess && onOpenUpload && uploadable.length > 0;
@@ -73,9 +72,15 @@ export const ExtensionSyncDialog: React.FC<Props> = ({ missing, untracked, onSyn
     );
     const shownMissing = missing.slice(0, maxItems);
     for (const e of shownMissing) {
-      lines.push({
-        text: <Text backgroundColor={BG} color={theme.secondary}>{fill(`  ${e.type}:${e.name}${e.version ? ` v${e.version}` : ''}`)}</Text>,
-      });
+      if (e.inCatalog) {
+        lines.push({
+          text: <Text backgroundColor={BG} color={theme.secondary}>{fill(`  ${e.type}:${e.name}${e.version ? ` v${e.version}` : ''}`)}</Text>,
+        });
+      } else {
+        lines.push({
+          text: <Text backgroundColor={BG} color={theme.muted}>{fill(`  ${e.type}:${e.name}  (нет в каталоге)`)}</Text>,
+        });
+      }
     }
     const moreMissing = missing.length - shownMissing.length;
     if (moreMissing > 0) {
@@ -91,7 +96,7 @@ export const ExtensionSyncDialog: React.FC<Props> = ({ missing, untracked, onSyn
       lines.push({ text: <Text backgroundColor={BG}>{emptyLine}</Text> });
     }
     lines.push(
-      { text: <Text backgroundColor={BG} color={theme.accent}>{fill('Расширения не указаны в .skill-hub.json')}</Text> },
+      { text: <Text backgroundColor={BG} color={theme.accent}>{fill('Расширения не указаны в проектном конфиге')}</Text> },
       { text: <Text backgroundColor={BG}>{emptyLine}</Text> },
     );
     const shownUntracked = untracked.slice(0, maxItems);
@@ -117,9 +122,9 @@ export const ExtensionSyncDialog: React.FC<Props> = ({ missing, untracked, onSyn
   // --- Footer ---
 
   if (hasActionable) {
-    const actionLabel = missing.length > 0 && untracked.some(e => e.inCatalog)
+    const actionLabel = missing.some(e => e.inCatalog) && untracked.some(e => e.inCatalog)
       ? 'синхронизировать'
-      : missing.length > 0
+      : missing.some(e => e.inCatalog)
         ? 'установить'
         : 'добавить в конфиг';
 

@@ -9,7 +9,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { AgentName } from '../../catalog';
-import { SkillHubConfig, AiAgentsConfig, ConfigSource, pushHistory, resolveProject, ResolvedProject, loadProjectExtensions } from '../../config';
+import { SkillHubConfig, AiAgentsConfig, ConfigSource, pushHistory, resolveProject, ResolvedProject, loadProjectExtensions, loadGitignoreAgentDirs, saveGitignoreAgentDirs, findProjectRoot } from '../../config';
 import { useStatus } from '../contexts/StatusContext';
 import { getCachePath, isCloned, resetCache, fullCatalogReset, updateCache, ensureCache } from '../../git';
 import { HintBar } from '../components/HintBar';
@@ -34,6 +34,7 @@ type Field = 'agent' | 'scope' | 'project' | 'registryUrl' | 'installMcp' | 'ins
   | 'saveAsGlobal' | 'resetToGlobal' | 'createProjectConfig'
   | 'syncExtensions'
   | 'checkProjectConflicts'
+  | 'gitignoreAgentDirs'
   | `aiAgent:${AgentName}`
   | 'aiProxy'
   | `aiAgentProxy:${AgentName}`;
@@ -85,6 +86,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
   const [pendingRegistryUrl, setPendingRegistryUrl] = useState<string | null>(null);
   const [pendingResetContext, setPendingResetContext] = useState<'settings' | 'editModal' | null>(null);
   const [pendingExtCount, setPendingExtCount] = useState(0);
+  const [localGitignoreAgentDirs, setLocalGitignoreAgentDirs] = useState<boolean>(() => loadGitignoreAgentDirs());
 
   const cachePath = getCachePath();
   const cacheInstalled = isCloned(cachePath);
@@ -120,6 +122,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         const f: Field[] = ['agent', 'scope', 'project', 'registryUrl'];
         f.push('updateCache');
         if (configSource === 'project') {
+          f.push('gitignoreAgentDirs');
           f.push('saveAsGlobal', 'resetToGlobal', 'syncExtensions');
         } else if (hasProjectRoot) {
           f.push('createProjectConfig');
@@ -200,6 +203,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
           ? (idx - 1 + SCOPES.length) % SCOPES.length
           : (idx + 1) % SCOPES.length;
         setLocalScope(SCOPES[newIdx]);
+      } else if (activeField === 'gitignoreAgentDirs') {
+        setLocalGitignoreAgentDirs(prev => !prev);
       } else if (activeField.startsWith('aiAgent:')) {
         const agentName = activeField.slice('aiAgent:'.length) as AgentName;
         setLocalAiAgents(prev => ({
@@ -238,7 +243,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
       }
       if (activeField === 'createProjectConfig') {
         if (onCreateProjectConfig()) {
-          setStatus('Проектный конфиг создан (.skill-hub.json)', 'success');
+          setStatus('Проектный конфиг создан', 'success');
         } else {
           setStatus('Не удалось создать проектный конфиг', 'error');
         }
@@ -343,6 +348,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         }
       }
       updateConfig({ agent: localAgent, defaultScope: localScope, registryUrl: localRegistryUrl, aiAgents: localAiAgents });
+      // Сохраняем gitignoreAgentDirs отдельно — это поле публичного конфига, не SkillHubConfig
+      saveGitignoreAgentDirs(localGitignoreAgentDirs);
       if (urlChanged) {
         resetAndRedownload();
         setStatus('Настройки сохранены. Загрузка каталога...', 'success');
@@ -367,7 +374,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
     return (
       <Box flexDirection="column" padding={2}>
         <Confirm
-          message={`Смена каталога очистит список расширений в .skill-hub.json (${pendingExtCount} шт.). Файлы на диске останутся. Продолжить?`}
+          message={`Смена каталога очистит список расширений в проектном конфиге (${pendingExtCount} шт.). Файлы на диске останутся. Продолжить?`}
           onConfirm={() => {
             setShowResetConfirm(false);
             if (pendingResetContext === 'settings') {
@@ -525,6 +532,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
               activeField={activeField}
               configSource={configSource}
               hasProjectRoot={hasProjectRoot}
+              localGitignoreAgentDirs={localGitignoreAgentDirs}
             />
             <Box flexDirection="column" borderStyle="round" borderColor={theme.border} paddingX={1} marginTop={1}>
               <SetupTab

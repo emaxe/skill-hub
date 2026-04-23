@@ -43,9 +43,27 @@ export interface ResolvedConfig {
   projectRoot: string | null;
 }
 
+/** Формат публичной части проектного конфига (.skill-hub.json) — коммитится в git */
+export interface ProjectPublicConfig {
+  registryUrl?: string;
+  project?: string;
+  extensions?: ProjectExtensionRecord[];
+  /** Добавлять проектные папки ИИ-агентов в .gitignore */
+  gitignoreAgentDirs?: boolean;
+}
+
+/** Формат локальной части проектного конфига (.skill-hub.local.json) — в .gitignore */
+export interface ProjectLocalConfig {
+  agent?: AgentName;
+  defaultScope?: 'global' | 'project';
+  aiAgents?: AiAgentsConfig;
+  history?: ConfigHistory;
+}
+
 const CONFIG_DIR = path.join(os.homedir(), '.skill-hub');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const PROJECT_CONFIG_NAME = '.skill-hub.json';
+const PROJECT_LOCAL_CONFIG_NAME = '.skill-hub.local.json';
 
 const DEFAULT_CONFIG: SkillHubConfig = {
   agent: 'claude-code',
@@ -129,6 +147,10 @@ export function getProjectConfigPath(projectRoot: string): string {
   return path.join(projectRoot, PROJECT_CONFIG_NAME);
 }
 
+export function getProjectLocalConfigPath(projectRoot: string): string {
+  return path.join(projectRoot, PROJECT_LOCAL_CONFIG_NAME);
+}
+
 // --- Глобальный конфиг ---
 
 export function loadConfig(): SkillHubConfig {
@@ -148,19 +170,146 @@ export function saveConfig(config: SkillHubConfig): void {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
+// --- Миграция и обеспечение проектного конфига ---
+
+/** Определяет, является ли файл .skill-hub.json старым форматом (с обёрткой settings) */
+function isOldProjectConfigFormat(file: Record<string, unknown>): boolean {
+  return file != null && typeof file === 'object' && 'settings' in file;
+}
+
+/**
+ * Мигрирует старый формат .skill-hub.json (settings + extensions в одном файле)
+ * в новый двухфайловый формат. Идемпотентна: если файл уже в новом формате — ничего не делает.
+ * @returns true если миграция была выполнена
+ */
+export function migrateOldProjectConfig(projectRoot: string): boolean {
+  const publicPath = getProjectConfigPath(projectRoot);
+  if (!fs.existsSync(publicPath)) return false;
+
+  let file: Record<string, unknown>;
+  try {
+    file = JSON.parse(fs.readFileSync(publicPath, 'utf-8'));
+  } catch {
+    return false;
+  }
+
+  if (!isOldProjectConfigFormat(file)) return false;
+
+  const settings = (file.settings ?? {}) as Partial<SkillHubConfig>;
+  const extensions = (Array.isArray(file.extensions) ? file.extensions : []) as ProjectExtensionRecord[];
+
+  // Публичный файл: registryUrl, project, extensions
+  const publicConfig: ProjectPublicConfig = {
+    registryUrl: settings.registryUrl ?? DEFAULT_CONFIG.registryUrl,
+    project: settings.project,
+    extensions,
+  };
+  fs.writeFileSync(publicPath, JSON.stringify(publicConfig, null, 2));
+
+  // Локальный файл: agent, defaultScope, aiAgents, history
+  const localPath = getProjectLocalConfigPath(projectRoot);
+  const localConfig: ProjectLocalConfig = {
+    agent: settings.agent ?? DEFAULT_CONFIG.agent,
+    defaultScope: settings.defaultScope ?? DEFAULT_CONFIG.defaultScope,
+    aiAgents: settings.aiAgents ?? DEFAULT_CONFIG.aiAgents,
+    history: settings.history,
+  };
+  fs.writeFileSync(localPath, JSON.stringify(localConfig, null, 2));
+
+  return true;
+}
+
+/**
+ * Добавляет .skill-hub.local.json в .gitignore если ещё нет.
+ * Создаёт .gitignore если он не существует.
+ */
+export function ensureGitignore(projectRoot: string): void {
+  const gitignorePath = path.join(projectRoot, '.gitignore');
+  const entry = PROJECT_LOCAL_CONFIG_NAME;
+
+  let content = '';
+  try {
+    if (fs.existsSync(gitignorePath)) {
+      content = fs.readFileSync(gitignorePath, 'utf-8');
+    }
+  } catch {
+    // ignore
+  }
+
+  // Проверяем, есть ли уже запись (как точная строка в отдельной строке)
+  const lines = content.split('\n');
+  if (lines.some(line => line.trim() === entry)) return;
+
+  const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
+  fs.writeFileSync(gitignorePath, content + separator + entry + '\n');
+}
+
+/**
+ * Обеспечивает наличие локального конфига: если публичный есть, а локального нет —
+ * создаёт локальный из глобальных настроек.
+ */
+export function ensureProjectLocalConfig(projectRoot: string): void {
+  const localPath = getProjectLocalConfigPath(projectRoot);
+  if (fs.existsSync(localPath)) return;
+
+  const publicPath = getProjectConfigPath(projectRoot);
+  if (!fs.existsSync(publicPath)) return;
+
+  const globalConfig = loadConfig();
+  const localConfig: ProjectLocalConfig = {
+    agent: globalConfig.agent,
+    defaultScope: globalConfig.defaultScope,
+    aiAgents: globalConfig.aiAgents,
+    history: globalConfig.history,
+  };
+  fs.writeFileSync(localPath, JSON.stringify(localConfig, null, 2));
+}
+
+/**
+ * Оркестратор: миграция старого формата → обеспечение локального конфига → gitignore.
+ * Идемпотентна, безопасна для повторных вызовов.
+ */
+export function ensureProjectConfig(projectRoot: string): void {
+  migrateOldProjectConfig(projectRoot);
+  ensureProjectLocalConfig(projectRoot);
+  ensureGitignore(projectRoot);
+}
+
 // --- Проектный конфиг ---
 
 export function loadProjectConfig(projectRoot?: string): SkillHubConfig | null {
   const root = projectRoot ?? findProjectRoot();
   if (!root) return null;
-  const configPath = getProjectConfigPath(root);
+
+  const publicPath = getProjectConfigPath(root);
+  if (!fs.existsSync(publicPath)) return null;
+
+  // Обеспечиваем наличие обоих файлов (миграция + auto-create local)
+  ensureProjectConfig(root);
+
   try {
-    if (fs.existsSync(configPath)) {
-      const file = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      if (file && typeof file === 'object' && file.settings) {
-        return mergeWithDefaults(file.settings as Partial<SkillHubConfig>);
-      }
+    // Публичный: registryUrl, project
+    let publicData: ProjectPublicConfig = {};
+    if (fs.existsSync(publicPath)) {
+      publicData = JSON.parse(fs.readFileSync(publicPath, 'utf-8')) as ProjectPublicConfig;
     }
+
+    // Локальный: agent, defaultScope, aiAgents, history
+    let localData: ProjectLocalConfig = {};
+    const localPath = getProjectLocalConfigPath(root);
+    if (fs.existsSync(localPath)) {
+      localData = JSON.parse(fs.readFileSync(localPath, 'utf-8')) as ProjectLocalConfig;
+    }
+
+    const merged: Partial<SkillHubConfig> = {
+      registryUrl: publicData.registryUrl,
+      project: publicData.project,
+      agent: localData.agent,
+      defaultScope: localData.defaultScope,
+      aiAgents: localData.aiAgents,
+      history: localData.history,
+    };
+    return mergeWithDefaults(merged);
   } catch {
     // ignore
   }
@@ -170,18 +319,32 @@ export function loadProjectConfig(projectRoot?: string): SkillHubConfig | null {
 export function saveProjectConfig(config: SkillHubConfig, projectRoot?: string): void {
   const root = projectRoot ?? findProjectRoot();
   if (!root) return;
-  const configPath = getProjectConfigPath(root);
 
-  let existing: Record<string, unknown> = {};
+  // Публичный файл: registryUrl, project (сохраняем extensions)
+  const publicPath = getProjectConfigPath(root);
+  let existingPublic: ProjectPublicConfig = {};
   try {
-    if (fs.existsSync(configPath)) {
-      existing = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    if (fs.existsSync(publicPath)) {
+      existingPublic = JSON.parse(fs.readFileSync(publicPath, 'utf-8')) as ProjectPublicConfig;
     }
   } catch {
     // ignore
   }
-  existing.settings = config;
-  fs.writeFileSync(configPath, JSON.stringify(existing, null, 2));
+  existingPublic.registryUrl = config.registryUrl;
+  existingPublic.project = config.project;
+  fs.writeFileSync(publicPath, JSON.stringify(existingPublic, null, 2));
+
+  // Локальный файл: agent, defaultScope, aiAgents, history
+  const localPath = getProjectLocalConfigPath(root);
+  const localConfig: ProjectLocalConfig = {
+    agent: config.agent,
+    defaultScope: config.defaultScope,
+    aiAgents: config.aiAgents,
+    history: config.history,
+  };
+  fs.writeFileSync(localPath, JSON.stringify(localConfig, null, 2));
+
+  ensureGitignore(root);
 }
 
 // --- Resolved конфиг (проектный > глобальный) ---
@@ -189,6 +352,11 @@ export function saveProjectConfig(config: SkillHubConfig, projectRoot?: string):
 export function resolveConfig(): ResolvedConfig {
   const projectRoot = findProjectRoot();
   if (projectRoot) {
+    // Миграция + автосоздание локального конфига при наличии публичного
+    const publicExists = fs.existsSync(getProjectConfigPath(projectRoot));
+    if (publicExists) {
+      ensureProjectConfig(projectRoot);
+    }
     const projectConfig = loadProjectConfig(projectRoot);
     if (projectConfig) {
       return { config: projectConfig, source: 'project', projectRoot };
@@ -228,7 +396,8 @@ export function resolveProject(resolvedConfig?: ResolvedConfig): ResolvedProject
     if (fs.existsSync(configPath)) {
       try {
         const file = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-        const parentProject = file?.settings?.project;
+        // Поддержка обоих форматов: новый (project на верхнем уровне) и старый (settings.project)
+        const parentProject = file?.project ?? file?.settings?.project;
         if (parentProject && typeof parentProject === 'string') {
           return { project: parentProject, source: 'parent', parentPath: configPath };
         }
@@ -272,14 +441,34 @@ export function resetProjectToGlobal(): boolean {
   return true;
 }
 
-// При старте: если в проекте нет .skill-hub.json — создать из глобального
+// При старте: если в проекте нет конфигов — создать оба из глобального
 export function initProjectConfig(): boolean {
   const projectRoot = findProjectRoot();
   if (!projectRoot) return false;
-  const configPath = getProjectConfigPath(projectRoot);
-  if (fs.existsSync(configPath)) return false;
+  const publicPath = getProjectConfigPath(projectRoot);
+  if (fs.existsSync(publicPath)) return false;
+
   const globalConfig = loadConfig();
-  saveProjectConfig(globalConfig, projectRoot);
+
+  // Публичный файл: registryUrl, project, extensions
+  const publicConfig: ProjectPublicConfig = {
+    registryUrl: globalConfig.registryUrl,
+    project: globalConfig.project,
+    extensions: [],
+  };
+  fs.writeFileSync(publicPath, JSON.stringify(publicConfig, null, 2));
+
+  // Локальный файл: agent, defaultScope, aiAgents, history
+  const localPath = getProjectLocalConfigPath(projectRoot);
+  const localConfig: ProjectLocalConfig = {
+    agent: globalConfig.agent,
+    defaultScope: globalConfig.defaultScope,
+    aiAgents: globalConfig.aiAgents,
+    history: globalConfig.history,
+  };
+  fs.writeFileSync(localPath, JSON.stringify(localConfig, null, 2));
+
+  ensureGitignore(projectRoot);
   return true;
 }
 
@@ -297,16 +486,17 @@ export function pushHistory(list: string[] | undefined, value: string): string[]
 export function hasProjectConfig(projectRoot?: string): boolean {
   const root = projectRoot ?? findProjectRoot();
   if (!root) return false;
-  return fs.existsSync(getProjectConfigPath(root));
+  return fs.existsSync(getProjectConfigPath(root)) && fs.existsSync(getProjectLocalConfigPath(root));
 }
 
 export function loadProjectExtensions(projectRoot?: string): ProjectExtensionRecord[] {
   const root = projectRoot ?? findProjectRoot();
   if (!root) return [];
-  const configPath = getProjectConfigPath(root);
+  const publicPath = getProjectConfigPath(root);
   try {
-    if (fs.existsSync(configPath)) {
-      const file = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    if (fs.existsSync(publicPath)) {
+      const file = JSON.parse(fs.readFileSync(publicPath, 'utf-8'));
+      // Поддержка нового (плоского) формата — extensions на верхнем уровне
       if (file && Array.isArray(file.extensions)) {
         return file.extensions as ProjectExtensionRecord[];
       }
@@ -320,18 +510,18 @@ export function loadProjectExtensions(projectRoot?: string): ProjectExtensionRec
 export function saveProjectExtensions(extensions: ProjectExtensionRecord[], projectRoot?: string): void {
   const root = projectRoot ?? findProjectRoot();
   if (!root) return;
-  const configPath = getProjectConfigPath(root);
+  const publicPath = getProjectConfigPath(root);
 
-  let existing: Record<string, unknown> = {};
+  let existing: ProjectPublicConfig = {};
   try {
-    if (fs.existsSync(configPath)) {
-      existing = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    if (fs.existsSync(publicPath)) {
+      existing = JSON.parse(fs.readFileSync(publicPath, 'utf-8')) as ProjectPublicConfig;
     }
   } catch {
     // ignore
   }
   existing.extensions = extensions;
-  fs.writeFileSync(configPath, JSON.stringify(existing, null, 2));
+  fs.writeFileSync(publicPath, JSON.stringify(existing, null, 2));
 }
 
 export function addProjectExtension(record: ProjectExtensionRecord, projectRoot?: string): void {
@@ -345,4 +535,40 @@ export function removeProjectExtension(name: string, type: ExtensionType, projec
   const list = loadProjectExtensions(projectRoot);
   const filtered = list.filter(e => !(e.type === type && e.name === name));
   saveProjectExtensions(filtered, projectRoot);
+}
+
+// --- Настройка gitignoreAgentDirs ---
+
+/** Читает настройку gitignoreAgentDirs из публичного проектного конфига */
+export function loadGitignoreAgentDirs(projectRoot?: string): boolean {
+  const root = projectRoot ?? findProjectRoot();
+  if (!root) return false;
+  const publicPath = getProjectConfigPath(root);
+  try {
+    if (fs.existsSync(publicPath)) {
+      const file = JSON.parse(fs.readFileSync(publicPath, 'utf-8')) as ProjectPublicConfig;
+      return file.gitignoreAgentDirs === true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+/** Сохраняет настройку gitignoreAgentDirs в публичный проектный конфиг */
+export function saveGitignoreAgentDirs(value: boolean, projectRoot?: string): void {
+  const root = projectRoot ?? findProjectRoot();
+  if (!root) return;
+  const publicPath = getProjectConfigPath(root);
+
+  let existing: ProjectPublicConfig = {};
+  try {
+    if (fs.existsSync(publicPath)) {
+      existing = JSON.parse(fs.readFileSync(publicPath, 'utf-8')) as ProjectPublicConfig;
+    }
+  } catch {
+    // ignore
+  }
+  existing.gitignoreAgentDirs = value;
+  fs.writeFileSync(publicPath, JSON.stringify(existing, null, 2));
 }

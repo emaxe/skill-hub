@@ -38,6 +38,7 @@ cli/
 │   ├── git.ts                # Git-операции: clone, pull, cache management
 │   ├── upload.ts             # Загрузка расширений в каталог (git push + PR URL)
 │   ├── sync.ts               # Синхронизация расширений: missing/untracked detection
+│   ├── gitignore-agents.ts   # Добавление папок ИИ-агентов в .gitignore
 │   ├── conventions.ts        # Режим agents-conventions: init/exit/health
 │   ├── platform.ts           # Платформенный хелпер: isWindows, isMac, isLinux, getAppData()
 │   ├── agent-launcher.ts     # Запуск AI-агентов: exec (-a) и script (-A) режимы
@@ -95,6 +96,7 @@ cli/
 │           ├── GitCredentialsDialog.tsx    # Диалог git-аутентификации
 │           ├── ProjectConfigDialog.tsx    # Диалог создания проектного конфига
 │           ├── ProjectConflictDialog.tsx  # Конфликт расширений между проектами
+│           ├── AgentDirsGitignoreDialog.tsx # Диалог добавления папок агентов в .gitignore
 │           ├── Header.tsx                 # Заголовок приложения
 │           ├── InfoBar.tsx                # Информационная панель
 │           ├── StatusBar.tsx              # Строка статуса
@@ -122,9 +124,16 @@ cli/
 
 **Два уровня:**
 - **Глобальный:** `~/.skill-hub/config.json`
-- **Проектный:** `.skill-hub.json` (в корне проекта)
+- **Проектный:** два файла в корне проекта:
+  - `.skill-hub.json` — **публичный** (коммитится в git): `registryUrl`, `project`, `gitignoreAgentDirs`, `extensions`
+  - `.skill-hub.local.json` — **локальный** (в `.gitignore`): `agent`, `defaultScope`, `aiAgents`, `history`
 
-Проектный конфиг переопределяет глобальный. Поиск проектного конфига: `config.ts → resolveProject()` — поднимается от CWD вверх, ищет `.skill-hub.json` или `.git`.
+Проектный конфиг переопределяет глобальный. Поиск проектного конфига: `config.ts → findProjectRoot()` — поднимается от CWD вверх, ищет `.skill-hub.json` или `.git`.
+
+При первом обращении автоматически:
+- мигрирует старый формат (единый `.skill-hub.json` с обёрткой `settings`) в два файла
+- создаёт `.skill-hub.local.json` из глобального конфига если отсутствует
+- добавляет `.skill-hub.local.json` в `.gitignore`
 
 ```typescript
 interface SkillHubConfig {
@@ -143,13 +152,25 @@ interface SkillHubConfig {
 }
 ```
 
-**Проектный конфиг** (`.skill-hub.json`):
+**Проектный конфиг — публичная часть** (`.skill-hub.json`):
 ```json
 {
-  "settings": { "agent": "claude-code", "defaultScope": "project" },
+  "registryUrl": "https://github.com/emaxe/skill-hub-catalog.git",
+  "project": "my-project",
+  "gitignoreAgentDirs": true,
   "extensions": [
     { "type": "skill", "name": "git-commit-and-push", "version": "1.0.0", "scope": "project" }
   ]
+}
+```
+
+**Проектный конфиг — локальная часть** (`.skill-hub.local.json`):
+```json
+{
+  "agent": "claude-code",
+  "defaultScope": "project",
+  "aiAgents": { "proxy": "", "agents": { ... } },
+  "history": { "registryUrl": [], "proxy": [] }
 }
 ```
 
@@ -199,7 +220,7 @@ interface SkillHubConfig {
 ### Синхронизация расширений
 
 При старте TUI (`sync.ts → checkExtensionSync()`):
-1. Загрузить `extensions` из `.skill-hub.json`
+1. Загрузить `extensions` из публичного проектного конфига (`.skill-hub.json`)
 2. Сканировать диск через адаптер
 3. **Missing** — в конфиге, но не на диске → предложить установить
 4. **Untracked** — на диске, но не в конфиге → предложить добавить в конфиг или загрузить в каталог
@@ -267,11 +288,12 @@ interface SkillHubConfig {
 
 ### Стартовая последовательность (App.tsx)
 
-4 последовательные проверки при запуске TUI:
+5 последовательных проверок при запуске TUI:
 1. **Conventions health** — если agent=`agents-conventions`, проверить `.agents/`, symlinks
 2. **Project config** — предложить создать `.skill-hub.json` если глобальный конфиг, но есть проект
 3. **Extension sync** — missing/untracked расширения
 4. **Project conflicts** — расширения не для текущего проекта
+5. **Agent dirs gitignore** — если `gitignoreAgentDirs=true`, предложить добавить отсутствующие папки агентов в `.gitignore`
 
 ### Экраны (screens/)
 
@@ -350,10 +372,14 @@ interface SkillHubConfig {
 
 ### Конфигурация
 
-- `resolveConfig()` — мерджит проектный + глобальный конфиг. Проектный приоритетнее.
-- `resolveProject()` — ищет корень проекта, поднимаясь от CWD. Приоритет: агентские директории → `.skill-hub.json` → `.git`.
+- `resolveConfig()` — мерджит проектный + глобальный конфиг. Проектный приоритетнее. Автоматически вызывает `ensureProjectConfig()` для миграции и создания локального конфига.
+- `findProjectRoot()` — ищет корень проекта, поднимаясь от CWD. Приоритет: агентские директории → `.skill-hub.json` → `.git`.
+- `ensureProjectConfig()` — оркестратор: миграция старого формата → создание `.skill-hub.local.json` → `.gitignore`. Идемпотентна.
+- `hasProjectConfig()` — проверяет наличие **обоих** файлов (`.skill-hub.json` и `.skill-hub.local.json`).
 - `pushHistory()` — добавляет URL/proxy в историю (max 6 записей).
 - При смене `registryUrl` — вызвать `fullCatalogReset()` (удалить кеш + очистить extensions из проектного конфига).
+- `loadGitignoreAgentDirs()` / `saveGitignoreAgentDirs()` — чтение/запись настройки `gitignoreAgentDirs` из публичного проектного конфига.
+- `gitignore-agents.ts` — утилиты для проверки и добавления папок ИИ-агентов в `.gitignore`: `AGENT_GITIGNORE_ENTRIES`, `getExistingAgentEntries()`, `getMissingGitignoreEntries()`, `addAgentDirsToGitignore()`.
 
 ### Тестирование
 

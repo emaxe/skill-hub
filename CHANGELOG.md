@@ -10,6 +10,13 @@
 - **`skill-hub -U` — полная реконсиляция** — при запуске восстанавливает структуру conventions (каталоги, symlinks, pointers, bootstrap), доустанавливает расширения из `.skill-hub.json`, затем обновляет существующие.
 
 ### Добавлено
+- **Настройка «Папки ИИ-агентов в .gitignore»** — переключатель `gitignoreAgentDirs` в публичном проектном конфиге (`.skill-hub.json`)
+  - TUI: поле в Настройки → Основное → `[да]/[нет]` (←→ переключение), доступно только при проектном конфиге
+  - При старте TUI (5-я проверка) — если настройка включена и есть агентские папки/файлы не в `.gitignore`, показывается диалог с предложением добавить
+  - При `skill-hub -U` — автоматически добавляет отсутствующие записи в `.gitignore`
+  - Записи: `.claude/`, `.cursor/`, `.github/`, `.codex/`, `.agents/`, `.cursorrules`
+  - Модуль `gitignore-agents.ts`: проверка покрытия, добавление секции с комментарием `# AI agent directories (skill-hub)`
+  - Компонент `AgentDirsGitignoreDialog` — диалоговое окно в стиле ExtensionSyncDialog
 - `ensureConventionsStructure()` — идемпотентная функция для восстановления `.agents/` структуры, symlinks, thin pointers, bootstrap-скиллов, `AGENTS.md`.
 - `installAgentsConventionsGlobal()` / `removeAgentsConventionsGlobal()` — установка/удаление `agents-conventions` во все AI-агенты.
 - Marker-injection (`<!-- skill-hub: agents-conventions -->`) для copilot/codex глобальных конфигов.

@@ -55,7 +55,7 @@ export function makeConfigCommand(): Command {
         const extensions = loadProjectExtensions();
         if (extensions.length > 0 && !opts.yes) {
           const projRoot = findProjectRoot() || process.cwd();
-          console.log(chalk.yellow(`\n⚠  Смена каталога приведёт к очистке списка расширений в .skill-hub.json:`));
+          console.log(chalk.yellow(`\n⚠  Смена каталога приведёт к очистке списка расширений в проектном конфиге:`));
           console.log(chalk.yellow(`   • ${extensions.length} расширений в проекте ${projRoot}\n`));
           console.log(chalk.yellow(`   Файлы расширений на диске останутся без изменений.\n`));
 
@@ -91,7 +91,7 @@ export function makeConfigCommand(): Command {
       if (saveGlobalFromProject()) {
         console.log(chalk.green('Проектные настройки сохранены как глобальные.'));
       } else {
-        console.error(chalk.red('Не найден проектный конфиг (.skill-hub.json).'));
+        console.error(chalk.red('Не найден проектный конфиг.'));
         process.exit(1);
       }
     });

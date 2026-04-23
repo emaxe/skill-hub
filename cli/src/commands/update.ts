@@ -10,8 +10,9 @@ import { getCachePath, updateCache } from '../git';
 import { createRegistry } from '../registry';
 import { getAdapter } from '../adapters/get-adapter';
 import { updateSelf } from '../base-setup';
-import { resolveConfig, loadProjectExtensions, findProjectRoot } from '../config';
+import { resolveConfig, loadProjectExtensions, findProjectRoot, loadGitignoreAgentDirs } from '../config';
 import { ensureConventionsStructure } from '../conventions';
+import { getMissingGitignoreEntries, addAgentDirsToGitignore } from '../gitignore-agents';
 
 export function makeUpdateCommand(): Command {
   return new Command('update')
@@ -72,7 +73,7 @@ export function makeUpdateCommand(): Command {
               }
             }
             if (restored > 0) {
-              console.log(chalk.green(`  Восстановлено ${restored} расширений из .skill-hub.json`));
+              console.log(chalk.green(`  Восстановлено ${restored} расширений из проектного конфига`));
             }
           }
         }
@@ -108,6 +109,18 @@ export function makeUpdateCommand(): Command {
           console.log(selfResult.mcp
             ? chalk.green('✓ MCP обновлён')
             : chalk.dim('— MCP не настроен, пропускаю'));
+        }
+
+        // Проверка настройки gitignoreAgentDirs
+        if (!name) {
+          const projectRoot = findProjectRoot();
+          if (projectRoot && loadGitignoreAgentDirs(projectRoot)) {
+            const missing = getMissingGitignoreEntries(projectRoot);
+            if (missing.length > 0) {
+              addAgentDirsToGitignore(projectRoot, missing);
+              console.log(chalk.green(`✓ Добавлено в .gitignore: ${missing.join(', ')}`));
+            }
+          }
         }
       } catch (err) {
         spinner.fail(chalk.red(String(err)));

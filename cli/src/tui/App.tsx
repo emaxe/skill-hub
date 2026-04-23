@@ -3,7 +3,7 @@
  *
  * Структура:
  * - Header (вкладки) + основная область (экраны) + InfoBar + StatusBar + HintBar
- * - При старте последовательно выполняет 4 проверки: conventions health → project config → extension sync → conflicts
+ * - При старте последовательно выполняет 5 проверок: conventions health → project config → extension sync → conflicts → agent dirs gitignore
  * - Глобальные хоткеи: Tab — смена вкладки, 1-3 — переход, Ctrl+Q — выход
  */
 import React, { useState, useCallback, useEffect } from 'react';
@@ -38,10 +38,12 @@ import { GitCredentialsDialog, GitCredentials } from './components/GitCredential
 import { Extension, loadCatalog } from '../catalog';
 import { InstalledEntry } from './hooks/useRegistry';
 import { getConventionsStatus } from '../conventions';
-import { ProjectExtensionRecord, addProjectExtension, resolveProject, ResolvedProject } from '../config';
-import { checkExtensionSync, UntrackedExtension, checkProjectConflicts, ProjectConflict } from '../sync';
+import { ProjectExtensionRecord, addProjectExtension, resolveProject, ResolvedProject, loadGitignoreAgentDirs, findProjectRoot } from '../config';
+import { checkExtensionSync, UntrackedExtension, MissingExtension, checkProjectConflicts, ProjectConflict } from '../sync';
 import { getCachePath, ensureCache, ensureCacheWithCredentials, GitAuthError } from '../git';
 import { ScanResult } from '../adapters/types';
+import { getMissingGitignoreEntries, addAgentDirsToGitignore } from '../gitignore-agents';
+import { AgentDirsGitignoreDialog } from './components/AgentDirsGitignoreDialog';
 
 const TABS: TabName[] = ['catalog', 'installed', 'settings'];
 
@@ -93,11 +95,15 @@ export const App: React.FC = () => {
   const [conventionsIssues, setConventionsIssues] = useState<ConventionsIssue[]>([]);
   const [showProjectConfigDialog, setShowProjectConfigDialog] = useState(false);
   const [showSyncDialog, setShowSyncDialog] = useState(false);
-  const [missingExtensions, setMissingExtensions] = useState<ProjectExtensionRecord[]>([]);
+  const [missingExtensions, setMissingExtensions] = useState<MissingExtension[]>([]);
   const [untrackedExtensions, setUntrackedExtensions] = useState<UntrackedExtension[]>([]);
   const [showProjectConflictDialog, setShowProjectConflictDialog] = useState(false);
   const [projectConflicts, setProjectConflicts] = useState<ProjectConflict[]>([]);
   const [resolvedProject, setResolvedProject] = useState<ResolvedProject>(() => resolveProject());
+
+  // Состояние диалога gitignore ИИ-агентов
+  const [showGitignoreAgentDirsDialog, setShowGitignoreAgentDirsDialog] = useState(false);
+  const [missingGitignoreEntries, setMissingGitignoreEntries] = useState<string[]>([]);
 
   // Состояние диалога ввода учётных данных git
   const [showGitCredentials, setShowGitCredentials] = useState(false);
@@ -106,11 +112,11 @@ export const App: React.FC = () => {
   const [gitCredentialsPending, setGitCredentialsPending] = useState<((creds: GitCredentials) => Promise<void>) | null>(null);
 
   // Фазы стартовых проверок — выполняются последовательно, каждая ждёт закрытия диалога
-  type StartupPhase = 'conventions' | 'projectConfig' | 'sync' | 'conflicts' | 'done';
+  type StartupPhase = 'conventions' | 'projectConfig' | 'sync' | 'conflicts' | 'gitignoreAgentDirs' | 'done';
   const [startupPhase, setStartupPhase] = useState<StartupPhase>('conventions');
 
   // Флаг: активен ли какой-либо диалог — блокирует ввод на фоновых экранах
-  const dialogActive = showConventionsWarning || showProjectConfigDialog || showSyncDialog || showProjectConflictDialog || showGitCredentials;
+  const dialogActive = showConventionsWarning || showProjectConfigDialog || showSyncDialog || showProjectConflictDialog || showGitignoreAgentDirsDialog || showGitCredentials;
 
   useEffect(() => {
     if (startupPhase === 'done') return;
@@ -177,6 +183,24 @@ export const App: React.FC = () => {
         if (conflicts.length > 0) {
           setProjectConflicts(conflicts);
           setShowProjectConflictDialog(true);
+          return;
+        }
+      }
+      setStartupPhase('gitignoreAgentDirs');
+      return;
+    }
+
+    // Проверка 5: папки ИИ-агентов в .gitignore
+    if (startupPhase === 'gitignoreAgentDirs') {
+      if (source === 'project') {
+        const projectRoot = findProjectRoot();
+        if (projectRoot && loadGitignoreAgentDirs(projectRoot)) {
+          const missing = getMissingGitignoreEntries(projectRoot);
+          if (missing.length > 0) {
+            setMissingGitignoreEntries(missing);
+            setShowGitignoreAgentDirsDialog(true);
+            return;
+          }
         }
       }
       setStartupPhase('done');
@@ -225,7 +249,7 @@ export const App: React.FC = () => {
     doCreateProjectConfig();
     setShowProjectConfigDialog(false);
     setResolvedProject(resolveProject());
-    setStatus('Проектный конфиг создан (.skill-hub.json)', 'success');
+    setStatus('Проектный конфиг создан', 'success');
     setStartupPhase(prev => prev === 'projectConfig' ? 'sync' : prev);
   }, [doCreateProjectConfig, setStatus]);
 
@@ -240,21 +264,26 @@ export const App: React.FC = () => {
       let installedCount = 0;
       let trackedCount = 0;
 
-      // Установка missing-расширений
+      // Установка missing-расширений (только те, что есть в каталоге)
+      let skippedCount = 0;
       if (missingExtensions.length > 0) {
-        await ensureCache();
-        const cachePath = getCachePath();
-        const catalog = loadCatalog(cachePath);
-        for (const ext of missingExtensions) {
-          const fullExt = catalog.extensions.find(e => e.name === ext.name && e.type === ext.type);
-          if (fullExt) {
-            await registry.install(fullExt, agent, ext.scope);
-            installedCount++;
+        const installable = missingExtensions.filter(e => e.inCatalog);
+        skippedCount = missingExtensions.length - installable.length;
+        if (installable.length > 0) {
+          await ensureCache();
+          const cachePath = getCachePath();
+          const catalog = loadCatalog(cachePath);
+          for (const ext of installable) {
+            const fullExt = catalog.extensions.find(e => e.name === ext.name && e.type === ext.type);
+            if (fullExt) {
+              await registry.install(fullExt, agent, ext.scope);
+              installedCount++;
+            }
           }
         }
       }
 
-      // Добавление untracked-расширений в .skill-hub.json (только из каталога, с актуальной версией)
+      // Добавление untracked-расширений в проектный конфиг (только из каталога, с актуальной версией)
       for (const ext of untrackedExtensions) {
         if (!ext.inCatalog) continue;
         addProjectExtension({
@@ -269,10 +298,12 @@ export const App: React.FC = () => {
       const parts: string[] = [];
       if (installedCount > 0) parts.push(`установлено: ${installedCount}`);
       if (trackedCount > 0) parts.push(`добавлено в конфиг: ${trackedCount}`);
+      if (skippedCount > 0) parts.push(`не в каталоге: ${skippedCount}`);
       if (parts.length > 0) {
-        setStatus(`Синхронизация: ${parts.join(', ')}`, 'success');
+        const type = installedCount > 0 || trackedCount > 0 ? 'success' : 'error';
+        setStatus(`Синхронизация: ${parts.join(', ')}`, type);
       } else {
-        setStatus('Расширения не найдены в каталоге', 'error');
+        setStatus('Нечего синхронизировать', 'idle');
       }
       setStartupPhase(prev => prev === 'sync' ? 'conflicts' : prev);
     } catch (err) {
@@ -330,6 +361,7 @@ export const App: React.FC = () => {
 
   const handleRemoveProjectConflicts = useCallback(async () => {
     setShowProjectConflictDialog(false);
+    setStartupPhase(prev => prev === 'conflicts' ? 'gitignoreAgentDirs' : prev);
     try {
       let removedCount = 0;
       for (const conflict of projectConflicts) {
@@ -349,6 +381,7 @@ export const App: React.FC = () => {
 
   const handleDismissProjectConflicts = useCallback(() => {
     setShowProjectConflictDialog(false);
+    setStartupPhase(prev => prev === 'conflicts' ? 'gitignoreAgentDirs' : prev);
   }, []);
 
   const handleCheckProjectConflictsFromSettings = useCallback(() => {
@@ -362,6 +395,21 @@ export const App: React.FC = () => {
       }
     }
   }, [agent]);
+
+  const handleSyncGitignoreAgentDirs = useCallback(() => {
+    setShowGitignoreAgentDirsDialog(false);
+    const projectRoot = findProjectRoot();
+    if (projectRoot && missingGitignoreEntries.length > 0) {
+      addAgentDirsToGitignore(projectRoot, missingGitignoreEntries);
+      setStatus(`Добавлено в .gitignore: ${missingGitignoreEntries.join(', ')}`, 'success');
+    }
+    setStartupPhase(prev => prev === 'gitignoreAgentDirs' ? 'done' : prev);
+  }, [missingGitignoreEntries, setStatus]);
+
+  const handleDismissGitignoreAgentDirs = useCallback(() => {
+    setShowGitignoreAgentDirsDialog(false);
+    setStartupPhase(prev => prev === 'gitignoreAgentDirs' ? 'done' : prev);
+  }, []);
 
   const handleSyncFromSettings = useCallback(() => {
     const syncResult = checkExtensionSync(agent);
@@ -626,6 +674,15 @@ export const App: React.FC = () => {
                 currentProject={resolvedProject.project}
                 onRemove={handleRemoveProjectConflicts}
                 onDismiss={handleDismissProjectConflicts}
+              />
+            </Box>
+          )}
+          {showGitignoreAgentDirsDialog && (
+            <Box position="absolute" marginTop={2} marginLeft={2}>
+              <AgentDirsGitignoreDialog
+                missingEntries={missingGitignoreEntries}
+                onSync={handleSyncGitignoreAgentDirs}
+                onDismiss={handleDismissGitignoreAgentDirs}
               />
             </Box>
           )}

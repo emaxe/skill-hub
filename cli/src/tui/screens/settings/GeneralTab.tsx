@@ -5,7 +5,7 @@ import { ConfigSource, ResolvedProject } from '../../../config';
 import { InstallState } from '../../hooks/useBaseSetup';
 import { theme } from '../../theme';
 
-type Field = 'agent' | 'scope' | 'project' | 'registryUrl' | 'updateCache' | 'saveAsGlobal' | 'resetToGlobal' | 'createProjectConfig' | 'syncExtensions' | 'checkProjectConflicts';
+type Field = 'agent' | 'scope' | 'project' | 'registryUrl' | 'updateCache' | 'saveAsGlobal' | 'resetToGlobal' | 'createProjectConfig' | 'syncExtensions' | 'checkProjectConflicts' | 'gitignoreAgentDirs';
 
 interface Props {
   localAgent: AgentName;
@@ -18,6 +18,7 @@ interface Props {
   activeField: string;
   configSource: ConfigSource;
   hasProjectRoot: boolean;
+  localGitignoreAgentDirs: boolean;
 }
 
 export const GeneralTab: React.FC<Props> = ({
@@ -31,6 +32,7 @@ export const GeneralTab: React.FC<Props> = ({
   activeField,
   configSource,
   hasProjectRoot,
+  localGitignoreAgentDirs,
 }) => (
   <Box flexDirection="column">
     {/* Рабочая папка */}
@@ -43,7 +45,7 @@ export const GeneralTab: React.FC<Props> = ({
     <Box marginBottom={1}>
       <Text dimColor>{'  '}{'Источник:     '}</Text>
       <Text color={configSource === 'project' ? theme.success : theme.warning}>
-        {configSource === 'project' ? '📁 проектные (.skill-hub.json)' : '🌐 глобальные (~/.skill-hub/config.json)'}
+        {configSource === 'project' ? '📁 проектные (.skill-hub.json + .local)' : '🌐 глобальные (~/.skill-hub/config.json)'}
       </Text>
     </Box>
 
@@ -115,6 +117,17 @@ export const GeneralTab: React.FC<Props> = ({
         {cacheUpdateState === 'idle' && <Text dimColor>[Enter]</Text>}
         {cacheUpdateState === 'success' && <Text color={theme.success}>✓ обновлён</Text>}
         {cacheUpdateState === 'error' && <Text color={theme.error}>ошибка</Text>}
+      </Box>
+    )}
+
+    {/* Сохранить как глобальные (только для проектных настроек) */}
+    {configSource === 'project' && (
+      <Box marginBottom={1}>
+        <Text color={activeField === 'gitignoreAgentDirs' ? theme.selected : theme.secondary}>
+          {activeField === 'gitignoreAgentDirs' ? '▶ ' : '  '}{'Папки ИИ-агентов в .gitignore: '}
+        </Text>
+        <Text color={theme.warning}>[{localGitignoreAgentDirs ? 'да' : 'нет'}]</Text>
+        <Text dimColor> ←→</Text>
       </Box>
     )}
 

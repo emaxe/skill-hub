@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Catalog, Extension, AgentName, ExtensionType, loadCatalog, searchExtensions } from '../../catalog';
-import { getCachePath } from '../../git';
+import { getCachePath, ensureCache, isCloned } from '../../git';
 
 export interface UseCatalogState {
   catalog: Catalog | null;
@@ -27,20 +27,29 @@ export function useCatalog(agent?: AgentName, project?: string | null): UseCatal
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Загрузка каталога
+  // Загрузка каталога (при необходимости — clone/pull)
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setError(null);
 
     const cachePath = getCachePath();
-    try {
+
+    const load = async () => {
+      // Если кеш ещё не загружен — скачать
+      if (!isCloned(cachePath)) {
+        await ensureCache(cachePath);
+      }
+      if (cancelled) return;
       const cat = loadCatalog(cachePath);
       setCatalog(cat);
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);
-    }
+    };
+
+    load()
+      .catch(err => { if (!cancelled) setError(String(err)); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
   }, [reloadKey]);
 
   // Debounce поиска

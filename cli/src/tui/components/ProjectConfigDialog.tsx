@@ -32,7 +32,7 @@ export const ProjectConfigDialog: React.FC<Props> = ({ onCreate, onDismiss }) =>
   const lines: Array<{ text: React.ReactNode }> = [
     { text: <Text backgroundColor={BG} color={theme.primary}>{fill('Проектный конфиг не найден')}</Text> },
     { text: <Text backgroundColor={BG}>{emptyLine}</Text> },
-    { text: <Text backgroundColor={BG} color={theme.secondary}>{fill('В этом проекте нет .skill-hub.json.')}</Text> },
+    { text: <Text backgroundColor={BG} color={theme.secondary}>{fill('В этом проекте нет проектного конфига.')}</Text> },
     { text: <Text backgroundColor={BG} color={theme.secondary}>{fill('Создать из глобальных настроек?')}</Text> },
     { text: <Text backgroundColor={BG}>{emptyLine}</Text> },
     {
