@@ -68,6 +68,7 @@ cli/
 │       │   ├── useBaseSetup.ts    # MCP/base-skill setup status
 │       │   ├── useUploadAccess.ts # Async проверка write-доступа к каталогу
 │       │   ├── useTerminalSize.ts # Размер терминала + debounced resize
+│       │   ├── useLayout.ts       # Адаптивная раскладка: breakpoint, конфиг колонок, флаги видимости
 │       │   ├── useConventionsInit.ts  # Init conventions flow (dynamic paths)
 │       │   ├── useConventionsExit.ts  # Exit conventions flow (dynamic paths)
 │       │   └── useKeymap.ts       # Хоткеи per-screen
@@ -327,6 +328,7 @@ interface SkillHubConfig {
 | `useBaseSetup` | Статус установки MCP/base-skill/self-update |
 | `useUploadAccess` | Async проверка write-доступа к каталогу (кеш) |
 | `useTerminalSize` | Размеры терминала с debounced resize |
+| `useLayout` | Адаптивная раскладка: breakpoint (`compact/normal/wide`), конфиг колонок таблиц, флаги показа InfoBar/Separator |
 | `useConventionsInit` | Init conventions flow: динамические пути к `~/.skill-hub/bootstrap/init-agents/` |
 | `useConventionsExit` | Exit conventions flow: динамические пути к `~/.skill-hub/bootstrap/exit-agents/` |
 | `useKeymap` | Хоткеи per-screen |
@@ -348,6 +350,27 @@ interface SkillHubConfig {
 3. **Комментарии для неочевидной логики.** «Почему», а не «что». Скоринг, дедупликация, multi-step flows.
 4. **Не переусердствовать.** Простые геттеры и self-documenting код не комментировать.
 5. **Версии в sync.** Bump `package.json` → обновить строки в `index.ts` и `mcp.ts`.
+
+### Адаптивный TUI (responsive layout)
+
+TUI адаптируется к размеру терминала через хук `useLayout` (`hooks/useLayout.ts`). Все компоненты получают адаптивные параметры **через props** (не вызывают `useLayout` самостоятельно) — единственный источник данных в `App.tsx`.
+
+**Breakpoints по ширине:**
+
+| Breakpoint | Диапазон | Что меняется |
+|-----------|---------|-------------|
+| `compact` | < 80 кол. | Скрыты TAGS/PROJECT/SOURCE, короткие лейблы Header/FilterBar, компактный InfoBar |
+| `normal` | 80–119 кол. | Стандартный вид |
+| `wide` | ≥ 120 кол. | Расширенные колонки NAME/DESCRIPTION |
+
+**По высоте:** при `rows < 16` — InfoBar и один Separator скрываются, `contentAreaHeight` пересчитывается (+3 строки для контента). `MIN_ROWS = 12`.
+
+**Интерфейсы из `useLayout.ts`:** `Breakpoint`, `TableColumn`, `CatalogTableConfig`, `InstalledTableConfig`, `LayoutConfig`.
+
+**Правила при добавлении новых компонентов:**
+- Принимать `compact?: boolean`, `termColumns?: number`, `dialogWidth?: number` и подобные props
+- Не импортировать `useLayout` напрямую в компонент — только через props из App.tsx
+- Диалоги: использовать `dialogWidth ?? Math.min(58, stdout.columns - 12)` как fallback
 
 ### Ink/React паттерны
 
@@ -387,6 +410,7 @@ interface SkillHubConfig {
 - Тесты рядом с модулями: `upload.test.ts`, `git.test.ts`, `catalog.test.ts`
 - Моки: `jest.mock('simple-git')` для git-операций, `jest.mock('fs')` для файловых
 - Тест `getUploadCandidates` пропущен — требует мок адаптера без DI
+- **Текущее состояние:** 169 тестов (168 pass, 1 skip)
 
 ### Windows и кроссплатформенность
 

@@ -15,14 +15,16 @@ interface Props {
   onSync: () => void;
   /** Пользователь пропустил */
   onDismiss: () => void;
+  /** Ширина содержимого диалога (без рамки) */
+  dialogWidth?: number;
 }
 
 const BG = '#1e1e2e';
 const BORDER_COLOR = theme.warning;
 
-export const AgentDirsGitignoreDialog: React.FC<Props> = ({ missingEntries, onSync, onDismiss }) => {
+export const AgentDirsGitignoreDialog: React.FC<Props> = ({ missingEntries, onSync, onDismiss, dialogWidth }) => {
   const { stdout } = useStdout();
-  const innerWidth = Math.min(58, (stdout?.columns ?? 80) - 12);
+  const innerWidth = dialogWidth ?? Math.min(58, (stdout?.columns ?? 80) - 12);
 
   useInput((_input, key) => {
     if (key.return) onSync();

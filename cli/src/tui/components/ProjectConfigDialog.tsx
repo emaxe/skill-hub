@@ -5,14 +5,16 @@ import { theme } from '../theme';
 interface Props {
   onCreate: () => void;
   onDismiss: () => void;
+  /** Ширина содержимого диалога (без рамки) */
+  dialogWidth?: number;
 }
 
 const BG = '#1e1e2e';
 const BORDER_COLOR = theme.primary;
 
-export const ProjectConfigDialog: React.FC<Props> = ({ onCreate, onDismiss }) => {
+export const ProjectConfigDialog: React.FC<Props> = ({ onCreate, onDismiss, dialogWidth }) => {
   const { stdout } = useStdout();
-  const innerWidth = Math.min(58, (stdout?.columns ?? 80) - 12);
+  const innerWidth = dialogWidth ?? Math.min(58, (stdout?.columns ?? 80) - 12);
 
   useInput((_input, key) => {
     if (key.return) onCreate();

@@ -9,11 +9,12 @@
 1. Перейти в `cli/` директорию
 2. Спросить пользователя тип версии (patch / minor / major). По умолчанию — patch
 3. Поднять версию в `cli/package.json` с помощью `npm version <тип> --no-git-tag-version`
-4. Выполнить `npm run build` — убедиться, что билд проходит
-5. Выполнить `npm pack --dry-run` — показать содержимое пакета пользователю
-6. Спросить подтверждение перед публикацией
-7. Выполнить `npm publish --access public`
-8. Показать итоговую версию и ссылку: `https://www.npmjs.com/package/@emaxe/skill-hub`
+4. Скопировать актуальный README из корня репозитория: `cp ../README.md ./README.md` (npm берёт README из директории пакета, а не из корня репо — без этого шага на npmjs.com будет устаревший `cli/README.md`)
+5. Выполнить `npm run build` — убедиться, что билд проходит
+6. Выполнить `npm pack --dry-run` — показать содержимое пакета пользователю
+7. Спросить подтверждение перед публикацией
+8. Выполнить `npm publish --access public`
+9. Показать итоговую версию и ссылку: `https://www.npmjs.com/package/@emaxe/skill-hub`
 
 ## Arguments
 

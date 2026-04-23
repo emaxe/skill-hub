@@ -8,14 +8,16 @@ interface Props {
   currentProject: string;
   onRemove: () => void;
   onDismiss: () => void;
+  /** Ширина содержимого диалога (без рамки) */
+  dialogWidth?: number;
 }
 
 const BG = '#1e1e2e';
 const BORDER_COLOR = theme.warning;
 
-export const ProjectConflictDialog: React.FC<Props> = ({ conflicts, currentProject, onRemove, onDismiss }) => {
+export const ProjectConflictDialog: React.FC<Props> = ({ conflicts, currentProject, onRemove, onDismiss, dialogWidth }) => {
   const { stdout } = useStdout();
-  const innerWidth = Math.min(58, (stdout?.columns ?? 80) - 12);
+  const innerWidth = dialogWidth ?? Math.min(58, (stdout?.columns ?? 80) - 12);
 
   useInput((_input, key) => {
     if (key.return) onRemove();

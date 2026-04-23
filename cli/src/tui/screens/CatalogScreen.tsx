@@ -10,6 +10,7 @@ import { SearchInput } from '../components/SearchInput';
 import { FilterBar } from '../components/FilterBar';
 import { HintBar } from '../components/HintBar';
 import type { Hint } from '../components/HintBar';
+import type { CatalogTableConfig } from '../hooks/useLayout';
 
 export interface CatalogScreenProps {
   agent: AgentName;
@@ -21,6 +22,12 @@ export interface CatalogScreenProps {
   project?: string | null;
   viewHeight: number;
   inputActive?: boolean;
+  /** Конфиг колонок таблицы каталога (из useLayout) */
+  tableConfig?: CatalogTableConfig;
+  /** Compact-режим для вложенных компонентов */
+  compact?: boolean;
+  /** Ширина терминала для адаптивных хинтов */
+  termColumns?: number;
 }
 
 const PAGE_SIZE_MIN = 3;
@@ -29,6 +36,7 @@ const FIXED_ROWS = 8;
 
 export const CatalogScreen: React.FC<CatalogScreenProps> = ({
   agent, onOpenDetail, onSearchFocusChange, install, installed, defaultScope, project, viewHeight, inputActive,
+  tableConfig, compact, termColumns,
 }) => {
   const catalogAgent = agent === 'agents-conventions' ? 'claude-code' : agent;
   const { results, query, typeFilter, loading, error, setQuery, setTypeFilter } = useCatalog(catalogAgent, project);
@@ -127,7 +135,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
   return (
     <Box flexDirection="column" flexGrow={1}>
       <SearchInput value={query} onChange={setQuery} focused={searchFocused} />
-      <FilterBar activeType={typeFilter} onTypeChange={setTypeFilter} />
+      <FilterBar activeType={typeFilter} onTypeChange={setTypeFilter} compact={compact} />
       {loading ? (
         <Box paddingX={2}>
           <Text dimColor>Загрузка каталога...</Text>
@@ -144,6 +152,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
             installedNames={installedNames}
             installedScopes={installedScopes}
             currentProject={project}
+            tableConfig={tableConfig}
           />
           {totalPages > 1 && (
             <Box paddingX={1} marginTop={1}>
@@ -152,7 +161,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
           )}
         </Box>
       )}
-      <HintBar hints={hints} />
+      <HintBar hints={hints} maxWidth={termColumns} />
     </Box>
   );
 };

@@ -19,7 +19,7 @@ import { useNavigation } from './hooks/useNavigation';
 import { useRegistry } from './hooks/useRegistry';
 import { useSettings } from './hooks/useSettings';
 import { useBaseSetup } from './hooks/useBaseSetup';
-import { useTerminalSize } from './hooks/useTerminalSize';
+import { useLayout } from './hooks/useLayout';
 import { StatusContext } from './contexts/StatusContext';
 import { CatalogScreen } from './screens/CatalogScreen';
 import { InstalledScreen } from './screens/InstalledScreen';
@@ -468,8 +468,12 @@ export const App: React.FC = () => {
   }, { isActive: !dialogActive });
   const screen = nav.currentScreen;
 
-  const { rows: termHeight, columns: termWidth } = useTerminalSize();
-  const contentAreaHeight = termHeight - 8; // Header(1+border) + Separator(1) + InfoBar(1) + Separator(1) + StatusBar(1) + HintBar(1)
+  const layout = useLayout();
+  const { breakpoint, columns: termWidth, rows: termHeight, catalogTable, installedTable, dialogInnerWidth, labelPadWidth } = layout;
+  const isCompact = breakpoint === 'compact';
+  // При малой высоте скрываем InfoBar и разделители — экономия 3 строк
+  const hiddenRows = layout.showInfoBar ? 0 : 3;
+  const contentAreaHeight = termHeight - 8 + hiddenRows; // Header(1+border) + Separator(1) + InfoBar(1) + Separator(1) + StatusBar(1) + HintBar(1)
 
   const globalCount = registry.installed.filter(e => e.effectiveScope === 'global').length;
   const projectCount = registry.installed.filter(e => e.effectiveScope === 'project').length;
@@ -501,6 +505,8 @@ export const App: React.FC = () => {
           onOpenContent={handleOpenContent}
           viewHeight={contentAreaHeight}
           inputActive={!dialogActive}
+          labelPadWidth={labelPadWidth}
+          termColumns={termWidth}
         />
       );
     }
@@ -532,6 +538,8 @@ export const App: React.FC = () => {
           inputActive={!dialogActive}
           hasUploadAccess={uploadAccess.hasAccess}
           onOpenUpload={handleOpenUpload}
+          labelPadWidth={labelPadWidth}
+          termColumns={termWidth}
         />
       );
     }
@@ -544,6 +552,7 @@ export const App: React.FC = () => {
           onOpenContent={handleOpenContent}
           viewHeight={contentAreaHeight}
           inputActive={!dialogActive}
+          termColumns={termWidth}
         />
       );
     }
@@ -565,6 +574,9 @@ export const App: React.FC = () => {
           inputActive={!dialogActive}
           hasUploadAccess={uploadAccess.hasAccess}
           onOpenUpload={handleOpenUpload}
+          tableConfig={installedTable}
+          compact={isCompact}
+          termColumns={termWidth}
         />
       );
     }
@@ -604,6 +616,9 @@ export const App: React.FC = () => {
         project={resolvedProject.project}
         viewHeight={contentAreaHeight}
         inputActive={!dialogActive}
+        tableConfig={catalogTable}
+        compact={isCompact}
+        termColumns={termWidth}
       />
     );
   };
@@ -619,7 +634,7 @@ export const App: React.FC = () => {
     : [{ key: 'Esc', description: 'назад' }, { key: 'Ctrl+Q', description: 'выход' }];
 
   const MIN_COLS = 60;
-  const MIN_ROWS = 10;
+  const MIN_ROWS = 12;
 
   if (termWidth < MIN_COLS || termHeight < MIN_ROWS) {
     return (
@@ -634,7 +649,7 @@ export const App: React.FC = () => {
   return (
     <StatusContext.Provider value={{ message: statusMessage, status: statusType, setStatus, clearStatus }}>
       <Box flexDirection="column" height="100%">
-        <Header activeTab={nav.activeTab} />
+        <Header activeTab={nav.activeTab} compact={isCompact} />
         <Box height={contentAreaHeight} flexDirection="column">
           {renderScreen()}
           {showConventionsWarning && (
@@ -643,6 +658,7 @@ export const App: React.FC = () => {
                 issues={conventionsIssues}
                 onGoToSettings={handleGoToSettings}
                 onDismiss={handleDismissWarning}
+                dialogWidth={dialogInnerWidth}
               />
             </Box>
           )}
@@ -651,6 +667,7 @@ export const App: React.FC = () => {
               <ProjectConfigDialog
                 onCreate={handleCreateProjectConfig}
                 onDismiss={handleDismissProjectConfigDialog}
+                dialogWidth={dialogInnerWidth}
               />
             </Box>
           )}
@@ -664,6 +681,7 @@ export const App: React.FC = () => {
                 hasUploadAccess={uploadAccess.hasAccess}
                 loadingUploadAccess={uploadAccess.loading}
                 onOpenUpload={handleOpenUpload}
+                dialogWidth={dialogInnerWidth}
               />
             </Box>
           )}
@@ -674,6 +692,7 @@ export const App: React.FC = () => {
                 currentProject={resolvedProject.project}
                 onRemove={handleRemoveProjectConflicts}
                 onDismiss={handleDismissProjectConflicts}
+                dialogWidth={dialogInnerWidth}
               />
             </Box>
           )}
@@ -683,6 +702,7 @@ export const App: React.FC = () => {
                 missingEntries={missingGitignoreEntries}
                 onSync={handleSyncGitignoreAgentDirs}
                 onDismiss={handleDismissGitignoreAgentDirs}
+                dialogWidth={dialogInnerWidth}
               />
             </Box>
           )}
@@ -692,24 +712,28 @@ export const App: React.FC = () => {
                 url={gitCredentialsUrl}
                 onConfirm={handleGitCredentialsConfirm}
                 onCancel={handleGitCredentialsCancel}
+                dialogWidth={dialogInnerWidth}
               />
             </Box>
           )}
         </Box>
         {!isFullscreen && (
           <>
-            <Separator />
-            <InfoBar
-              totalCount={registry.installed.length}
-              globalCount={globalCount}
-              projectCount={projectCount}
-              parentCount={parentCount}
-              agent={agent}
-              defaultScope={config.defaultScope}
-            />
-            <Separator />
+            {layout.showSeparators ? <Separator /> : null}
+            {layout.showInfoBar ? (
+              <InfoBar
+                totalCount={registry.installed.length}
+                globalCount={globalCount}
+                projectCount={projectCount}
+                parentCount={parentCount}
+                agent={agent}
+                defaultScope={config.defaultScope}
+                compact={isCompact}
+              />
+            ) : null}
+            {layout.showSeparators ? <Separator /> : null}
             <StatusBar message={statusMessage} status={statusType} />
-            <HintBar hints={hints} />
+            <HintBar hints={hints} maxWidth={termWidth} />
           </>
         )}
       </Box>

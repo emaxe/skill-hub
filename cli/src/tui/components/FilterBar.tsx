@@ -10,24 +10,32 @@ const TYPE_OPTIONS: { value: ExtensionType | 'all'; label: string }[] = [
   { value: 'command', label: 'Commands' },
 ];
 
+const COMPACT_TYPE_LABELS: Record<ExtensionType | 'all', string> = {
+  all: '*',
+  skill: 'S',
+  agent: 'A',
+  command: 'C',
+};
+
 interface Props {
   activeType: ExtensionType | 'all';
   onTypeChange: (type: ExtensionType | 'all') => void;
+  compact?: boolean;
 }
 
-export const FilterBar: React.FC<Props> = ({ activeType }) => (
+export const FilterBar: React.FC<Props> = ({ activeType, compact }) => (
   <Box paddingX={1}>
     <Text color={theme.muted}>Тип </Text>
     <Text color={theme.warning}>[t]</Text>
     <Text color={theme.muted}>: </Text>
     {TYPE_OPTIONS.map(opt => (
       <React.Fragment key={opt.value}>
-        <Text color={theme.muted}>  </Text>
+        <Text color={theme.muted}>{compact ? ' ' : '  '}</Text>
         <Text
           color={activeType === opt.value ? theme.selected : theme.muted}
           bold={activeType === opt.value}
         >
-          {opt.label}
+          {compact ? COMPACT_TYPE_LABELS[opt.value] : opt.label}
         </Text>
       </React.Fragment>
     ))}

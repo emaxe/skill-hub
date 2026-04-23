@@ -20,13 +20,15 @@ interface Props {
   onConfirm: (creds: GitCredentials) => void;
   /** Вызывается при отмене */
   onCancel: () => void;
+  /** Ширина содержимого диалога (без рамки) */
+  dialogWidth?: number;
 }
 
 type Field = 'username' | 'password';
 
-export const GitCredentialsDialog: React.FC<Props> = ({ url, onConfirm, onCancel }) => {
+export const GitCredentialsDialog: React.FC<Props> = ({ url, onConfirm, onCancel, dialogWidth }) => {
   const { stdout } = useStdout();
-  const innerWidth = Math.min(56, (stdout?.columns ?? 80) - 12);
+  const innerWidth = dialogWidth ?? Math.min(56, (stdout?.columns ?? 80) - 12);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

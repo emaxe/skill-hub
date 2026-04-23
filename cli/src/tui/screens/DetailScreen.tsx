@@ -23,11 +23,17 @@ export interface DetailScreenProps {
   onOpenContent: (title: string, content: string) => void;
   viewHeight: number;
   inputActive?: boolean;
+  /** Ширина колонки метки (по умолчанию 12) */
+  labelPadWidth?: number;
+  /** Ширина терминала в колонках — для обрезки длинных значений */
+  termColumns?: number;
 }
 
 export const DetailScreen: React.FC<DetailScreenProps> = ({
   extension, agent, onBack, install, remove, isInstalled, defaultScope, onOpenContent, viewHeight, inputActive,
+  labelPadWidth: lpw, termColumns,
 }) => {
+  const labelPadWidth = lpw ?? 12;
   const { setStatus } = useStatus();
   const [showConfirm, setShowConfirm] = useState(false);
   const [showDiskConfirm, setShowDiskConfirm] = useState(false);
@@ -61,12 +67,21 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
     }
   }, { isActive: inputActive !== false });
 
-  const Row = ({ label, value }: { label: string; value: string }) => (
-    <Box>
-      <Text color={theme.muted}>{label.padEnd(12)}</Text>
-      <Text color={theme.secondary}>{value}</Text>
-    </Box>
-  );
+  const Row = ({ label, value }: { label: string; value: string }) => {
+    let display = value;
+    if (termColumns != null) {
+      const maxLen = termColumns - labelPadWidth - 4;
+      if (maxLen > 0 && display.length > maxLen) {
+        display = display.slice(0, maxLen - 1) + '…';
+      }
+    }
+    return (
+      <Box>
+        <Text color={theme.muted}>{label.padEnd(labelPadWidth)}</Text>
+        <Text color={theme.secondary}>{display}</Text>
+      </Box>
+    );
+  };
 
   const platformList = Object.entries(extension.platforms)
     .filter(([, file]) => file != null && file !== '')

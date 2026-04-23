@@ -12,6 +12,7 @@ import { Extension, AgentName, ExtensionType } from '../../catalog';
 import { InstallRecord } from '../../registry';
 import { InstalledEntry } from '../hooks/useRegistry';
 import { ScanResult } from '../../adapters/types';
+import { InstalledTableConfig } from '../hooks/useLayout';
 import { Confirm } from '../components/Confirm';
 import { HintBar, Hint } from '../components/HintBar';
 import { SearchInput } from '../components/SearchInput';
@@ -37,6 +38,12 @@ export interface InstalledScreenProps {
   hasUploadAccess?: boolean;
   /** Открыть экран загрузки */
   onOpenUpload?: (preselected?: ScanResult[]) => void;
+  /** Адаптивная конфигурация колонок таблицы */
+  tableConfig?: InstalledTableConfig;
+  /** Compact-режим для вложенных компонентов */
+  compact?: boolean;
+  /** Ширина терминала для адаптивных хинтов */
+  termColumns?: number;
 }
 
 type ScopeFilter = 'all' | 'global' | 'project' | 'parent';
@@ -76,7 +83,7 @@ function nextInList<T>(current: T, list: T[]): T {
 
 export const InstalledScreen: React.FC<InstalledScreenProps> = ({
   agent, onMoveExt, onOpenDetail, onSearchFocusChange, installed, loading, error, remove, update, updateSelf, viewHeight, project, inputActive,
-  hasUploadAccess, onOpenUpload,
+  hasUploadAccess, onOpenUpload, tableConfig, compact, termColumns,
 }) => {
   const { setStatus } = useStatus();
   const isConventions = agent === 'agents-conventions';
@@ -262,7 +269,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
 
       {/* Type filter bar (conventions mode only) */}
       {isConventions && (
-        <FilterBar activeType={typeFilter} onTypeChange={setTypeFilter} />
+        <FilterBar activeType={typeFilter} onTypeChange={setTypeFilter} compact={compact} />
       )}
 
       {/* Agent filter bar (conventions mode, global scope only) */}
@@ -314,26 +321,26 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
           <Box flexDirection="column" paddingX={1} marginTop={1}>
             {/* Table header */}
             <Box flexDirection="row">
-              <Box minWidth={2}><Text> </Text></Box>
-              <Box minWidth={9}><Text dimColor>TYPE</Text></Box>
-              <Box minWidth={22}><Text dimColor>NAME</Text></Box>
-              <Box minWidth={8}><Text dimColor>VER</Text></Box>
-              <Box minWidth={8}><Text dimColor>SCOPE</Text></Box>
-              <Box minWidth={16}><Text dimColor>TAGS</Text></Box>
-              <Box minWidth={12}><Text dimColor>PROJECT</Text></Box>
-              <Box minWidth={10}><Text dimColor>SOURCE</Text></Box>
+              <Box minWidth={tableConfig ? tableConfig.selector.width : 2}><Text> </Text></Box>
+              <Box minWidth={tableConfig ? tableConfig.type.width : 9}><Text dimColor>TYPE</Text></Box>
+              <Box minWidth={tableConfig ? tableConfig.name.width : 22}><Text dimColor>NAME</Text></Box>
+              <Box minWidth={tableConfig ? tableConfig.version.width : 8}><Text dimColor>VER</Text></Box>
+              <Box minWidth={tableConfig ? tableConfig.scope.width : 8}><Text dimColor>SCOPE</Text></Box>
+              {(tableConfig ? tableConfig.tags.visible : true) ? <Box minWidth={tableConfig ? tableConfig.tags.width : 16}><Text dimColor>TAGS</Text></Box> : null}
+              {(tableConfig ? tableConfig.project.visible : true) ? <Box minWidth={tableConfig ? tableConfig.project.width : 12}><Text dimColor>PROJECT</Text></Box> : null}
+              {(tableConfig ? tableConfig.source.visible : true) ? <Box minWidth={tableConfig ? tableConfig.source.width : 10}><Text dimColor>SOURCE</Text></Box> : null}
               <Text dimColor>AGENT</Text>
             </Box>
             {/* Separator */}
             <Box flexDirection="row">
-              <Box minWidth={2}><Text> </Text></Box>
-              <Box minWidth={9}><Text dimColor>{'────────'}</Text></Box>
-              <Box minWidth={22}><Text dimColor>{'────────────────────'}</Text></Box>
-              <Box minWidth={8}><Text dimColor>{'──────'}</Text></Box>
-              <Box minWidth={8}><Text dimColor>{'───────'}</Text></Box>
-              <Box minWidth={16}><Text dimColor>{'──────────────'}</Text></Box>
-              <Box minWidth={12}><Text dimColor>{'──────────'}</Text></Box>
-              <Box minWidth={10}><Text dimColor>{'────────'}</Text></Box>
+              <Box minWidth={tableConfig ? tableConfig.selector.width : 2}><Text> </Text></Box>
+              <Box minWidth={tableConfig ? tableConfig.type.width : 9}><Text dimColor>{'─'.repeat(tableConfig ? tableConfig.type.width - 2 : 8)}</Text></Box>
+              <Box minWidth={tableConfig ? tableConfig.name.width : 22}><Text dimColor>{'─'.repeat(tableConfig ? tableConfig.name.width - 2 : 20)}</Text></Box>
+              <Box minWidth={tableConfig ? tableConfig.version.width : 8}><Text dimColor>{'─'.repeat(tableConfig ? tableConfig.version.width - 2 : 6)}</Text></Box>
+              <Box minWidth={tableConfig ? tableConfig.scope.width : 8}><Text dimColor>{'─'.repeat(tableConfig ? tableConfig.scope.width - 2 : 7)}</Text></Box>
+              {(tableConfig ? tableConfig.tags.visible : true) ? <Box minWidth={tableConfig ? tableConfig.tags.width : 16}><Text dimColor>{'─'.repeat(tableConfig ? tableConfig.tags.width - 2 : 14)}</Text></Box> : null}
+              {(tableConfig ? tableConfig.project.visible : true) ? <Box minWidth={tableConfig ? tableConfig.project.width : 12}><Text dimColor>{'─'.repeat(tableConfig ? tableConfig.project.width - 2 : 10)}</Text></Box> : null}
+              {(tableConfig ? tableConfig.source.visible : true) ? <Box minWidth={tableConfig ? tableConfig.source.width : 10}><Text dimColor>{'─'.repeat(tableConfig ? tableConfig.source.width - 2 : 8)}</Text></Box> : null}
               <Text dimColor>{'────────'}</Text>
             </Box>
             {/* Rows */}
@@ -348,40 +355,46 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
                 : '—';
               return (
                 <Box key={`${entry.type}:${entry.name}:${entry.scope}:${entry.sourceAgent || entry.agent}`} flexDirection="row">
-                  <Box minWidth={2}>
+                  <Box minWidth={tableConfig ? tableConfig.selector.width : 2}>
                     <Text color={isSelected ? theme.selected : theme.muted}>
                       {isSelected ? '▶' : ' '}
                     </Text>
                   </Box>
-                  <Box minWidth={9}>
-                    <Text color={theme.accent}>{truncate(entry.type, 8)}</Text>
+                  <Box minWidth={tableConfig ? tableConfig.type.width : 9}>
+                    <Text color={theme.accent}>{truncate(entry.type, tableConfig ? tableConfig.type.truncateAt : 8)}</Text>
                   </Box>
-                  <Box minWidth={22}>
+                  <Box minWidth={tableConfig ? tableConfig.name.width : 22}>
                     <Text color={isSelected ? theme.selected : theme.secondary} bold={isSelected}>
-                      {truncate(entry.name, 20)}
+                      {truncate(entry.name, tableConfig ? tableConfig.name.truncateAt : 20)}
                     </Text>
                   </Box>
-                  <Box minWidth={8}>
-                    <Text color={theme.muted}>{truncate(entry.version || '?', 7)}</Text>
+                  <Box minWidth={tableConfig ? tableConfig.version.width : 8}>
+                    <Text color={theme.muted}>{truncate(entry.version || '?', tableConfig ? tableConfig.version.truncateAt : 7)}</Text>
                   </Box>
-                  <Box minWidth={8}>
+                  <Box minWidth={tableConfig ? tableConfig.scope.width : 8}>
                     <Text color={entry.effectiveScope === 'global' ? theme.success : entry.effectiveScope === 'parent' ? theme.accent : theme.warning}>
                       {entry.effectiveScope}
                     </Text>
                   </Box>
-                  <Box minWidth={16}>
-                    <Text color={theme.muted} dimColor>{truncate(tagsText, 15)}</Text>
-                  </Box>
-                  <Box minWidth={12}>
-                    <Text color={projectText === '—' ? theme.muted : theme.accent} dimColor={projectText === '—'}>
-                      {truncate(projectText, 11)}
-                    </Text>
-                  </Box>
-                  <Box minWidth={10}>
-                    <Text color={entry.source === 'manual' ? theme.muted : theme.accent}>
-                      {entry.source}
-                    </Text>
-                  </Box>
+                  {(tableConfig ? tableConfig.tags.visible : true) ? (
+                    <Box minWidth={tableConfig ? tableConfig.tags.width : 16}>
+                      <Text color={theme.muted} dimColor>{truncate(tagsText, tableConfig ? tableConfig.tags.truncateAt : 15)}</Text>
+                    </Box>
+                  ) : null}
+                  {(tableConfig ? tableConfig.project.visible : true) ? (
+                    <Box minWidth={tableConfig ? tableConfig.project.width : 12}>
+                      <Text color={projectText === '—' ? theme.muted : theme.accent} dimColor={projectText === '—'}>
+                        {truncate(projectText, tableConfig ? tableConfig.project.truncateAt : 11)}
+                      </Text>
+                    </Box>
+                  ) : null}
+                  {(tableConfig ? tableConfig.source.visible : true) ? (
+                    <Box minWidth={tableConfig ? tableConfig.source.width : 10}>
+                      <Text color={entry.source === 'manual' ? theme.muted : theme.accent}>
+                        {entry.source}
+                      </Text>
+                    </Box>
+                  ) : null}
                   <Text color={displayAgent === 'all agents' ? theme.primary : theme.muted}>
                     {displayAgent}
                   </Text>
@@ -413,7 +426,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
           />
         )}
       </Box>
-      <HintBar hints={hints} />
+      <HintBar hints={hints} maxWidth={termColumns} />
     </Box>
   );
 };

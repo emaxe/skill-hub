@@ -28,16 +28,20 @@ export interface InstalledDetailScreenProps {
   hasUploadAccess?: boolean;
   /** Открыть экран загрузки с предвыбранным расширением */
   onOpenUpload?: (preselected?: ScanResult[]) => void;
+  /** Ширина колонки метки (по умолчанию 14) */
+  labelPadWidth?: number;
+  /** Ширина терминала в колонках — для обрезки длинных значений */
+  termColumns?: number;
 }
 
 type Action = 'delete' | 'move' | 'update' | 'register' | 'upload';
 
-const SEP = <Text color={theme.muted} dimColor>{'─'.repeat(40)}</Text>;
-
 export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
   entry, agent, onBack, remove, move, update, install, defaultScope, onOpenContent, viewHeight, inputActive,
-  hasUploadAccess, onOpenUpload,
+  hasUploadAccess, onOpenUpload, labelPadWidth: lpw, termColumns,
 }) => {
+  const labelPadWidth = lpw ?? 14;
+  const SEP = <Text color={theme.muted} dimColor>{'─'.repeat(Math.min(40, (termColumns ?? 80) - 4))}</Text>;
   const { catalog } = useCatalog();
   const { setStatus } = useStatus();
   const [actionIndex, setActionIndex] = useState(0);
@@ -140,12 +144,21 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
       .catch((err: unknown) => setStatus(String(err), 'error'));
   };
 
-  const Row = ({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) => (
-    <Box>
-      <Text color={theme.muted}>{label.padEnd(14)}</Text>
-      <Text color={valueColor ?? theme.secondary}>{value}</Text>
-    </Box>
-  );
+  const Row = ({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) => {
+    let display = value;
+    if (termColumns != null) {
+      const maxLen = termColumns - labelPadWidth - 4;
+      if (maxLen > 0 && display.length > maxLen) {
+        display = display.slice(0, maxLen - 1) + '…';
+      }
+    }
+    return (
+      <Box>
+        <Text color={theme.muted}>{label.padEnd(labelPadWidth)}</Text>
+        <Text color={valueColor ?? theme.secondary}>{display}</Text>
+      </Box>
+    );
+  };
 
   const platformList = catalogExt
     ? Object.entries(catalogExt.platforms)

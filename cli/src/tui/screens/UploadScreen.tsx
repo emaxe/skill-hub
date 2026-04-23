@@ -44,12 +44,14 @@ export interface UploadScreenProps {
   onOpenContent: (title: string, content: string) => void;
   viewHeight: number;
   inputActive?: boolean;
+  /** Ширина терминала в колонках для адаптивной обрезки строк */
+  termColumns?: number;
 }
 
 type Phase = 'select' | 'uploading' | 'done' | 'error';
 
 export const UploadScreen: React.FC<UploadScreenProps> = ({
-  agent, onBack, preselected, onOpenContent, viewHeight, inputActive,
+  agent, onBack, preselected, onOpenContent, viewHeight, inputActive, termColumns,
 }) => {
   const { setStatus } = useStatus();
 
@@ -403,7 +405,7 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({
         <Text color={theme.muted}>Ветка </Text>
         <Text color={theme.warning} bold>[b]</Text>
         <Text color={theme.muted}>: </Text>
-        <Text color={theme.accent}>{branchName.length > 30 ? branchName.slice(0, 30) + '…' : branchName}</Text>
+        <Text color={theme.accent}>{branchName.length > (termColumns ? Math.min(30, termColumns - 25) : 30) ? branchName.slice(0, termColumns ? Math.min(30, termColumns - 25) : 30) + '…' : branchName}</Text>
       </Box>
 
       {prTitle ? (
@@ -411,12 +413,12 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({
           <Text color={theme.muted}>PR </Text>
           <Text color={theme.warning} bold>[e]</Text>
           <Text color={theme.muted}>: </Text>
-          <Text color={theme.secondary}>{prTitle.length > 50 ? prTitle.slice(0, 50) + '…' : prTitle}</Text>
+          <Text color={theme.secondary}>{prTitle.length > (termColumns ? Math.min(50, termColumns - 12) : 50) ? prTitle.slice(0, termColumns ? Math.min(50, termColumns - 12) : 50) + '…' : prTitle}</Text>
         </Box>
       ) : null}
 
       <Box marginTop={1} flexDirection="column">
-        <Text color={theme.muted} dimColor>{'─'.repeat(50)}</Text>
+        <Text color={theme.muted} dimColor>{'─'.repeat(termColumns ? Math.min(50, termColumns - 4) : 50)}</Text>
       </Box>
 
       {candidates.length === 0 ? (

@@ -10,14 +10,16 @@ interface Props {
   issues: ConventionsIssue[];
   onGoToSettings: () => void;
   onDismiss: () => void;
+  /** Ширина содержимого диалога (без рамки) */
+  dialogWidth?: number;
 }
 
 const BG = '#1e1e2e';
 const BORDER_COLOR = theme.warning;
 
-export const ConventionsWarningDialog: React.FC<Props> = ({ issues, onGoToSettings, onDismiss }) => {
+export const ConventionsWarningDialog: React.FC<Props> = ({ issues, onGoToSettings, onDismiss, dialogWidth }) => {
   const { stdout } = useStdout();
-  const innerWidth = Math.min(58, (stdout?.columns ?? 80) - 12);
+  const innerWidth = dialogWidth ?? Math.min(58, (stdout?.columns ?? 80) - 12);
 
   useInput((_input, key) => {
     if (key.return) onGoToSettings();
