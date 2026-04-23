@@ -103,11 +103,12 @@ async function executeArgs(argv) {
     const { makeSetupMcpCommand } = require('./commands/setup-mcp');
     const { makeConfigCommand } = require('./commands/config');
     const { makeAgentsConventionsCommand } = require('./commands/agents-conventions');
+    const { makeGitignoreAgentDirsCommand } = require('./commands/gitignore-agent-dirs');
     const program = new Command();
     program
         .name('skill-hub')
         .description('Extension manager for AI coding agents (Claude Code, Cursor, Copilot)')
-        .version('0.1.13');
+        .version('0.1.16');
     program.addCommand(makeSearchCommand());
     program.addCommand(makeListCommand());
     program.addCommand(makeInfoCommand());
@@ -118,6 +119,7 @@ async function executeArgs(argv) {
     program.addCommand(makeSetupMcpCommand());
     program.addCommand(makeConfigCommand());
     program.addCommand(makeAgentsConventionsCommand());
+    program.addCommand(makeGitignoreAgentDirsCommand());
     program.addHelpText('after', `
 Дополнительные возможности:
 
@@ -140,7 +142,9 @@ async function executeArgs(argv) {
   skill-hub search git                     Поиск расширений
   skill-hub install skill:git-helper       Установить скилл
   skill-hub -a claude-code -p "fix bug"    Запустить Claude Code
-  skill-hub -U --then -a copilot           Обновить всё, затем запустить Copilot`);
+  skill-hub -U --then -a copilot           Обновить всё, затем запустить Copilot
+  skill-hub gitignore-agent-dirs enable    Добавить папки агентов в .gitignore
+  skill-hub gitignore-agent-dirs disable   Убрать папки агентов из .gitignore`);
     await program.parseAsync(argv);
 }
 // Точка входа: поддержка --then для цепочки команд
