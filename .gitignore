@@ -6,3 +6,4 @@ node_modules/
 .worktrees/
 .claude/settings.local.json
 .skill-hub.local.json
+docs/
