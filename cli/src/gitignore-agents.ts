@@ -81,6 +81,45 @@ export function getMissingGitignoreEntries(projectRoot: string): string[] {
 }
 
 /**
+ * Удаляет секцию skill-hub из .gitignore.
+ * Убирает строку-заголовок `# AI agent directories (skill-hub)` и все следующие
+ * за ней записи до ближайшей пустой строки или следующего `#`-комментария.
+ * Если секции нет — ничего не делает.
+ */
+export function removeAgentDirsFromGitignore(projectRoot: string): void {
+  const gitignorePath = path.join(projectRoot, '.gitignore');
+  let content = '';
+  try {
+    if (!fs.existsSync(gitignorePath)) return;
+    content = fs.readFileSync(gitignorePath, 'utf-8');
+  } catch {
+    return;
+  }
+
+  if (!content.includes(GITIGNORE_SECTION_HEADER)) return;
+
+  const lines = content.split('\n');
+  const headerIdx = lines.findIndex(l => l.trim() === GITIGNORE_SECTION_HEADER);
+  if (headerIdx === -1) return;
+
+  // Находим конец секции (следующая пустая строка, следующий # комментарий или конец файла)
+  let endIdx = headerIdx + 1;
+  while (endIdx < lines.length && lines[endIdx].trim() !== '' && !lines[endIdx].trim().startsWith('#')) {
+    endIdx++;
+  }
+
+  // Удаляем заголовок + записи секции
+  lines.splice(headerIdx, endIdx - headerIdx);
+
+  // Убираем лишнюю пустую строку перед секцией, если она осталась
+  if (headerIdx > 0 && lines[headerIdx - 1].trim() === '' && (headerIdx >= lines.length || lines[headerIdx]?.trim() === '')) {
+    lines.splice(headerIdx - 1, 1);
+  }
+
+  fs.writeFileSync(gitignorePath, lines.join('\n'));
+}
+
+/**
  * Добавляет указанные агентские записи в .gitignore с секцией-комментарием.
  * Создаёт .gitignore если он не существует.
  */

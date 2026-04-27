@@ -10,6 +10,8 @@ interface Props {
   issues: ConventionsIssue[];
   onGoToSettings: () => void;
   onDismiss: () => void;
+  /** Восстановить структуру conventions автоматически (ensureConventionsStructure) */
+  onRepair?: () => void;
   /** Ширина содержимого диалога (без рамки) */
   dialogWidth?: number;
 }
@@ -17,13 +19,15 @@ interface Props {
 const BG = '#1e1e2e';
 const BORDER_COLOR = theme.warning;
 
-export const ConventionsWarningDialog: React.FC<Props> = ({ issues, onGoToSettings, onDismiss, dialogWidth }) => {
+export const ConventionsWarningDialog: React.FC<Props> = ({ issues, onGoToSettings, onDismiss, onRepair, dialogWidth }) => {
   const { stdout } = useStdout();
   const innerWidth = dialogWidth ?? Math.min(58, (stdout?.columns ?? 80) - 12);
 
   useInput((_input, key) => {
     if (key.return) onGoToSettings();
     if (key.escape) onDismiss();
+    const ni = _input.toLowerCase();
+    if ((ni === 'r' || ni === 'к') && onRepair) { onRepair(); return; }
   });
 
   const fill = (s: string) => {
@@ -48,18 +52,36 @@ export const ConventionsWarningDialog: React.FC<Props> = ({ issues, onGoToSettin
   }
 
   lines.push({ text: <Text backgroundColor={BG}>{emptyLine}</Text> });
-  lines.push({
-    text: (
-      <Text backgroundColor={BG} color={theme.muted}>
-        {'Нажми '}
-        <Text backgroundColor={BG} color={theme.success}>Enter</Text>
-        {' → настройки, '}
-        <Text backgroundColor={BG} color={theme.error}>Esc</Text>
-        {' → закрыть'}
-        {' '.repeat(Math.max(0, innerWidth - 39))}
-      </Text>
-    ),
-  });
+
+  if (onRepair) {
+    lines.push({
+      text: (
+        <Text backgroundColor={BG} color={theme.muted}>
+          {'Нажми '}
+          <Text backgroundColor={BG} color={theme.accent}>r</Text>
+          {' → восстановить, '}
+          <Text backgroundColor={BG} color={theme.success}>Enter</Text>
+          {' → настройки, '}
+          <Text backgroundColor={BG} color={theme.error}>Esc</Text>
+          {' → закрыть'}
+          {' '.repeat(Math.max(0, innerWidth - stripAnsi('Нажми r → восстановить, Enter → настройки, Esc → закрыть').length))}
+        </Text>
+      ),
+    });
+  } else {
+    lines.push({
+      text: (
+        <Text backgroundColor={BG} color={theme.muted}>
+          {'Нажми '}
+          <Text backgroundColor={BG} color={theme.success}>Enter</Text>
+          {' → настройки, '}
+          <Text backgroundColor={BG} color={theme.error}>Esc</Text>
+          {' → закрыть'}
+          {' '.repeat(Math.max(0, innerWidth - 39))}
+        </Text>
+      ),
+    });
+  }
 
   return (
     <Box flexDirection="column">

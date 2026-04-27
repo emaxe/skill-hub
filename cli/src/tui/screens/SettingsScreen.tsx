@@ -10,6 +10,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { AgentName } from '../../catalog';
 import { SkillHubConfig, AiAgentsConfig, ConfigSource, pushHistory, resolveProject, ResolvedProject, loadProjectExtensions, loadGitignoreAgentDirs, saveGitignoreAgentDirs, findProjectRoot } from '../../config';
+import { getMissingGitignoreEntries, addAgentDirsToGitignore, removeAgentDirsFromGitignore } from '../../gitignore-agents';
 import { useStatus } from '../contexts/StatusContext';
 import { getCachePath, isCloned, resetCache, fullCatalogReset, updateCache, ensureCache } from '../../git';
 import { HintBar } from '../components/HintBar';
@@ -135,7 +136,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
         } else {
           if (setup.status?.mcpInstalled === false) f.push('installMcp');
           if (setup.status?.baseSkillInstalled === false) f.push('installBaseSkill');
-          if (setup.status?.mcpInstalled === true || setup.status?.baseSkillInstalled === true) f.push('updateAgent');
+          if (setup.status?.mcpOutdated || setup.status?.baseSkillOutdated) f.push('updateAgent');
         }
         return f;
       }
@@ -349,7 +350,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
       }
       updateConfig({ agent: localAgent, defaultScope: localScope, registryUrl: localRegistryUrl, aiAgents: localAiAgents });
       // Сохраняем gitignoreAgentDirs отдельно — это поле публичного конфига, не SkillHubConfig
+      const prevGitignore = loadGitignoreAgentDirs();
       saveGitignoreAgentDirs(localGitignoreAgentDirs);
+      // Автоматически применяем изменение настройки gitignoreAgentDirs к .gitignore
+      if (localGitignoreAgentDirs !== prevGitignore) {
+        const projectRoot = findProjectRoot();
+        if (projectRoot) {
+          if (localGitignoreAgentDirs) {
+            const missing = getMissingGitignoreEntries(projectRoot);
+            if (missing.length > 0) {
+              addAgentDirsToGitignore(projectRoot, missing);
+            }
+          } else {
+            removeAgentDirsFromGitignore(projectRoot);
+          }
+        }
+      }
       if (urlChanged) {
         resetAndRedownload();
         setStatus('Настройки сохранены. Загрузка каталога...', 'success');

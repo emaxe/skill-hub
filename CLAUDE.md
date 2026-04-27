@@ -29,7 +29,7 @@ skill-hub search git             # проверить CLI
 ```
 cli/
 ├── src/
-│   ├── index.ts              # Точка входа CLI (Commander). 8 команд + TUI
+│   ├── index.ts              # Точка входа CLI (Commander). 9 команд + TUI
 │   ├── mcp.ts                # MCP-сервер (7 инструментов)
 │   ├── mcp-entry.ts          # Отдельная точка входа для MCP
 │   ├── catalog.ts            # Типы Extension, AgentName, loadCatalog(), scoreExtensions()
@@ -38,7 +38,7 @@ cli/
 │   ├── git.ts                # Git-операции: clone, pull, cache management
 │   ├── upload.ts             # Загрузка расширений в каталог (git push + PR URL)
 │   ├── sync.ts               # Синхронизация расширений: missing/untracked detection
-│   ├── gitignore-agents.ts   # Добавление папок ИИ-агентов в .gitignore
+│   ├── gitignore-agents.ts   # Добавление/удаление папок ИИ-агентов в/из .gitignore
 │   ├── conventions.ts        # Режим agents-conventions: init/exit/health
 │   ├── platform.ts           # Платформенный хелпер: isWindows, isMac, isLinux, getAppData()
 │   ├── agent-launcher.ts     # Запуск AI-агентов: exec (-a) и script (-A) режимы
@@ -52,7 +52,7 @@ cli/
 │   │   ├── copilot.ts
 │   │   ├── codex.ts
 │   │   └── agents-conventions.ts
-│   ├── commands/             # CLI-команды (search, install, remove, list, info, ...)
+│   ├── commands/             # CLI-команды (search, install, remove, list, info, gitignore-agent-dirs, ...)
 │   └── tui/                  # Интерактивный TUI (Ink/React)
 │       ├── index.ts          # renderApp() — точка входа TUI
 │       ├── App.tsx           # Корневой компонент (~600 строк)
@@ -75,7 +75,7 @@ cli/
 │       ├── screens/
 │       │   ├── CatalogScreen.tsx        # Таб «Каталог» — поиск, фильтры, установка
 │       │   ├── InstalledScreen.tsx       # Таб «Установленные» — список, удаление, обновление
-│       │   ├── SettingsScreen.tsx        # Таб «Настройки» — конфигурация, подвкладки
+│       │   ├── SettingsScreen.tsx        # Таб «Настройки» — конфигурация, подвкладки; при сохранении автоматически применяет изменения gitignoreAgentDirs к .gitignore
 │       │   ├── DetailScreen.tsx          # Карточка расширения из каталога
 │       │   ├── InstalledDetailScreen.tsx # Карточка установленного расширения
 │       │   ├── MoveScreen.tsx            # Перемещение global ↔ project
@@ -98,6 +98,9 @@ cli/
 │           ├── ProjectConfigDialog.tsx    # Диалог создания проектного конфига
 │           ├── ProjectConflictDialog.tsx  # Конфликт расширений между проектами
 │           ├── AgentDirsGitignoreDialog.tsx # Диалог добавления папок агентов в .gitignore
+│           ├── CatalogUpdateDialog.tsx      # Диалог обновления каталога при старте
+│           ├── ExtensionUpdatesDialog.tsx   # Диалог доступных обновлений расширений
+│           ├── SelfUpdateDialog.tsx         # Диалог обновления base-skill и MCP
 │           ├── Header.tsx                 # Заголовок приложения
 │           ├── InfoBar.tsx                # Информационная панель
 │           ├── StatusBar.tsx              # Строка статуса
@@ -259,6 +262,7 @@ interface SkillHubConfig {
 | `config` | Управление конфигурацией: `set`, `get`, `reset` |
 | `setup-mcp` | Зарегистрировать MCP-сервер для агента |
 | `agents-conventions` | `enable` / `disable` режим conventions |
+| `gitignore-agent-dirs` | `enable` / `disable` / `status` — настройка автодобавления папок агентов в `.gitignore` |
 | `help` | Справка по всем командам |
 
 **Специальные флаги:**
@@ -289,12 +293,17 @@ interface SkillHubConfig {
 
 ### Стартовая последовательность (App.tsx)
 
-5 последовательных проверок при запуске TUI:
-1. **Conventions health** — если agent=`agents-conventions`, проверить `.agents/`, symlinks
-2. **Project config** — предложить создать `.skill-hub.json` если глобальный конфиг, но есть проект
-3. **Extension sync** — missing/untracked расширения
-4. **Project conflicts** — расширения не для текущего проекта
-5. **Agent dirs gitignore** — если `gitignoreAgentDirs=true`, предложить добавить отсутствующие папки агентов в `.gitignore`
+8 последовательных проверок при запуске TUI (с диалогами, пользователь может пропустить каждую):
+1. **Update catalog** — `updateCache()`, git pull каталога; диалог с loading/error + кнопка Пропустить (Esc)
+2. **Conventions health** — если agent=`agents-conventions`: проверить `.agents/`, symlinks; диалог с кнопкой `r → Восстановить` (`ensureConventionsStructure`)
+3. **Project config** — предложить создать `.skill-hub.json` если глобальный конфиг, но есть проект
+4. **Extension sync** — missing/untracked расширения (зависит от обновлённого каталога)
+5. **Project conflicts** — расширения не для текущего проекта
+6. **Extension updates** — расширения с устаревшими версиями; диалог со списком + Enter обновить / Esc пропустить (зависит от обновлённого каталога)
+7. **Self update** — обновление base-skill/MCP если установлены; диалог + Enter обновить / Esc пропустить
+8. **Agent dirs gitignore** — если `gitignoreAgentDirs=true`, предложить добавить отсутствующие папки агентов в `.gitignore`
+
+**Зависимости между фазами:** `sync` (установка missing) и `updateExtensions` используют каталог → обе идут после `updateCatalog`. При пропуске/ошибке `updateCatalog` продолжают с кешированным каталогом. `selfUpdate` не зависит от каталога (источник — `base-skills/` в npm-пакете).
 
 ### Экраны (screens/)
 
@@ -402,7 +411,7 @@ TUI адаптируется к размеру терминала через х�
 - `pushHistory()` — добавляет URL/proxy в историю (max 6 записей).
 - При смене `registryUrl` — вызвать `fullCatalogReset()` (удалить кеш + очистить extensions из проектного конфига).
 - `loadGitignoreAgentDirs()` / `saveGitignoreAgentDirs()` — чтение/запись настройки `gitignoreAgentDirs` из публичного проектного конфига.
-- `gitignore-agents.ts` — утилиты для проверки и добавления папок ИИ-агентов в `.gitignore`: `AGENT_GITIGNORE_ENTRIES`, `getExistingAgentEntries()`, `getMissingGitignoreEntries()`, `addAgentDirsToGitignore()`.
+- `gitignore-agents.ts` — утилиты для управления папками ИИ-агентов в `.gitignore`: `AGENT_GITIGNORE_ENTRIES`, `getExistingAgentEntries()`, `getMissingGitignoreEntries()`, `addAgentDirsToGitignore()`, `removeAgentDirsFromGitignore()`.
 
 ### Тестирование
 

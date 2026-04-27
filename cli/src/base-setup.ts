@@ -6,6 +6,8 @@ import { AgentName } from './catalog';
 export interface SetupStatus {
   mcpInstalled: boolean | null;       // null = не поддерживается агентом
   baseSkillInstalled: boolean | null; // null = нет файла для агента
+  mcpOutdated: boolean;              // true = установлен, но отличается от пакета
+  baseSkillOutdated: boolean;        // true = установлен, но отличается от пакета
 }
 
 export function getMcpConfigPath(agent: AgentName): string | null {
@@ -59,10 +61,44 @@ export function checkBaseSkill(agent: AgentName): boolean | null {
   return fs.existsSync(destPath);
 }
 
+export function checkBaseSkillUpToDate(agent: AgentName): boolean {
+  const sourcePath = getBaseSkillSourcePath(agent);
+  if (!fs.existsSync(sourcePath)) return true;
+  const destPath = getBaseSkillDestPath(agent);
+  if (destPath === null || !fs.existsSync(destPath)) return true;
+  try {
+    return fs.readFileSync(sourcePath, 'utf-8') === fs.readFileSync(destPath, 'utf-8');
+  } catch {
+    return false;
+  }
+}
+
+export function checkMcpUpToDate(agent: AgentName): boolean {
+  const configPath = getMcpConfigPath(agent);
+  if (configPath === null) return true;
+  if (!fs.existsSync(configPath)) return true;
+  try {
+    const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+    const servers = (raw.mcpServers || {}) as Record<string, unknown>;
+    if (!('skill-hub' in servers)) return true;
+    const actual = servers['skill-hub'] as Record<string, unknown>;
+    const expected = agent === 'copilot'
+      ? { type: 'local', command: 'skill-hub-mcp', args: [], tools: ['*'] }
+      : { command: 'skill-hub-mcp', args: [] };
+    return JSON.stringify(actual) === JSON.stringify(expected);
+  } catch {
+    return false;
+  }
+}
+
 export async function checkSetupStatus(agent: AgentName): Promise<SetupStatus> {
+  const mcpInstalled = checkMcp(agent);
+  const baseSkillInstalled = checkBaseSkill(agent);
   return {
-    mcpInstalled: checkMcp(agent),
-    baseSkillInstalled: checkBaseSkill(agent),
+    mcpInstalled,
+    baseSkillInstalled,
+    mcpOutdated: mcpInstalled === true && !checkMcpUpToDate(agent),
+    baseSkillOutdated: baseSkillInstalled === true && !checkBaseSkillUpToDate(agent),
   };
 }
 

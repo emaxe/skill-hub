@@ -192,7 +192,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
         const entry = filtered[safeIndex];
         if (entry.effectiveScope === 'parent') return;
         const ext = recordToExtension(entry);
-        update(ext, agent, entry.scope as 'global' | 'project').then(() => {
+        update(ext, entry.sourceAgent || agent, entry.scope as 'global' | 'project').then(() => {
           setStatus(`Обновлено: ${entry.name}`, 'success');
         }).catch((err: unknown) => {
           setStatus(`Ошибка обновления: ${String(err)}`, 'error');
@@ -204,7 +204,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
         try {
           for (const entry of filtered) {
             if (entry.effectiveScope === 'parent') continue;
-            await update(recordToExtension(entry), agent, entry.scope as 'global' | 'project');
+            await update(recordToExtension(entry), entry.sourceAgent || agent, entry.scope as 'global' | 'project');
           }
           await updateSelf();
           setStatus('Всё обновлено', 'success');
@@ -230,7 +230,7 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
     setConfirmDiskDelete(null);
     const ext = recordToExtension(entry);
     try {
-      await remove(ext, agent, entry.scope as 'global' | 'project', deleteFromDisk);
+      await remove(ext, entry.sourceAgent || agent, entry.scope as 'global' | 'project', deleteFromDisk);
       setStatus(`Удалено: ${entry.name}${deleteFromDisk ? '' : ' (файлы сохранены)'}`, 'success');
     } catch (err) {
       setStatus(`Ошибка удаления: ${String(err)}`, 'error');

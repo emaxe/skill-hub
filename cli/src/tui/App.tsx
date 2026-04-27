@@ -3,10 +3,12 @@
  *
  * Структура:
  * - Header (вкладки) + основная область (экраны) + InfoBar + StatusBar + HintBar
- * - При старте последовательно выполняет 5 проверок: conventions health → project config → extension sync → conflicts → agent dirs gitignore
+ * - При старте последовательно выполняет 8 проверок:
+ *   updateCatalog → conventions health → project config → extension sync → conflicts
+ *   → extension updates → self update → agent dirs gitignore
  * - Глобальные хоткеи: Tab — смена вкладки, 1-3 — переход, Ctrl+Q — выход
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import path from 'path';
 import { normalizeInput, isCtrl } from './keymap';
@@ -35,15 +37,19 @@ import { ProjectConfigDialog } from './components/ProjectConfigDialog';
 import { ExtensionSyncDialog } from './components/ExtensionSyncDialog';
 import { ProjectConflictDialog } from './components/ProjectConflictDialog';
 import { GitCredentialsDialog, GitCredentials } from './components/GitCredentialsDialog';
-import { Extension, loadCatalog } from '../catalog';
+import { Extension, loadCatalog, AgentName } from '../catalog';
 import { InstalledEntry } from './hooks/useRegistry';
-import { getConventionsStatus } from '../conventions';
+import { getConventionsStatus, ensureConventionsStructure } from '../conventions';
 import { ProjectExtensionRecord, addProjectExtension, resolveProject, ResolvedProject, loadGitignoreAgentDirs, findProjectRoot } from '../config';
 import { checkExtensionSync, UntrackedExtension, MissingExtension, checkProjectConflicts, ProjectConflict } from '../sync';
-import { getCachePath, ensureCache, ensureCacheWithCredentials, GitAuthError } from '../git';
+import { getCachePath, ensureCache, ensureCacheWithCredentials, updateCache, GitAuthError } from '../git';
 import { ScanResult } from '../adapters/types';
 import { getMissingGitignoreEntries, addAgentDirsToGitignore } from '../gitignore-agents';
 import { AgentDirsGitignoreDialog } from './components/AgentDirsGitignoreDialog';
+import { CatalogUpdateDialog, CatalogUpdateStatus } from './components/CatalogUpdateDialog';
+import { ExtensionUpdatesDialog, ExtensionUpdateEntry } from './components/ExtensionUpdatesDialog';
+import { SelfUpdateDialog } from './components/SelfUpdateDialog';
+import { checkSetupStatus, updateSelf } from '../base-setup';
 
 const TABS: TabName[] = ['catalog', 'installed', 'settings'];
 
@@ -105,6 +111,21 @@ export const App: React.FC = () => {
   const [showGitignoreAgentDirsDialog, setShowGitignoreAgentDirsDialog] = useState(false);
   const [missingGitignoreEntries, setMissingGitignoreEntries] = useState<string[]>([]);
 
+  // Состояние диалога обновления каталога
+  const [showCatalogUpdateDialog, setShowCatalogUpdateDialog] = useState(false);
+  const [catalogUpdateStatus, setCatalogUpdateStatus] = useState<CatalogUpdateStatus>('loading');
+  const [catalogUpdateError, setCatalogUpdateError] = useState<string | undefined>(undefined);
+  const catalogUpdateStarted = useRef(false);
+
+  // Состояние диалога обновления расширений
+  const [showExtensionUpdatesDialog, setShowExtensionUpdatesDialog] = useState(false);
+  const [extensionUpdates, setExtensionUpdates] = useState<ExtensionUpdateEntry[]>([]);
+
+  // Состояние диалога обновления base-skill/MCP
+  const [showSelfUpdateDialog, setShowSelfUpdateDialog] = useState(false);
+  const [selfUpdateHasSkill, setSelfUpdateHasSkill] = useState(false);
+  const [selfUpdateHasMcp, setSelfUpdateHasMcp] = useState(false);
+
   // Состояние диалога ввода учётных данных git
   const [showGitCredentials, setShowGitCredentials] = useState(false);
   const [gitCredentialsUrl, setGitCredentialsUrl] = useState('');
@@ -112,14 +133,33 @@ export const App: React.FC = () => {
   const [gitCredentialsPending, setGitCredentialsPending] = useState<((creds: GitCredentials) => Promise<void>) | null>(null);
 
   // Фазы стартовых проверок — выполняются последовательно, каждая ждёт закрытия диалога
-  type StartupPhase = 'conventions' | 'projectConfig' | 'sync' | 'conflicts' | 'gitignoreAgentDirs' | 'done';
-  const [startupPhase, setStartupPhase] = useState<StartupPhase>('conventions');
+  type StartupPhase = 'updateCatalog' | 'conventions' | 'projectConfig' | 'sync' | 'conflicts' | 'updateExtensions' | 'selfUpdate' | 'gitignoreAgentDirs' | 'done';
+  const [startupPhase, setStartupPhase] = useState<StartupPhase>('updateCatalog');
 
   // Флаг: активен ли какой-либо диалог — блокирует ввод на фоновых экранах
-  const dialogActive = showConventionsWarning || showProjectConfigDialog || showSyncDialog || showProjectConflictDialog || showGitignoreAgentDirsDialog || showGitCredentials;
+  const dialogActive = showConventionsWarning || showProjectConfigDialog || showSyncDialog || showProjectConflictDialog || showGitignoreAgentDirsDialog || showGitCredentials || showCatalogUpdateDialog || showExtensionUpdatesDialog || showSelfUpdateDialog;
 
   useEffect(() => {
     if (startupPhase === 'done') return;
+
+    // Проверка 0: обновление каталога (git pull)
+    if (startupPhase === 'updateCatalog') {
+      if (catalogUpdateStarted.current) return;
+      catalogUpdateStarted.current = true;
+      setCatalogUpdateStatus('loading');
+      setShowCatalogUpdateDialog(true);
+      updateCache()
+        .then(() => {
+          setCatalogUpdateStatus('success');
+          setShowCatalogUpdateDialog(false);
+          setStartupPhase('conventions');
+        })
+        .catch((err: unknown) => {
+          setCatalogUpdateStatus('error');
+          setCatalogUpdateError(String(err));
+        });
+      return;
+    }
 
     // Проверка 1: agents-conventions — полная валидация
     if (startupPhase === 'conventions') {
@@ -186,11 +226,62 @@ export const App: React.FC = () => {
           return;
         }
       }
-      setStartupPhase('gitignoreAgentDirs');
+      setStartupPhase('updateExtensions');
       return;
     }
 
-    // Проверка 5: папки ИИ-агентов в .gitignore
+    // Проверка 5: обновления установленных расширений
+    if (startupPhase === 'updateExtensions') {
+      if (registry.installed.length > 0) {
+        const cachePath = getCachePath();
+        try {
+          const catalog = loadCatalog(cachePath);
+          const outdated: ExtensionUpdateEntry[] = [];
+          for (const entry of registry.installed) {
+            if (entry.effectiveScope === 'parent') continue;
+            const catExt = catalog.extensions.find(e => e.name === entry.name && e.type === entry.type);
+            // Не предлагаем обновления если текущая версия неизвестна (manual/scan-only)
+            if (catExt && catExt.version && entry.version && entry.version !== '?' && catExt.version !== entry.version) {
+              outdated.push({
+                type: entry.type,
+                name: entry.name,
+                currentVersion: entry.version,
+                newVersion: catExt.version,
+                scope: entry.effectiveScope as 'global' | 'project',
+                sourceAgent: entry.sourceAgent,
+              });
+            }
+          }
+          if (outdated.length > 0) {
+            setExtensionUpdates(outdated);
+            setShowExtensionUpdatesDialog(true);
+            return;
+          }
+        } catch {
+          // Каталог недоступен — пропускаем проверку обновлений
+        }
+      }
+      setStartupPhase('selfUpdate');
+      return;
+    }
+
+    // Проверка 6: обновление базового скилла и MCP
+    if (startupPhase === 'selfUpdate') {
+      let ignore = false;
+      checkSetupStatus(config.agent).then(status => {
+        if (ignore) return;
+        if (status.mcpOutdated || status.baseSkillOutdated) {
+          setSelfUpdateHasMcp(status.mcpOutdated);
+          setSelfUpdateHasSkill(status.baseSkillOutdated);
+          setShowSelfUpdateDialog(true);
+        } else {
+          setStartupPhase('gitignoreAgentDirs');
+        }
+      });
+      return () => { ignore = true; };
+    }
+
+    // Проверка 7: папки ИИ-агентов в .gitignore
     if (startupPhase === 'gitignoreAgentDirs') {
       if (source === 'project') {
         const projectRoot = findProjectRoot();
@@ -205,7 +296,7 @@ export const App: React.FC = () => {
       }
       setStartupPhase('done');
     }
-  }, [startupPhase, source, config.agent, hasProjectRoot]);
+  }, [startupPhase, source, config.agent, hasProjectRoot, registry.installed]);
 
   // --- Навигация между экранами ---
   const handleOpenDetail = useCallback((ext: Extension) => {
@@ -361,7 +452,7 @@ export const App: React.FC = () => {
 
   const handleRemoveProjectConflicts = useCallback(async () => {
     setShowProjectConflictDialog(false);
-    setStartupPhase(prev => prev === 'conflicts' ? 'gitignoreAgentDirs' : prev);
+    setStartupPhase(prev => prev === 'conflicts' ? 'updateExtensions' : prev);
     try {
       let removedCount = 0;
       for (const conflict of projectConflicts) {
@@ -381,7 +472,7 @@ export const App: React.FC = () => {
 
   const handleDismissProjectConflicts = useCallback(() => {
     setShowProjectConflictDialog(false);
-    setStartupPhase(prev => prev === 'conflicts' ? 'gitignoreAgentDirs' : prev);
+    setStartupPhase(prev => prev === 'conflicts' ? 'updateExtensions' : prev);
   }, []);
 
   const handleCheckProjectConflictsFromSettings = useCallback(() => {
@@ -395,6 +486,84 @@ export const App: React.FC = () => {
       }
     }
   }, [agent]);
+
+  // --- Обработчики диалога обновления каталога ---
+  const handleCatalogUpdateSkip = useCallback(() => {
+    setShowCatalogUpdateDialog(false);
+    setStartupPhase(prev => prev === 'updateCatalog' ? 'conventions' : prev);
+  }, []);
+
+  const handleCatalogUpdateRetry = useCallback(() => {
+    catalogUpdateStarted.current = false;
+    setCatalogUpdateStatus('loading');
+    setCatalogUpdateError(undefined);
+    // Пересбрасываем фазу чтобы useEffect перезапустился
+    setStartupPhase('updateCatalog');
+  }, []);
+
+  // --- Обработчики диалога обновления расширений ---
+  const handleUpdateExtensions = useCallback(async () => {
+    setShowExtensionUpdatesDialog(false);
+    setStartupPhase(prev => prev === 'updateExtensions' ? 'selfUpdate' : prev);
+    try {
+      const cachePath = getCachePath();
+      const catalog = loadCatalog(cachePath);
+      let updatedCount = 0;
+        for (const entry of extensionUpdates) {
+        const catExt = catalog.extensions.find(e => e.name === entry.name && e.type === entry.type);
+        if (!catExt) continue;
+        try {
+          const targetAgent = (entry.sourceAgent || agent) as AgentName;
+          await registry.update(catExt, targetAgent, entry.scope);
+          updatedCount++;
+        } catch {
+          // skip
+        }
+      }
+      setStatus(`Обновлено расширений: ${updatedCount}`, 'success');
+    } catch (err) {
+      setStatus(`Ошибка обновления: ${String(err)}`, 'error');
+    }
+  }, [extensionUpdates, agent, registry, setStatus]);
+
+  const handleSkipExtensionUpdates = useCallback(() => {
+    setShowExtensionUpdatesDialog(false);
+    setStartupPhase(prev => prev === 'updateExtensions' ? 'selfUpdate' : prev);
+  }, []);
+
+  // --- Обработчики диалога self-update ---
+  const handleSelfUpdate = useCallback(async () => {
+    setShowSelfUpdateDialog(false);
+    setStartupPhase(prev => prev === 'selfUpdate' ? 'gitignoreAgentDirs' : prev);
+    try {
+      const result = await updateSelf(agent as AgentName);
+      const parts: string[] = [];
+      if (result.skill) parts.push('base-skill');
+      if (result.mcp) parts.push('MCP');
+      if (parts.length > 0) {
+        setStatus(`Обновлено: ${parts.join(', ')}`, 'success');
+      }
+    } catch (err) {
+      setStatus(`Ошибка обновления компонентов: ${String(err)}`, 'error');
+    }
+  }, [agent, setStatus]);
+
+  const handleSkipSelfUpdate = useCallback(() => {
+    setShowSelfUpdateDialog(false);
+    setStartupPhase(prev => prev === 'selfUpdate' ? 'gitignoreAgentDirs' : prev);
+  }, []);
+
+  // --- Обработчик восстановления conventions ---
+  const handleRepairConventions = useCallback(() => {
+    setShowConventionsWarning(false);
+    try {
+      ensureConventionsStructure();
+      setStatus('Структура agents-conventions восстановлена', 'success');
+    } catch (err) {
+      setStatus(`Ошибка восстановления: ${String(err)}`, 'error');
+    }
+    setStartupPhase(prev => prev === 'conventions' ? 'projectConfig' : prev);
+  }, [setStatus]);
 
   const handleSyncGitignoreAgentDirs = useCallback(() => {
     setShowGitignoreAgentDirsDialog(false);
@@ -658,6 +827,7 @@ export const App: React.FC = () => {
                 issues={conventionsIssues}
                 onGoToSettings={handleGoToSettings}
                 onDismiss={handleDismissWarning}
+                onRepair={handleRepairConventions}
                 dialogWidth={dialogInnerWidth}
               />
             </Box>
@@ -712,6 +882,38 @@ export const App: React.FC = () => {
                 url={gitCredentialsUrl}
                 onConfirm={handleGitCredentialsConfirm}
                 onCancel={handleGitCredentialsCancel}
+                dialogWidth={dialogInnerWidth}
+              />
+            </Box>
+          )}
+          {showCatalogUpdateDialog && (
+            <Box position="absolute" marginTop={2} marginLeft={2}>
+              <CatalogUpdateDialog
+                status={catalogUpdateStatus}
+                errorMessage={catalogUpdateError}
+                onSkip={handleCatalogUpdateSkip}
+                onRetry={handleCatalogUpdateRetry}
+                dialogWidth={dialogInnerWidth}
+              />
+            </Box>
+          )}
+          {showExtensionUpdatesDialog && (
+            <Box position="absolute" marginTop={2} marginLeft={2}>
+              <ExtensionUpdatesDialog
+                updates={extensionUpdates}
+                onUpdate={handleUpdateExtensions}
+                onSkip={handleSkipExtensionUpdates}
+                dialogWidth={dialogInnerWidth}
+              />
+            </Box>
+          )}
+          {showSelfUpdateDialog && (
+            <Box position="absolute" marginTop={2} marginLeft={2}>
+              <SelfUpdateDialog
+                hasBaseSkill={selfUpdateHasSkill}
+                hasMcp={selfUpdateHasMcp}
+                onUpdate={handleSelfUpdate}
+                onSkip={handleSkipSelfUpdate}
                 dialogWidth={dialogInnerWidth}
               />
             </Box>

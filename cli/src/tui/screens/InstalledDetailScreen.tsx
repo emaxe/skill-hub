@@ -107,13 +107,13 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
       const action = actions[actionIndex].id;
       if (action === 'delete') { setShowConfirm(true); return; }
       if (action === 'move') {
-        move(makeExt(), agent, entry.scope as 'global' | 'project')
+        move(makeExt(), entry.sourceAgent || agent, entry.scope as 'global' | 'project')
           .then(() => { setStatus(`Перемещено: ${entry.name}`, 'success'); onBack(); })
           .catch((err: unknown) => setStatus(String(err), 'error'));
         return;
       }
       if (action === 'update') {
-        update(makeExt(), agent, entry.scope as 'global' | 'project')
+        update(makeExt(), entry.sourceAgent || agent, entry.scope as 'global' | 'project')
           .then(() => { setStatus(`Обновлено: ${entry.name}`, 'success'); onBack(); })
           .catch((err: unknown) => setStatus(String(err), 'error'));
         return;
@@ -139,7 +139,7 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
 
   const handleDiskDeleteChoice = (deleteFromDisk: boolean) => {
     setShowDiskConfirm(false);
-    remove(makeExt(), agent, entry.scope as 'global' | 'project', deleteFromDisk)
+    remove(makeExt(), entry.sourceAgent || agent, entry.scope as 'global' | 'project', deleteFromDisk)
       .then(() => { setStatus(`Удалено: ${entry.name}${deleteFromDisk ? '' : ' (файлы сохранены)'}`, 'success'); onBack(); })
       .catch((err: unknown) => setStatus(String(err), 'error'));
   };
