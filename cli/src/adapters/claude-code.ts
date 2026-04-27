@@ -8,6 +8,7 @@ import os from 'os';
 import { Extension, ExtensionType } from '../catalog';
 import { AgentAdapter, ScanResult } from './types';
 import { pathsEqual } from '../platform';
+import { copyExtensionDir, getExtensionDirRel } from '../multi-file';
 
 export class ClaudeCodeAdapter implements AgentAdapter {
   agentName = 'claude-code' as const;
@@ -42,15 +43,22 @@ export class ClaudeCodeAdapter implements AgentAdapter {
 
   async install(ext: Extension, scope: 'global' | 'project', cachePath: string): Promise<void> {
     const sourceFile = this.getSourceFile(ext);
-    const srcPath = path.join(cachePath, ext.path, sourceFile);
+    const srcDir = path.join(cachePath, getExtensionDirRel(ext.path));
+    const srcPath = path.join(srcDir, sourceFile);
     const destPath = this.getInstallPath(ext, scope);
 
     if (!fs.existsSync(srcPath)) {
       throw new Error(`Source file not found: ${srcPath}`);
     }
 
-    fs.mkdirSync(path.dirname(destPath), { recursive: true });
-    fs.copyFileSync(srcPath, destPath);
+    if (ext.type === 'skill') {
+      // Скиллы: копировать всю директорию (основной файл + дополнительные)
+      copyExtensionDir(srcDir, path.dirname(destPath));
+    } else {
+      // Агенты/команды: копировать один файл (с переименованием)
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+      fs.copyFileSync(srcPath, destPath);
+    }
   }
 
   async remove(ext: Extension, scope: 'global' | 'project'): Promise<void> {

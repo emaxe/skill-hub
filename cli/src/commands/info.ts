@@ -58,6 +58,12 @@ export function makeInfoCommand(): Command {
           console.log(`    ${ag}: ${file}${current}`);
         }
       }
+      if (ext.files && ext.files.length > 0) {
+        console.log(`\n  Дополнительные файлы:`);
+        for (const f of ext.files) {
+          console.log(`    ${f}`);
+        }
+      }
       if (ext.dependencies.length) {
         console.log(`\n  Зависимости: ${ext.dependencies.join(', ')}`);
       }

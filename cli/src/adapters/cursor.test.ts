@@ -66,3 +66,40 @@ test('install agent: создаёт .cursor/agents/{name}.mdc', async () => {
   await adapter.install(mockAgent, 'project', tmpCache);
   expect(fs.existsSync(path.join(tmpProject, '.cursor', 'agents', 'test-agent.mdc'))).toBe(true);
 });
+
+// ─── Multi-file skills ──────────────────────────────────────
+
+describe('Cursor Adapter: multi-file skills', () => {
+  test('install копирует дополнительные файлы + трансформирует основной', async () => {
+    const cacheDir = path.join(tmpCache, 'skills', 'test-skill');
+    fs.writeFileSync(path.join(cacheDir, 'script.sh'), '#!/bin/bash\necho hello');
+    fs.mkdirSync(path.join(cacheDir, 'templates'), { recursive: true });
+    fs.writeFileSync(path.join(cacheDir, 'templates', 'tpl.txt'), 'template');
+
+    const adapter = new CursorAdapter(tmpProject, tmpHome);
+    await adapter.install(mockSkill, 'project', tmpCache);
+
+    const skillDir = path.join(tmpProject, '.cursor', 'skills', 'test-skill');
+
+    // Основной файл трансформирован (Cursor frontmatter)
+    const mainContent = fs.readFileSync(path.join(skillDir, 'SKILL.md'), 'utf-8');
+    expect(mainContent).toContain('description: Test');
+    expect(mainContent).toContain('alwaysApply: false');
+
+    // Дополнительные файлы скопированы as-is
+    expect(fs.existsSync(path.join(skillDir, 'script.sh'))).toBe(true);
+    expect(fs.readFileSync(path.join(skillDir, 'script.sh'), 'utf-8')).toBe('#!/bin/bash\necho hello');
+    expect(fs.existsSync(path.join(skillDir, 'templates', 'tpl.txt'))).toBe(true);
+  });
+
+  test('remove удаляет все файлы включая дополнительные', async () => {
+    const cacheDir = path.join(tmpCache, 'skills', 'test-skill');
+    fs.writeFileSync(path.join(cacheDir, 'script.sh'), '#!/bin/bash');
+
+    const adapter = new CursorAdapter(tmpProject, tmpHome);
+    await adapter.install(mockSkill, 'project', tmpCache);
+    await adapter.remove(mockSkill, 'project');
+
+    expect(fs.existsSync(path.join(tmpProject, '.cursor', 'skills', 'test-skill'))).toBe(false);
+  });
+});

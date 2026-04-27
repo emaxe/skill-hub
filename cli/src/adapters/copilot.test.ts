@@ -105,3 +105,51 @@ describe('Copilot Adapter Windows path', () => {
     expect(installPath).toContain(path.join('Library', 'Application Support', 'Code', 'User'));
   });
 });
+
+// ─── Multi-file skills ──────────────────────────────────────
+
+describe('Copilot Adapter: multi-file skills', () => {
+  test('install копирует доп. файлы в .github/skills/{name}/', async () => {
+    const cacheDir = path.join(tmpCache, 'skills', 'test-skill');
+    fs.writeFileSync(path.join(cacheDir, 'script.sh'), '#!/bin/bash\necho hello');
+    fs.mkdirSync(path.join(cacheDir, 'templates'), { recursive: true });
+    fs.writeFileSync(path.join(cacheDir, 'templates', 'tpl.txt'), 'template');
+
+    const adapter = new CopilotAdapter(tmpProject, tmpHome);
+    await adapter.install(mockSkill, 'project', tmpCache);
+
+    // Marker-injection в copilot-instructions.md
+    const content = fs.readFileSync(path.join(tmpProject, '.github', 'copilot-instructions.md'), 'utf-8');
+    expect(content).toContain('<!-- skill-hub: test-skill -->');
+    expect(content).toContain('<!-- additional files: .github/skills/test-skill/ -->');
+
+    // Дополнительные файлы в отдельной директории
+    const additionalDir = path.join(tmpProject, '.github', 'skills', 'test-skill');
+    expect(fs.existsSync(path.join(additionalDir, 'script.sh'))).toBe(true);
+    expect(fs.existsSync(path.join(additionalDir, 'templates', 'tpl.txt'))).toBe(true);
+    // Основной файл НЕ скопирован в доп. директорию
+    expect(fs.existsSync(path.join(additionalDir, 'SKILL.md'))).toBe(false);
+  });
+
+  test('install без доп. файлов — нет комментария additional files', async () => {
+    const adapter = new CopilotAdapter(tmpProject, tmpHome);
+    await adapter.install(mockSkill, 'project', tmpCache);
+
+    const content = fs.readFileSync(path.join(tmpProject, '.github', 'copilot-instructions.md'), 'utf-8');
+    expect(content).toContain('<!-- skill-hub: test-skill -->');
+    expect(content).not.toContain('additional files');
+  });
+
+  test('remove удаляет marker-секцию И директорию доп. файлов', async () => {
+    const cacheDir = path.join(tmpCache, 'skills', 'test-skill');
+    fs.writeFileSync(path.join(cacheDir, 'script.sh'), '#!/bin/bash');
+
+    const adapter = new CopilotAdapter(tmpProject, tmpHome);
+    await adapter.install(mockSkill, 'project', tmpCache);
+    await adapter.remove(mockSkill, 'project');
+
+    const content = fs.readFileSync(path.join(tmpProject, '.github', 'copilot-instructions.md'), 'utf-8');
+    expect(content).not.toContain('skill-hub: test-skill');
+    expect(fs.existsSync(path.join(tmpProject, '.github', 'skills', 'test-skill'))).toBe(false);
+  });
+});

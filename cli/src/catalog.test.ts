@@ -91,3 +91,22 @@ test('parseExtension: отсутствие projects → пустой масси�
   const parsed = parseExtension(raw);
   expect(parsed.projects).toEqual([]);
 });
+
+test('parseExtension: files парсится корректно', () => {
+  const raw = { ...mockExt, files: ['script.sh', 'templates/tpl.txt'] };
+  const parsed = parseExtension(raw);
+  expect(parsed.files).toEqual(['script.sh', 'templates/tpl.txt']);
+});
+
+test('parseExtension: отсутствие files → undefined', () => {
+  const raw = { ...mockExt };
+  delete (raw as any).files;
+  const parsed = parseExtension(raw);
+  expect(parsed.files).toBeUndefined();
+});
+
+test('parseExtension: files не массив → undefined', () => {
+  const raw = { ...mockExt, files: 'not-an-array' };
+  const parsed = parseExtension(raw);
+  expect(parsed.files).toBeUndefined();
+});

@@ -247,6 +247,52 @@ describe('buildCatalogEntry', () => {
 
     expect(entry.platforms['claude-code']).toBe('SKILL.md');
   });
+
+  test('заполняет files для многофайлового скилла', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const tmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'build-entry-'));
+    const skillDir = path.join(tmpDir, 'my-skill');
+    fs.mkdirSync(path.join(skillDir, 'templates'), { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# Skill');
+    fs.writeFileSync(path.join(skillDir, 'script.sh'), '#!/bin/bash');
+    fs.writeFileSync(path.join(skillDir, 'templates', 'tpl.txt'), 'template');
+
+    const scan = makeScanResult({
+      type: 'skill',
+      name: 'my-skill',
+      path: path.join(skillDir, 'SKILL.md'),
+    });
+    const fm = makeFrontmatter({ name: 'my-skill' });
+    const entry = buildCatalogEntry(scan, fm, 'claude-code');
+
+    expect(entry.files).toBeDefined();
+    expect(entry.files).toContain('script.sh');
+    expect(entry.files).toContain(path.join('templates', 'tpl.txt'));
+
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  test('files отсутствует для однофайлового скилла', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const tmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'build-entry-'));
+    const skillDir = path.join(tmpDir, 'my-skill');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# Skill');
+
+    const scan = makeScanResult({
+      type: 'skill',
+      name: 'my-skill',
+      path: path.join(skillDir, 'SKILL.md'),
+    });
+    const fm = makeFrontmatter({ name: 'my-skill' });
+    const entry = buildCatalogEntry(scan, fm, 'claude-code');
+
+    expect(entry.files).toBeUndefined();
+
+    fs.rmSync(tmpDir, { recursive: true });
+  });
 });
 
 // ─── detectPlatform / parseGitUrl ────────────────────────────
