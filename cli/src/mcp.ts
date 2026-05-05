@@ -573,6 +573,7 @@ export async function startMcpServer(): Promise<void> {
           scope: ext.scope,
           platforms: ext.platforms,
           dependencies: ext.dependencies,
+          files: ext.files || [],
           installed,
           installed_scope: record?.scope || null,
           effectiveScope: match?.effectiveScope || null,

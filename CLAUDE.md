@@ -33,6 +33,7 @@ cli/
 │   ├── mcp.ts                # MCP-сервер (7 инструментов)
 │   ├── mcp-entry.ts          # Отдельная точка входа для MCP
 │   ├── catalog.ts            # Типы Extension, AgentName, loadCatalog(), scoreExtensions()
+│   ├── multi-file.ts         # Утилиты многофайловых расширений: copyExtensionDir(), hasAdditionalFiles()
 │   ├── config.ts             # Двухуровневый конфиг: global + project
 │   ├── registry.ts           # Реестр установленных расширений (registry.json)
 │   ├── git.ts                # Git-операции: clone, pull, cache management
@@ -200,6 +201,29 @@ interface SkillHubConfig {
 | agents-conventions | — | `.agents/skills/{name}/SKILL.md` |
 
 **Автодетекция** (`detect-agent.ts`): env vars (`CURSOR_TRACE` → cursor, `GITHUB_COPILOT` → copilot, `CODEX_SANDBOX` → codex) → наличие `.cursor/` → наличие `.codex/` → default `claude-code`.
+
+### Многофайловые расширения
+
+Расширения (особенно скиллы) могут содержать дополнительные файлы помимо основного `.md` — скрипты, шаблоны, конфигурации. Модуль `multi-file.ts` содержит утилиты:
+
+- `getExtensionDirRel(extPath)` — вычисляет путь к директории из `ext.path` (обратная совместимость: поддерживает и путь к файлу `skills/name/SKILL.md`, и к директории `skills/name`)
+- `copyExtensionDir(src, dest, ignore?)` — рекурсивное копирование, пропуская `.skillignore` и symlinks
+- `copyAdditionalFiles(srcDir, destDir, mainFile)` — копирование всего кроме основного `.md`
+- `hasAdditionalFiles(extPath, cachePath)` — проверка наличия доп. файлов
+- `listExtensionFiles(extPath, cachePath, mainFile?)` — список доп. файлов (относительные пути)
+- `findBinaryFiles(dir)` — обнаружение бинарных файлов (запрещены для upload)
+- `getExtensionDirSize(dir)` — суммарный размер (лимит: 1 МБ)
+
+**Поведение по адаптерам:**
+
+| Адаптер | Скиллы | Агенты/Команды |
+|---------|--------|----------------|
+| Claude Code, conventions | `copyExtensionDir()` — вся директория | Один файл (как раньше) |
+| Cursor | Основной `.md` + Cursor frontmatter, доп. файлы as-is | Один файл |
+| Copilot | Marker-injection + доп. файлы в `.github/skills/{name}/` | Marker-injection |
+| Codex | Marker-injection + доп. файлы в `.codex/skills/{name}/` | Marker-injection |
+
+**Поле `files` в `Extension`:** опциональный массив строк — относительные пути доп. файлов. Заполняется при `buildCatalogEntry()`. Отсутствие = однофайловое расширение.
 
 ### Кеш каталога
 
@@ -419,7 +443,7 @@ TUI адаптируется к размеру терминала через х�
 - Тесты рядом с модулями: `upload.test.ts`, `git.test.ts`, `catalog.test.ts`
 - Моки: `jest.mock('simple-git')` для git-операций, `jest.mock('fs')` для файловых
 - Тест `getUploadCandidates` пропущен — требует мок адаптера без DI
-- **Текущее состояние:** 169 тестов (168 pass, 1 skip)
+- **Текущее состояние:** 225 тестов (224 pass, 1 skip)
 
 ### Windows и кроссплатформенность
 

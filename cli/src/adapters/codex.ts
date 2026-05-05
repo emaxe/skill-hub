@@ -9,6 +9,7 @@ import os from 'os';
 import { Extension, ExtensionType, platformKey } from '../catalog';
 import { AgentAdapter, ScanResult } from './types';
 import { stripFrontmatter } from '../frontmatter';
+import { copyAdditionalFiles, hasAdditionalFiles, getExtensionDirRel } from '../multi-file';
 
 // Маркеры начала/конца секции расширения внутри AGENTS.md
 const MARKER_START = (name: string) => `<!-- skill-hub: ${name} -->`;
@@ -41,7 +42,8 @@ export class CodexAdapter implements AgentAdapter {
 
   async install(ext: Extension, scope: 'global' | 'project', cachePath: string): Promise<void> {
     const sourceFile = this.getSourceFile(ext);
-    const srcPath = path.join(cachePath, ext.path, sourceFile);
+    const srcDir = path.join(cachePath, getExtensionDirRel(ext.path));
+    const srcPath = path.join(srcDir, sourceFile);
 
     if (!fs.existsSync(srcPath)) {
       throw new Error(`Codex version not available for ${ext.name}: missing ${sourceFile}`);
@@ -52,17 +54,52 @@ export class CodexAdapter implements AgentAdapter {
 
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
 
+    // Копирование дополнительных файлов
+    const hasExtra = hasAdditionalFiles(ext.path, cachePath);
+    if (hasExtra) {
+      const additionalDir = this.getAdditionalFilesPath(ext, scope);
+      copyAdditionalFiles(srcDir, additionalDir, sourceFile);
+    }
+
+    // Marker-injection с указанием пути к дополнительным файлам
     const existing = fs.existsSync(destPath) ? fs.readFileSync(destPath, 'utf-8') : '';
     const cleaned = this.removeSection(existing, ext.name);
-    const section = `\n${MARKER_START(ext.name)}\n${content}\n${MARKER_END(ext.name)}\n`;
+    const filesComment = hasExtra
+      ? `\n<!-- additional files: ${this.getAdditionalFilesRelPath(ext, scope)} -->`
+      : '';
+    const section = `\n${MARKER_START(ext.name)}${filesComment}\n${content}\n${MARKER_END(ext.name)}\n`;
     fs.writeFileSync(destPath, cleaned + section);
   }
 
+  /** Путь к директории дополнительных файлов расширения */
+  getAdditionalFilesPath(ext: Extension, scope: 'global' | 'project'): string {
+    if (scope === 'project') {
+      return path.join(this.projectDir, '.codex', 'skills', ext.name);
+    }
+    return path.join(this.homeDir, '.codex', 'skills', ext.name);
+  }
+
+  /** Относительный путь к доп. файлам (для комментария в marker-injection) */
+  private getAdditionalFilesRelPath(ext: Extension, scope: 'global' | 'project'): string {
+    if (scope === 'project') {
+      return `.codex/skills/${ext.name}/`;
+    }
+    return `skills/${ext.name}/`;
+  }
+
   async remove(ext: Extension, scope: 'global' | 'project'): Promise<void> {
+    // Удалить marker-секцию из AGENTS.md
     const destPath = this.getInstallPath(ext, scope);
-    if (!fs.existsSync(destPath)) return;
-    const content = fs.readFileSync(destPath, 'utf-8');
-    fs.writeFileSync(destPath, this.removeSection(content, ext.name));
+    if (fs.existsSync(destPath)) {
+      const content = fs.readFileSync(destPath, 'utf-8');
+      fs.writeFileSync(destPath, this.removeSection(content, ext.name));
+    }
+
+    // Удалить директорию дополнительных файлов
+    const additionalDir = this.getAdditionalFilesPath(ext, scope);
+    if (fs.existsSync(additionalDir)) {
+      fs.rmSync(additionalDir, { recursive: true });
+    }
   }
 
   isInstalled(ext: Extension, scope: 'global' | 'project'): boolean {

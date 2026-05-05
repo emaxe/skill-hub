@@ -91,3 +91,36 @@ test('getSourceFile: возвращает claude-code source через platform
   const adapter = new CodexAdapter(tmpProject, tmpHome);
   expect(adapter.getSourceFile(mockSkill)).toBe('SKILL.md');
 });
+
+// ─── Multi-file skills ──────────────────────────────────────
+
+describe('Codex Adapter: multi-file skills', () => {
+  test('install копирует доп. файлы в .codex/skills/{name}/', async () => {
+    const cacheDir = path.join(tmpCache, 'skills', 'test-skill');
+    fs.writeFileSync(path.join(cacheDir, 'script.sh'), '#!/bin/bash\necho hello');
+
+    const adapter = new CodexAdapter(tmpProject, tmpHome);
+    await adapter.install(mockSkill, 'project', tmpCache);
+
+    // Marker-injection в AGENTS.md
+    const content = fs.readFileSync(path.join(tmpProject, '.codex', 'AGENTS.md'), 'utf-8');
+    expect(content).toContain('<!-- skill-hub: test-skill -->');
+    expect(content).toContain('<!-- additional files: .codex/skills/test-skill/ -->');
+
+    // Дополнительные файлы
+    expect(fs.existsSync(path.join(tmpProject, '.codex', 'skills', 'test-skill', 'script.sh'))).toBe(true);
+  });
+
+  test('remove удаляет marker-секцию И директорию доп. файлов', async () => {
+    const cacheDir = path.join(tmpCache, 'skills', 'test-skill');
+    fs.writeFileSync(path.join(cacheDir, 'script.sh'), '#!/bin/bash');
+
+    const adapter = new CodexAdapter(tmpProject, tmpHome);
+    await adapter.install(mockSkill, 'project', tmpCache);
+    await adapter.remove(mockSkill, 'project');
+
+    const content = fs.readFileSync(path.join(tmpProject, '.codex', 'AGENTS.md'), 'utf-8');
+    expect(content).not.toContain('skill-hub: test-skill');
+    expect(fs.existsSync(path.join(tmpProject, '.codex', 'skills', 'test-skill'))).toBe(false);
+  });
+});

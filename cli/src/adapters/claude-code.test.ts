@@ -113,3 +113,57 @@ describe('Claude Code Adapter: case-insensitive path comparison on Windows', () 
     expect(Array.isArray(results)).toBe(true);
   });
 });
+
+// ─── Multi-file skills ──────────────────────────────────────
+
+describe('Claude Code Adapter: multi-file skills', () => {
+  test('install копирует дополнительные файлы скилла', async () => {
+    // Подготовка кеша с дополнительными файлами
+    const cacheDir = path.join(tmpCache, 'skills', 'test-skill');
+    fs.mkdirSync(path.join(cacheDir, 'templates'), { recursive: true });
+    fs.writeFileSync(path.join(cacheDir, 'script.sh'), '#!/bin/bash\necho hello');
+    fs.writeFileSync(path.join(cacheDir, 'templates', 'tpl.txt'), 'template content');
+
+    const adapter = new ClaudeCodeAdapter(tmpProject, tmpHome);
+    await adapter.install(mockSkill, 'project', tmpCache);
+
+    const skillDir = path.join(tmpProject, '.claude', 'skills', 'test-skill');
+    expect(fs.existsSync(path.join(skillDir, 'SKILL.md'))).toBe(true);
+    expect(fs.existsSync(path.join(skillDir, 'script.sh'))).toBe(true);
+    expect(fs.existsSync(path.join(skillDir, 'templates', 'tpl.txt'))).toBe(true);
+    expect(fs.readFileSync(path.join(skillDir, 'script.sh'), 'utf-8')).toBe('#!/bin/bash\necho hello');
+  });
+
+  test('install с ext.path в формате файла', async () => {
+    const filePathSkill = { ...mockSkill, path: 'skills/test-skill/SKILL.md' };
+    const adapter = new ClaudeCodeAdapter(tmpProject, tmpHome);
+    await adapter.install(filePathSkill, 'global', tmpCache);
+
+    expect(fs.existsSync(path.join(tmpHome, '.claude', 'skills', 'test-skill', 'SKILL.md'))).toBe(true);
+  });
+
+  test('remove удаляет все файлы скилла включая дополнительные', async () => {
+    const cacheDir = path.join(tmpCache, 'skills', 'test-skill');
+    fs.writeFileSync(path.join(cacheDir, 'script.sh'), '#!/bin/bash');
+
+    const adapter = new ClaudeCodeAdapter(tmpProject, tmpHome);
+    await adapter.install(mockSkill, 'global', tmpCache);
+
+    // Проверяем что файлы на месте
+    const skillDir = path.join(tmpHome, '.claude', 'skills', 'test-skill');
+    expect(fs.existsSync(path.join(skillDir, 'script.sh'))).toBe(true);
+
+    // Удаляем
+    await adapter.remove(mockSkill, 'global');
+    expect(fs.existsSync(skillDir)).toBe(false);
+  });
+
+  test('однофайловый скилл продолжает работать (обратная совместимость)', async () => {
+    const adapter = new ClaudeCodeAdapter(tmpProject, tmpHome);
+    await adapter.install(mockSkill, 'global', tmpCache);
+
+    const skillFile = path.join(tmpHome, '.claude', 'skills', 'test-skill', 'SKILL.md');
+    expect(fs.existsSync(skillFile)).toBe(true);
+    expect(fs.readFileSync(skillFile, 'utf-8')).toBe('# Test Skill');
+  });
+});

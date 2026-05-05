@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { Extension, ExtensionType } from '../catalog';
 import { AgentAdapter, ScanResult } from './types';
+import { copyExtensionDir, getExtensionDirRel } from '../multi-file';
 
 export class AgentsConventionsAdapter implements AgentAdapter {
   agentName = 'agents-conventions' as const;
@@ -50,15 +51,22 @@ export class AgentsConventionsAdapter implements AgentAdapter {
     }
 
     const sourceFile = this.getSourceFile(ext);
-    const srcPath = path.join(cachePath, ext.path, sourceFile);
+    const srcDir = path.join(cachePath, getExtensionDirRel(ext.path));
+    const srcPath = path.join(srcDir, sourceFile);
     const destPath = this.getInstallPath(ext, scope);
 
     if (!fs.existsSync(srcPath)) {
       throw new Error(`Source file not found: ${srcPath}`);
     }
 
-    fs.mkdirSync(path.dirname(destPath), { recursive: true });
-    fs.copyFileSync(srcPath, destPath);
+    if (ext.type === 'skill') {
+      // Скиллы: копировать всю директорию (основной файл + дополнительные)
+      copyExtensionDir(srcDir, path.dirname(destPath));
+    } else {
+      // Агенты/команды: копировать один файл
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+      fs.copyFileSync(srcPath, destPath);
+    }
   }
 
   async remove(ext: Extension, scope: 'global' | 'project'): Promise<void> {

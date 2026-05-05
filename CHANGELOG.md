@@ -4,10 +4,28 @@
 
 ## [Unreleased]
 
+### Добавлено
+- **Многофайловые скиллы** — скиллы теперь могут содержать дополнительные файлы (скрипты, шаблоны, конфигурации) помимо основного `SKILL.md`
+  - Утилиты `multi-file.ts`: `copyExtensionDir()`, `copyAdditionalFiles()`, `hasAdditionalFiles()`, `listExtensionFiles()`, `getExtensionDirRel()`
+  - Валидация при upload: запрет бинарных файлов (`findBinaryFiles()`), лимит размера директории 1 МБ (`getExtensionDirSize()`)
+  - Поддержка `.skillignore` — исключение файлов из копирования и загрузки
+  - Поле `files` в `Extension` — массив относительных путей доп. файлов в каталоге
+  - **Все 5 адаптеров** поддерживают установку многофайловых скиллов:
+    - Claude Code, conventions: `copyExtensionDir()` — полная копия директории
+    - Cursor: трансформация основного `.md` (Cursor frontmatter) + `copyAdditionalFiles()` as-is
+    - Copilot: marker-injection + доп. файлы в `.github/skills/{name}/`
+    - Codex: marker-injection + доп. файлы в `.codex/skills/{name}/`
+  - **Upload в каталог** корректно копирует всю директорию скилла (не только `SKILL.md`)
+  - 31 unit-тест на многофайловую функциональность
+
 ### Изменено
 - **Глобальная установка `agents-conventions`** — bootstrap-скилл теперь ставится глобально во все 4 AI-агента (claude-code, cursor — копия директории; copilot, codex — marker-injection). Удаляется при `disable`.
 - **`init-agents` / `exit-agents` → `~/.skill-hub/bootstrap/`** — перенесены из проектного `.agents/skills/` в глобальную директорию; не регистрируются в registry.
 - **`skill-hub -U` — полная реконсиляция** — при запуске восстанавливает структуру conventions (каталоги, symlinks, pointers, bootstrap), доустанавливает расширения из `.skill-hub.json`, затем обновляет существующие.
+
+### Исправлено
+- Upload загружал только `SKILL.md`, игнорируя доп. файлы скилла (`ScanResult.path` указывал на файл → `isDirectory()` = false)
+- Сломанные импорты в `useKeymap.ts` и `UploadScreen.tsx` (неверный путь к модулю `keymap`, недостающие `isLeftArrow`/`isRightArrow`)
 
 ### Добавлено
 - **Адаптивный TUI для малых экранов** — интерфейс корректно отображается при ширине от 60 колонок и высоте от 12 строк

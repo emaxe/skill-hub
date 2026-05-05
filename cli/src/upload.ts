@@ -12,6 +12,7 @@ import { AgentName, Extension, ExtensionType, Catalog, loadCatalog, platformKey 
 import { ScanResult } from './adapters/types';
 import { getAdapter } from './adapters/get-adapter';
 import { getCachePath, getRegistryUrl } from './git';
+import { listExtensionFiles, getExtensionDirSize, findBinaryFiles, MAX_EXTENSION_DIR_SIZE, copyExtensionDir } from './multi-file';
 
 // ─── Типы ────────────────────────────────────────────────────
 
@@ -162,7 +163,8 @@ function findMainFile(scan: ScanResult): string | null {
 
 /**
  * Валидирует расширения перед загрузкой в каталог.
- * Проверяет: наличие файла, фронтматтер, уникальность имени, kebab-case.
+ * Проверяет: наличие файла, фронтматтер, уникальность имени, kebab-case,
+ * размер директории, наличие бинарных файлов.
  */
 export function validateExtensionsForUpload(
   extensions: ScanResult[],
@@ -204,6 +206,22 @@ export function validateExtensionsForUpload(
       errors.push(`Расширение ${key} уже существует в каталоге`);
     }
 
+    // 5. Проверка размера директории расширения
+    const srcDir = path.dirname(mainFile);
+    if (fs.statSync(srcDir).isDirectory()) {
+      const size = getExtensionDirSize(srcDir);
+      if (size > MAX_EXTENSION_DIR_SIZE) {
+        const sizeMb = (size / 1024 / 1024).toFixed(2);
+        errors.push(`Размер директории (${sizeMb} МБ) превышает лимит в 1 МБ`);
+      }
+    }
+
+    // 6. Проверка бинарных файлов
+    const binaries = findBinaryFiles(path.dirname(mainFile));
+    if (binaries.length > 0) {
+      errors.push(`Обнаружены бинарные файлы: ${binaries.join(', ')}`);
+    }
+
     const frontmatter = (fm.name && fm.description && fm.version && fm.author)
       ? fm as Frontmatter
       : undefined;
@@ -216,6 +234,7 @@ export function validateExtensionsForUpload(
 
 /**
  * Создаёт объект Extension для вставки в catalog.json.
+ * Сканирует директорию расширения на наличие дополнительных файлов.
  */
 export function buildCatalogEntry(
   scan: ScanResult,
@@ -224,8 +243,13 @@ export function buildCatalogEntry(
 ): Extension {
   const pKey = platformKey(agent);
   const file = mainFileName(scan.type);
+  const extPath = `${scan.type}s/${frontmatter.name}/${file}`;
 
-  return {
+  // Сканировать дополнительные файлы в директории расширения
+  const srcDir = path.dirname(scan.path);
+  const additionalFiles = listAdditionalFilesFromDir(srcDir, file);
+
+  const entry: Extension = {
     type: scan.type,
     name: frontmatter.name,
     description: frontmatter.description,
@@ -234,10 +258,44 @@ export function buildCatalogEntry(
     version: frontmatter.version,
     scope: 'both',
     platforms: { [pKey]: file },
-    path: `${scan.type}s/${frontmatter.name}/${file}`,
+    path: extPath,
     dependencies: [],
     projects: [],
   };
+
+  if (additionalFiles.length > 0) {
+    entry.files = additionalFiles;
+  }
+
+  return entry;
+}
+
+/**
+ * Собирает относительные пути дополнительных файлов в директории расширения.
+ * Исключает основной файл и .skillignore.
+ */
+function listAdditionalFilesFromDir(dirPath: string, mainFile: string): string[] {
+  if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) return [];
+
+  const files: string[] = [];
+  function walk(current: string): void {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (entry.name === '.skillignore') continue;
+      if (entry.isSymbolicLink()) continue;
+
+      const full = path.join(current, entry.name);
+      const rel = path.relative(dirPath, full);
+
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.isFile()) {
+        if (current === dirPath && entry.name === mainFile) continue;
+        files.push(rel);
+      }
+    }
+  }
+  walk(dirPath);
+  return files;
 }
 
 // ─── 4. Git-операции загрузки ─────────────────────────────────
@@ -272,9 +330,12 @@ export async function uploadExtensions(opts: UploadOptions): Promise<UploadResul
       const srcPath = ext.path;
       if (fs.statSync(srcPath).isDirectory()) {
         // Копируем всю папку расширения
-        copyDirSync(srcPath, targetDir);
+        copyExtensionDir(srcPath, targetDir);
+      } else if (ext.type === 'skill') {
+        // Скиллы: копировать родительскую директорию (SKILL.md + доп. файлы)
+        copyExtensionDir(path.dirname(srcPath), targetDir);
       } else {
-        // Копируем один файл
+        // Агенты/команды: копировать один файл
         const destFile = path.join(targetDir, path.basename(srcPath));
         fs.copyFileSync(srcPath, destFile);
       }
@@ -328,7 +389,7 @@ export async function uploadExtensions(opts: UploadOptions): Promise<UploadResul
 
 /** Конвертирует Extension в сырой объект для catalog.json */
 function extensionToRaw(ext: Extension): Record<string, unknown> {
-  return {
+  const raw: Record<string, unknown> = {
     type: ext.type,
     name: ext.name,
     description: ext.description,
@@ -341,20 +402,10 @@ function extensionToRaw(ext: Extension): Record<string, unknown> {
     dependencies: ext.dependencies,
     projects: ext.projects,
   };
-}
-
-/** Рекурсивно копирует директорию */
-function copyDirSync(src: string, dest: string): void {
-  fs.mkdirSync(dest, { recursive: true });
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const srcEntry = path.join(src, entry.name);
-    const destEntry = path.join(dest, entry.name);
-    if (entry.isDirectory()) {
-      copyDirSync(srcEntry, destEntry);
-    } else {
-      fs.copyFileSync(srcEntry, destEntry);
-    }
+  if (ext.files && ext.files.length > 0) {
+    raw.files = ext.files;
   }
+  return raw;
 }
 
 // ─── 5. Генерация URL для PR/MR ─────────────────────────────

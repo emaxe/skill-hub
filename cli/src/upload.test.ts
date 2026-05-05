@@ -247,6 +247,52 @@ describe('buildCatalogEntry', () => {
 
     expect(entry.platforms['claude-code']).toBe('SKILL.md');
   });
+
+  test('заполняет files для многофайлового скилла', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const tmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'build-entry-'));
+    const skillDir = path.join(tmpDir, 'my-skill');
+    fs.mkdirSync(path.join(skillDir, 'templates'), { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# Skill');
+    fs.writeFileSync(path.join(skillDir, 'script.sh'), '#!/bin/bash');
+    fs.writeFileSync(path.join(skillDir, 'templates', 'tpl.txt'), 'template');
+
+    const scan = makeScanResult({
+      type: 'skill',
+      name: 'my-skill',
+      path: path.join(skillDir, 'SKILL.md'),
+    });
+    const fm = makeFrontmatter({ name: 'my-skill' });
+    const entry = buildCatalogEntry(scan, fm, 'claude-code');
+
+    expect(entry.files).toBeDefined();
+    expect(entry.files).toContain('script.sh');
+    expect(entry.files).toContain(path.join('templates', 'tpl.txt'));
+
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  test('files отсутствует для однофайлового скилла', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const tmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'build-entry-'));
+    const skillDir = path.join(tmpDir, 'my-skill');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# Skill');
+
+    const scan = makeScanResult({
+      type: 'skill',
+      name: 'my-skill',
+      path: path.join(skillDir, 'SKILL.md'),
+    });
+    const fm = makeFrontmatter({ name: 'my-skill' });
+    const entry = buildCatalogEntry(scan, fm, 'claude-code');
+
+    expect(entry.files).toBeUndefined();
+
+    fs.rmSync(tmpDir, { recursive: true });
+  });
 });
 
 // ─── detectPlatform / parseGitUrl ────────────────────────────
@@ -378,6 +424,76 @@ describe('generateBranchName', () => {
   test('генерирует имя ветки в формате upload/{user}-{timestamp}', () => {
     const name = generateBranchName();
     expect(name).toMatch(/^upload\/\w+-\d+$/);
+  });
+});
+
+// ─── uploadExtensions: копирование доп. файлов ───────────────
+
+describe('upload — копирование файлов скиллов', () => {
+  const fsReal = require('fs');
+  const pathReal = require('path');
+  const os = require('os');
+
+  let tmpSkillDir: string;
+  let tmpTargetDir: string;
+
+  beforeEach(() => {
+    tmpSkillDir = fsReal.mkdtempSync(pathReal.join(os.tmpdir(), 'upload-skill-'));
+    tmpTargetDir = fsReal.mkdtempSync(pathReal.join(os.tmpdir(), 'upload-target-'));
+  });
+
+  afterEach(() => {
+    fsReal.rmSync(tmpSkillDir, { recursive: true, force: true });
+    fsReal.rmSync(tmpTargetDir, { recursive: true, force: true });
+  });
+
+  test('copyExtensionDir копирует все файлы скилла в каталог', () => {
+    // Многофайловый скилл: SKILL.md + templates/prompt.txt + helper.sh
+    fsReal.mkdirSync(pathReal.join(tmpSkillDir, 'templates'), { recursive: true });
+    fsReal.writeFileSync(pathReal.join(tmpSkillDir, 'SKILL.md'), '---\nname: test\n---\n# Test');
+    fsReal.writeFileSync(pathReal.join(tmpSkillDir, 'templates', 'prompt.txt'), 'шаблон');
+    fsReal.writeFileSync(pathReal.join(tmpSkillDir, 'helper.sh'), '#!/bin/bash');
+
+    const { copyExtensionDir } = require('./multi-file');
+    copyExtensionDir(tmpSkillDir, tmpTargetDir);
+
+    expect(fsReal.existsSync(pathReal.join(tmpTargetDir, 'SKILL.md'))).toBe(true);
+    expect(fsReal.existsSync(pathReal.join(tmpTargetDir, 'templates', 'prompt.txt'))).toBe(true);
+    expect(fsReal.existsSync(pathReal.join(tmpTargetDir, 'helper.sh'))).toBe(true);
+    expect(fsReal.readFileSync(pathReal.join(tmpTargetDir, 'templates', 'prompt.txt'), 'utf-8')).toBe('шаблон');
+  });
+
+  test('.skillignore не копируется при upload', () => {
+    fsReal.mkdirSync(pathReal.join(tmpSkillDir, 'helpers'), { recursive: true });
+    fsReal.writeFileSync(pathReal.join(tmpSkillDir, 'SKILL.md'), '# Test');
+    fsReal.writeFileSync(pathReal.join(tmpSkillDir, 'helpers', 'util.sh'), 'util');
+    fsReal.writeFileSync(pathReal.join(tmpSkillDir, '.skillignore'), 'dev.txt');
+
+    const { copyExtensionDir } = require('./multi-file');
+    copyExtensionDir(tmpSkillDir, tmpTargetDir);
+
+    expect(fsReal.existsSync(pathReal.join(tmpTargetDir, 'SKILL.md'))).toBe(true);
+    expect(fsReal.existsSync(pathReal.join(tmpTargetDir, 'helpers', 'util.sh'))).toBe(true);
+    expect(fsReal.existsSync(pathReal.join(tmpTargetDir, '.skillignore'))).toBe(false);
+  });
+
+  test('upload скилла из path к файлу копирует всю директорию', () => {
+    // Симуляция того, что делает uploadExtensions():
+    // ext.path = '/path/to/SKILL.md' → dirname → copyExtensionDir
+    fsReal.mkdirSync(pathReal.join(tmpSkillDir, 'data'), { recursive: true });
+    fsReal.writeFileSync(pathReal.join(tmpSkillDir, 'SKILL.md'), '# Skill');
+    fsReal.writeFileSync(pathReal.join(tmpSkillDir, 'data', 'config.json'), '{"key": "value"}');
+
+    const srcPath = pathReal.join(tmpSkillDir, 'SKILL.md');
+    // Логика из uploadExtensions: для скиллов берём dirname
+    const srcDir = pathReal.dirname(srcPath);
+
+    const { copyExtensionDir } = require('./multi-file');
+    copyExtensionDir(srcDir, tmpTargetDir);
+
+    expect(fsReal.existsSync(pathReal.join(tmpTargetDir, 'SKILL.md'))).toBe(true);
+    expect(fsReal.existsSync(pathReal.join(tmpTargetDir, 'data', 'config.json'))).toBe(true);
+    expect(fsReal.readFileSync(pathReal.join(tmpTargetDir, 'data', 'config.json'), 'utf-8')).toBe('{"key": "value"}');
   });
 });
 

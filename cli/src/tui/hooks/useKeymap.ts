@@ -1,5 +1,6 @@
 import { useInput } from 'ink';
 import { useCallback } from 'react';
+import { isUpArrow, isDownArrow } from '../keymap';
 
 export type KeyContext = 'catalog' | 'installed' | 'settings' | 'detail' | 'move' | 'global' | 'search' | 'confirm';
 
@@ -36,8 +37,8 @@ export function useKeymap({ context, handlers, isActive = true }: UseKeymapOptio
 
       if (handler.key === 'escape' && key.escape) { handler.handler(); return; }
       if (handler.key === 'return' && key.return) { handler.handler(); return; }
-      if (handler.key === 'up' && key.upArrow) { handler.handler(); return; }
-      if (handler.key === 'down' && key.downArrow) { handler.handler(); return; }
+      if (handler.key === 'up' && isUpArrow(input, key)) { handler.handler(); return; }
+      if (handler.key === 'down' && isDownArrow(input, key)) { handler.handler(); return; }
       if (handler.key === 'tab' && key.tab && !key.shift) { handler.handler(); return; }
       if (handler.key === 'shift+tab' && key.tab && key.shift) { handler.handler(); return; }
       if (handler.key === input) { handler.handler(); return; }

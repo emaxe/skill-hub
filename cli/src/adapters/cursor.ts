@@ -4,6 +4,7 @@ import os from 'os';
 import { Extension, ExtensionType } from '../catalog';
 import { AgentAdapter, ScanResult } from './types';
 import { stripFrontmatter } from '../frontmatter';
+import { copyAdditionalFiles, getExtensionDirRel } from '../multi-file';
 
 function cursorRoot(scope: 'global' | 'project', projectDir: string, homeDir: string): string {
   return scope === 'global'
@@ -43,19 +44,24 @@ export class CursorAdapter implements AgentAdapter {
 
   async install(ext: Extension, scope: 'global' | 'project', cachePath: string): Promise<void> {
     const sourceFile = this.getSourceFile(ext);
-    const srcPath = path.join(cachePath, ext.path, sourceFile);
+    const srcDir = path.join(cachePath, getExtensionDirRel(ext.path));
+    const srcPath = path.join(srcDir, sourceFile);
     const destPath = this.getInstallPath(ext, scope);
 
     if (!fs.existsSync(srcPath)) {
       throw new Error(`Cursor version not available for ${ext.name}: missing ${sourceFile}`);
     }
 
+    // 1. Трансформация основного файла (Cursor frontmatter)
     const raw = fs.readFileSync(srcPath, 'utf-8');
     const body = stripFrontmatter(raw);
     const cursorFm = `---\ndescription: ${ext.description}\nalwaysApply: false\n---\n`;
 
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
     fs.writeFileSync(destPath, cursorFm + body);
+
+    // 2. Копирование дополнительных файлов (без трансформации)
+    copyAdditionalFiles(srcDir, path.dirname(destPath), sourceFile);
   }
 
   async remove(ext: Extension, scope: 'global' | 'project'): Promise<void> {

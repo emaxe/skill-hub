@@ -19,6 +19,8 @@ export interface Extension {
   color?: string;
   /** Привязка к проектам. Пустой массив = универсальное расширение. */
   projects: string[];
+  /** Список дополнительных файлов/директорий относительно директории расширения */
+  files?: string[];
 }
 
 export interface Catalog {
@@ -63,6 +65,7 @@ export function parseExtension(raw: unknown): Extension {
     model: r.model as string | undefined,
     color: r.color as string | undefined,
     projects: (r.projects as string[]) || [],
+    files: Array.isArray(r.files) ? r.files as string[] : undefined,
   };
 }
 
