@@ -36,3 +36,44 @@ test('список расширений по агенту', () => {
   expect(reg.list()).toHaveLength(2);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('повреждённый installed.json — возврат пустого списка и backup файла', () => {
+  const dir = tmpDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const regPath = path.join(dir, 'installed.json');
+  fs.writeFileSync(regPath, '{corrupted json!!!');
+
+  const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  const reg = createRegistry(dir);
+  const items = reg.list();
+
+  expect(items).toHaveLength(0);
+  expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Реестр повреждён'));
+
+  // Проверяем, что backup-файл создан
+  const files = fs.readdirSync(dir);
+  const backups = files.filter(f => f.startsWith('installed.json.backup.'));
+  expect(backups.length).toBe(1);
+
+  warnSpy.mockRestore();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('повреждённый реестр — последующая запись создаёт новый валидный файл', () => {
+  const dir = tmpDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const regPath = path.join(dir, 'installed.json');
+  fs.writeFileSync(regPath, 'not-json');
+
+  const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  const reg = createRegistry(dir);
+  reg.add({ type: 'skill', name: 'new-ext', version: '1.0.0', agent: 'claude-code', scope: 'global', path: '/tmp/new' });
+
+  // Новый installed.json должен быть валидным
+  const data = JSON.parse(fs.readFileSync(regPath, 'utf-8'));
+  expect(data.installations).toHaveLength(1);
+  expect(data.installations[0].name).toBe('new-ext');
+
+  warnSpy.mockRestore();
+  fs.rmSync(dir, { recursive: true, force: true });
+});

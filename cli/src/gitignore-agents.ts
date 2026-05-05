@@ -12,18 +12,24 @@ import path from 'path';
 export const AGENT_GITIGNORE_ENTRIES = [
   '.claude/',
   '.cursor/',
-  '.github/',
+  // НЕ .github/ целиком — только Copilot-специфичные файлы,
+  // чтобы не скрывать workflows/, CODEOWNERS, dependabot.yml и др.
+  '.github/copilot-instructions.md',
+  '.github/skills/',
   '.codex/',
   '.agents/',
   '.cursorrules',
 ];
+
+/** Устаревшая запись, которую нужно мигрировать в конкретные Copilot-пути */
+const LEGACY_GITHUB_ENTRY = '.github/';
 
 const GITIGNORE_SECTION_HEADER = '# AI agent directories (skill-hub)';
 
 /**
  * Проверяет, покрывает ли .gitignore указанную запись.
  * Учитывает: точное совпадение, запись без слеша покрывает вариант со слешем,
- * запись со слешем покрывает только директории.
+ * родительская директория покрывает дочерние записи (.github/ покрывает .github/skills/).
  */
 function isEntryCovered(gitignoreLines: string[], entry: string): boolean {
   const trimmedEntry = entry.trim();
@@ -37,6 +43,10 @@ function isEntryCovered(gitignoreLines: string[], entry: string): boolean {
     // Запись без слеша покрывает и файл, и директорию
     const lineWithoutSlash = trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
     if (lineWithoutSlash === entryWithoutSlash) return true;
+    // Родительская директория покрывает дочерние записи
+    // Например, .github/ покрывает .github/copilot-instructions.md и .github/skills/
+    const parentDir = trimmed.endsWith('/') ? trimmed : trimmed + '/';
+    if (trimmedEntry.startsWith(parentDir)) return true;
     return false;
   });
 }
@@ -62,8 +72,11 @@ export function getExistingAgentEntries(projectRoot: string): string[] {
 /**
  * Возвращает список агентских элементов, присутствующих в проекте,
  * но отсутствующих в .gitignore.
+ * Автоматически мигрирует устаревшую запись `.github/` при обнаружении.
  */
 export function getMissingGitignoreEntries(projectRoot: string): string[] {
+  // Мигрируем устаревшую `.github/` → конкретные Copilot-пути
+  migrateGithubGitignoreEntry(projectRoot);
   const existing = getExistingAgentEntries(projectRoot);
   if (existing.length === 0) return [];
 
@@ -116,6 +129,51 @@ export function removeAgentDirsFromGitignore(projectRoot: string): void {
     lines.splice(headerIdx - 1, 1);
   }
 
+  fs.writeFileSync(gitignorePath, lines.join('\n'));
+}
+
+/**
+ * Мигрирует устаревшую запись `.github/` в секции skill-hub.
+ * Заменяет `.github/` на конкретные Copilot-пути: `.github/copilot-instructions.md` и `.github/skills/`.
+ * Если секции skill-hub нет или `.github/` отсутствует — ничего не делает.
+ */
+export function migrateGithubGitignoreEntry(projectRoot: string): void {
+  const gitignorePath = path.join(projectRoot, '.gitignore');
+  let content = '';
+  try {
+    if (!fs.existsSync(gitignorePath)) return;
+    content = fs.readFileSync(gitignorePath, 'utf-8');
+  } catch {
+    return;
+  }
+
+  if (!content.includes(GITIGNORE_SECTION_HEADER)) return;
+
+  const lines = content.split('\n');
+  const headerIdx = lines.findIndex(l => l.trim() === GITIGNORE_SECTION_HEADER);
+  if (headerIdx === -1) return;
+
+  // Ищем `.github/` в секции skill-hub
+  let endIdx = headerIdx + 1;
+  let githubLineIdx = -1;
+  while (endIdx < lines.length && lines[endIdx].trim() !== '' && !lines[endIdx].trim().startsWith('#')) {
+    if (lines[endIdx].trim() === LEGACY_GITHUB_ENTRY) {
+      githubLineIdx = endIdx;
+    }
+    endIdx++;
+  }
+
+  if (githubLineIdx === -1) return;
+
+  // Заменяем `.github/` на конкретные Copilot-пути
+  const replacementEntries = AGENT_GITIGNORE_ENTRIES.filter(e => e.startsWith('.github/'));
+  // Фильтруем те, которых ещё нет в файле (кроме тех, что покрываются .github/)
+  const newEntries = replacementEntries.filter(e => {
+    // Не добавлять если уже есть точное совпадение
+    return !lines.some(l => l.trim() === e);
+  });
+
+  lines.splice(githubLineIdx, 1, ...newEntries);
   fs.writeFileSync(gitignorePath, lines.join('\n'));
 }
 

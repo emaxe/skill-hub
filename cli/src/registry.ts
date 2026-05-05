@@ -36,12 +36,20 @@ export function createRegistry(registryDir: string): Registry {
     if (!fs.existsSync(registryPath)) {
       return { version: 3, installations: [] };
     }
-    const raw = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
-    const installations = (raw.installations || []).map((r: InstallRecord) => ({
-      ...r,
-      agent: r.agent || 'claude-code',
-    }));
-    return { version: 3, installations };
+    try {
+      const raw = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
+      const installations = (raw.installations || []).map((r: InstallRecord) => ({
+        ...r,
+        agent: r.agent || 'claude-code',
+      }));
+      return { version: 3, installations };
+    } catch (err) {
+      // Backup повреждённого файла, чтобы пользователь мог восстановить данные вручную
+      const backupPath = registryPath + '.backup.' + Date.now();
+      try { fs.copyFileSync(registryPath, backupPath); } catch {}
+      console.warn(`⚠️ Реестр повреждён, создан backup: ${backupPath}`);
+      return { version: 3, installations: [] };
+    }
   }
 
   function save(data: { version: number; installations: InstallRecord[] }): void {

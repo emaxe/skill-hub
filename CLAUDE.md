@@ -435,7 +435,7 @@ TUI адаптируется к размеру терминала через х�
 - `pushHistory()` — добавляет URL/proxy в историю (max 6 записей).
 - При смене `registryUrl` — вызвать `fullCatalogReset()` (удалить кеш + очистить extensions из проектного конфига).
 - `loadGitignoreAgentDirs()` / `saveGitignoreAgentDirs()` — чтение/запись настройки `gitignoreAgentDirs` из публичного проектного конфига.
-- `gitignore-agents.ts` — утилиты для управления папками ИИ-агентов в `.gitignore`: `AGENT_GITIGNORE_ENTRIES`, `getExistingAgentEntries()`, `getMissingGitignoreEntries()`, `addAgentDirsToGitignore()`, `removeAgentDirsFromGitignore()`.
+- `gitignore-agents.ts` — утилиты для управления папками ИИ-агентов в `.gitignore`: `AGENT_GITIGNORE_ENTRIES`, `getExistingAgentEntries()`, `getMissingGitignoreEntries()`, `addAgentDirsToGitignore()`, `removeAgentDirsFromGitignore()`, `migrateGithubGitignoreEntry()`.
 
 ### Тестирование
 
