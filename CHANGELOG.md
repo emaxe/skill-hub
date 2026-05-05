@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### Исправлено (Security Audit)
+- **C2** — `removeSection()` / `removeMarkerContent()` больше не портят файлы при отсутствии конечного маркера. Вместо удаления всего от начального маркера до конца файла — оставляют содержимое нетронутым
+- **C3** — `registry.ts` `JSON.parse` обёрнут в try/catch: повреждённый `registry.json` не крашит CLI, а инициализируется пустым реестром с warning
+- **C4** — `.github/` заменена на `.github/copilot-instructions.md` в `AGENT_GITIGNORE_ENTRIES` — больше не блокирует GitHub Actions / Dependabot при автодобавлении в .gitignore
+- **C5** — `buildCatalogEntry()` при upload больше не сканирует родительскую директорию вместо директории скилла (`getExtensionDirRel()` корректно обрабатывает путь к файлу и к директории)
+- **C6** — upload cleanup: `finally` блок гарантирует возврат на `main` даже при ошибке push, предотвращая залипание кеша на feature branch
+- **C7** — Git auth URL → бесконечный цикл reclone: при `ENOENT`/ошибке клонирования не повторяет `ensureCache()` рекурсивно, а выбрасывает ошибку с понятным сообщением
+- **C8** — `checkMcpUpToDate()` использует рекурсивный `deepEqual()` вместо `JSON.stringify` для сравнения MCP-конфигов — порядок ключей больше не вызывает ложное «outdated»
+
 ### Добавлено
 - **Многофайловые скиллы** — скиллы теперь могут содержать дополнительные файлы (скрипты, шаблоны, конфигурации) помимо основного `SKILL.md`
   - Утилиты `multi-file.ts`: `copyExtensionDir()`, `copyAdditionalFiles()`, `hasAdditionalFiles()`, `listExtensionFiles()`, `getExtensionDirRel()`

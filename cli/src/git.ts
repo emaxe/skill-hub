@@ -27,6 +27,22 @@ function isAuthError(msg: string): boolean {
 }
 
 /**
+ * Нормализует git URL для сравнения — удаляет userinfo (username:password).
+ * Предотвращает ложное срабатывание "origin changed" при клонировании с credentials.
+ */
+export function normalizeGitUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.username = '';
+    parsed.password = '';
+    return parsed.toString();
+  } catch {
+    // SSH URL или невалидный — сравнивать as-is
+    return url;
+  }
+}
+
+/**
  * Встраивает учётные данные в HTTPS URL.
  * Например: https://github.com/… → https://user:pass@github.com/…
  * Для SSH URL возвращает URL без изменений.
@@ -125,12 +141,14 @@ export async function ensureCacheWithCredentials(
 async function ensureCacheWithUrl(registryUrl: string, cachePath: string): Promise<void> {
   const publicUrl = getRegistryUrl(); // для сообщений об ошибках (без credentials)
 
-  // Если клон есть, проверяем совпадение origin с текущим registryUrl
+  // Если клон есть, проверяем совпадение origin с текущим registryUrl.
+  // Нормализуем оба URL (удаляем credentials) чтобы избежать ложного reclone
+  // когда origin содержит username:password после клонирования с аутентификацией.
   if (isCloned(cachePath)) {
     try {
       const git = simpleGit(cachePath);
       const currentOrigin = (await git.remote(['get-url', 'origin']))?.trim();
-      if (currentOrigin && currentOrigin !== publicUrl) {
+      if (currentOrigin && normalizeGitUrl(currentOrigin) !== normalizeGitUrl(publicUrl)) {
         console.log('Registry URL changed, resetting cache...');
         resetCache(cachePath);
       }

@@ -11,7 +11,7 @@ import simpleGit from 'simple-git';
 import { AgentName, Extension, ExtensionType, Catalog, loadCatalog, platformKey } from './catalog';
 import { ScanResult } from './adapters/types';
 import { getAdapter } from './adapters/get-adapter';
-import { getCachePath, getRegistryUrl } from './git';
+import { getCachePath, getRegistryUrl, resetCache, ensureCache } from './git';
 import { listExtensionFiles, getExtensionDirSize, findBinaryFiles, MAX_EXTENSION_DIR_SIZE, copyExtensionDir } from './multi-file';
 
 // ─── Типы ────────────────────────────────────────────────────
@@ -245,8 +245,12 @@ export function buildCatalogEntry(
   const file = mainFileName(scan.type);
   const extPath = `${scan.type}s/${frontmatter.name}/${file}`;
 
-  // Сканировать дополнительные файлы в директории расширения
-  const srcDir = path.dirname(scan.path);
+  // Сканировать дополнительные файлы в директории расширения.
+  // scan.path может быть директорией (многофайловое расширение) или файлом —
+  // path.dirname() от директории вернёт родительскую, сканируя чужие файлы.
+  const srcDir = fs.existsSync(scan.path) && fs.statSync(scan.path).isDirectory()
+    ? scan.path
+    : path.dirname(scan.path);
   const additionalFiles = listAdditionalFilesFromDir(srcDir, file);
 
   const entry: Extension = {
@@ -383,7 +387,17 @@ export async function uploadExtensions(opts: UploadOptions): Promise<UploadResul
       await git.checkout('main');
       // Очистить неотслеживаемую ветку
       try { await git.branch(['-D', opts.branchName]); } catch { /* ignore */ }
-    } catch { /* ignore */ }
+    } catch (checkoutErr) {
+      console.error('⚠️ Не удалось вернуться на main, сброс кеша...');
+      try {
+        await git.raw(['reset', '--hard']);
+        await git.checkout('main');
+      } catch {
+        // Крайний случай — полный сброс кеша
+        resetCache(cachePath);
+        await ensureCache(cachePath);
+      }
+    }
   }
 }
 

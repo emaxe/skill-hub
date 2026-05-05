@@ -11,14 +11,14 @@ Skill-Hub — менеджер расширений для AI-агентов (Cl
 | `skill-hub` (этот) | `cli/` — TypeScript CLI + MCP-сервер; `cli/base-skills/` — бутстрап-скиллы |
 | `skill-hub-catalog` | `skills/`, `agents/`, `commands/`, `schema/`, `catalog.json` |
 
-**Npm-пакет:** `@emaxe/skill-hub` (version 0.1.11)
+**Npm-пакет:** `@emaxe/skill-hub` (version 0.1.18)
 **Node:** ≥18
 
 ## Команды разработки
 
 ```bash
 cd cli && npm run build          # сборка (tsc)
-cd cli && npm test               # Jest-тесты (127 тестов)
+cd cli && npm test               # Jest-тесты (266 тестов)
 npm link                         # глобальная линковка для локального тестирования
 npm unlink -g @emaxe/skill-hub   # удалить линк
 skill-hub search git             # проверить CLI
@@ -443,7 +443,7 @@ TUI адаптируется к размеру терминала через х�
 - Тесты рядом с модулями: `upload.test.ts`, `git.test.ts`, `catalog.test.ts`
 - Моки: `jest.mock('simple-git')` для git-операций, `jest.mock('fs')` для файловых
 - Тест `getUploadCandidates` пропущен — требует мок адаптера без DI
-- **Текущее состояние:** 225 тестов (224 pass, 1 skip)
+- **Текущее состояние:** 266 тестов (265 pass, 1 skip)
 
 ### Windows и кроссплатформенность
 

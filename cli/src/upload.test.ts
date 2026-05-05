@@ -293,6 +293,38 @@ describe('buildCatalogEntry', () => {
 
     fs.rmSync(tmpDir, { recursive: true });
   });
+
+  test('scan.path — директория: сканирует только её, не родительскую', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const tmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'build-entry-'));
+
+    // Создаём два скилла рядом — проверяем, что второй не попадёт в files
+    const skill1Dir = path.join(tmpDir, 'my-skill');
+    const skill2Dir = path.join(tmpDir, 'other-skill');
+    fs.mkdirSync(skill1Dir, { recursive: true });
+    fs.mkdirSync(skill2Dir, { recursive: true });
+    fs.writeFileSync(path.join(skill1Dir, 'SKILL.md'), '# Skill 1');
+    fs.writeFileSync(path.join(skill1Dir, 'helper.sh'), '#!/bin/bash');
+    fs.writeFileSync(path.join(skill2Dir, 'SKILL.md'), '# Skill 2');
+
+    const scan = makeScanResult({
+      type: 'skill',
+      name: 'my-skill',
+      path: skill1Dir, // директория, не файл
+    });
+    const fm = makeFrontmatter({ name: 'my-skill' });
+    const entry = buildCatalogEntry(scan, fm, 'claude-code');
+
+    // Должен содержать только helper.sh из my-skill, не файлы other-skill
+    expect(entry.files).toBeDefined();
+    expect(entry.files).toContain('helper.sh');
+    expect(entry.files).not.toContain('SKILL.md');
+    // Ни один файл из other-skill не должен попасть
+    expect(entry.files!.every((f: string) => !f.includes('other-skill'))).toBe(true);
+
+    fs.rmSync(tmpDir, { recursive: true });
+  });
 });
 
 // ─── detectPlatform / parseGitUrl ────────────────────────────
@@ -494,6 +526,118 @@ describe('upload — копирование файлов скиллов', () => 
     expect(fsReal.existsSync(pathReal.join(tmpTargetDir, 'SKILL.md'))).toBe(true);
     expect(fsReal.existsSync(pathReal.join(tmpTargetDir, 'data', 'config.json'))).toBe(true);
     expect(fsReal.readFileSync(pathReal.join(tmpTargetDir, 'data', 'config.json'), 'utf-8')).toBe('{"key": "value"}');
+  });
+});
+
+// ─── uploadExtensions: finally-блок восстановления ───────────
+
+describe('uploadExtensions — finally recovery', () => {
+  let mockGit: any;
+
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  function setupMocks(gitOverrides: Record<string, any> = {}) {
+    mockGit = {
+      checkout: jest.fn().mockResolvedValue(undefined),
+      checkoutLocalBranch: jest.fn().mockResolvedValue(undefined),
+      branch: jest.fn().mockResolvedValue(undefined),
+      add: jest.fn().mockResolvedValue(undefined),
+      commit: jest.fn().mockResolvedValue(undefined),
+      push: jest.fn().mockResolvedValue(undefined),
+      raw: jest.fn().mockResolvedValue(undefined),
+      ...gitOverrides,
+    };
+
+    jest.doMock('simple-git', () => () => mockGit);
+    jest.doMock('./git', () => ({
+      getCachePath: () => '/fake/cache',
+      getRegistryUrl: () => 'https://github.com/test/catalog.git',
+      resetCache: jest.fn(),
+      ensureCache: jest.fn().mockResolvedValue(undefined),
+    }));
+    jest.doMock('fs', () => ({
+      ...jest.requireActual('fs'),
+      mkdirSync: jest.fn(),
+      statSync: jest.fn().mockReturnValue({ isDirectory: () => true }),
+      readFileSync: jest.fn().mockReturnValue(JSON.stringify({ extensions: [], counts: {} })),
+      writeFileSync: jest.fn(),
+    }));
+    jest.doMock('./multi-file', () => ({
+      copyExtensionDir: jest.fn(),
+      listExtensionFiles: jest.fn().mockReturnValue([]),
+      getExtensionDirSize: jest.fn().mockReturnValue(0),
+      findBinaryFiles: jest.fn().mockReturnValue([]),
+      MAX_EXTENSION_DIR_SIZE: 1024 * 1024,
+    }));
+  }
+
+  test('при неудачном checkout на main — делает reset --hard и повторяет checkout', async () => {
+    let checkoutCallCount = 0;
+    setupMocks({
+      checkout: jest.fn().mockImplementation((branch: string) => {
+        checkoutCallCount++;
+        // 1-й вызов — начальный checkout main (в try) — ОК
+        if (checkoutCallCount === 1) return Promise.resolve();
+        // 2-й вызов — finally: checkout main — фейлим
+        if (checkoutCallCount === 2) return Promise.reject(new Error('checkout failed'));
+        // 3-й вызов — после reset --hard — ОК
+        return Promise.resolve();
+      }),
+      // push бросает ошибку чтобы попасть в catch → finally
+      push: jest.fn().mockRejectedValue(new Error('push failed')),
+    });
+
+    const { uploadExtensions } = require('./upload');
+    const result = await uploadExtensions({
+      extensions: [{ type: 'skill', name: 'test', scope: 'project', path: '/tmp/test' }],
+      frontmatters: new Map([['skill:test', { name: 'test', description: 'd', version: '1.0.0', author: 'a' }]]),
+      catalog: { version: 1, generated_at: '', counts: {}, extensions: [] },
+      agent: 'claude-code',
+      branchName: 'upload/test',
+      commitMessage: 'test',
+      cachePath: '/fake/cache',
+    });
+
+    expect(result.success).toBe(false);
+    expect(mockGit.raw).toHaveBeenCalledWith(['reset', '--hard']);
+    expect(mockGit.checkout).toHaveBeenCalledTimes(3);
+  });
+
+  test('при полном провале — вызывает resetCache + ensureCache', async () => {
+    let checkoutCallCount = 0;
+    setupMocks({
+      checkout: jest.fn().mockImplementation(() => {
+        checkoutCallCount++;
+        // 1-й — начальный OK
+        if (checkoutCallCount === 1) return Promise.resolve();
+        // Все остальные — фейл (finally: первый checkout и после reset)
+        return Promise.reject(new Error('checkout failed'));
+      }),
+      push: jest.fn().mockRejectedValue(new Error('push failed')),
+      raw: jest.fn().mockRejectedValue(new Error('reset failed')),
+    });
+
+    const { uploadExtensions } = require('./upload');
+    const gitModule = require('./git');
+
+    await uploadExtensions({
+      extensions: [{ type: 'skill', name: 'test', scope: 'project', path: '/tmp/test' }],
+      frontmatters: new Map([['skill:test', { name: 'test', description: 'd', version: '1.0.0', author: 'a' }]]),
+      catalog: { version: 1, generated_at: '', counts: {}, extensions: [] },
+      agent: 'claude-code',
+      branchName: 'upload/test',
+      commitMessage: 'test',
+      cachePath: '/fake/cache',
+    });
+
+    expect(gitModule.resetCache).toHaveBeenCalledWith('/fake/cache');
+    expect(gitModule.ensureCache).toHaveBeenCalledWith('/fake/cache');
   });
 });
 

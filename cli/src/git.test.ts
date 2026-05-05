@@ -1,4 +1,4 @@
-import { getCachePath, isCloned, resetCache, fullCatalogReset } from './git';
+import { getCachePath, isCloned, resetCache, fullCatalogReset, normalizeGitUrl, injectCredentials } from './git';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
@@ -161,5 +161,52 @@ describe('resetCache', () => {
   test('корректно работает если директория не существует', () => {
     const nonExistent = path.join(os.tmpdir(), 'skill-hub-nonexist-' + Date.now());
     expect(() => resetCache(nonExistent)).not.toThrow();
+  });
+});
+
+describe('normalizeGitUrl', () => {
+  test('удаляет username и password из HTTPS URL', () => {
+    const url = 'https://user:token123@github.com/emaxe/skill-hub-catalog.git';
+    expect(normalizeGitUrl(url)).toBe('https://github.com/emaxe/skill-hub-catalog.git');
+  });
+
+  test('удаляет только username из HTTPS URL', () => {
+    const url = 'https://user@github.com/emaxe/skill-hub-catalog.git';
+    expect(normalizeGitUrl(url)).toBe('https://github.com/emaxe/skill-hub-catalog.git');
+  });
+
+  test('не меняет URL без credentials', () => {
+    const url = 'https://github.com/emaxe/skill-hub-catalog.git';
+    expect(normalizeGitUrl(url)).toBe(url);
+  });
+
+  test('SSH URL возвращается без изменений', () => {
+    const url = 'git@github.com:emaxe/skill-hub-catalog.git';
+    expect(normalizeGitUrl(url)).toBe(url);
+  });
+
+  test('невалидный URL возвращается без изменений', () => {
+    const url = 'not-a-valid-url';
+    expect(normalizeGitUrl(url)).toBe(url);
+  });
+
+  test('обрабатывает URL-encoded credentials', () => {
+    const url = 'https://user%40email:p%40ss@github.com/org/repo.git';
+    expect(normalizeGitUrl(url)).toBe('https://github.com/org/repo.git');
+  });
+
+  test('нормализованные URL с credentials и без — совпадают', () => {
+    const clean = 'https://github.com/emaxe/skill-hub-catalog.git';
+    const authed = 'https://myuser:mytoken@github.com/emaxe/skill-hub-catalog.git';
+    expect(normalizeGitUrl(authed)).toBe(normalizeGitUrl(clean));
+  });
+});
+
+describe('injectCredentials + normalizeGitUrl roundtrip', () => {
+  test('injected credentials нормализуются обратно к оригинальному URL', () => {
+    const original = 'https://github.com/emaxe/skill-hub-catalog.git';
+    const injected = injectCredentials(original, 'user', 'token123');
+    expect(injected).not.toBe(original);
+    expect(normalizeGitUrl(injected)).toBe(normalizeGitUrl(original));
   });
 });

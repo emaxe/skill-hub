@@ -71,6 +71,27 @@ describe('checkMcpUpToDate', () => {
     });
     expect(checkMcpUpToDate('copilot')).toBe(false);
   });
+
+  test('возвращает true при другом порядке ключей (claude-code)', () => {
+    writeMcpConfig('claude-code', {
+      mcpServers: { 'skill-hub': { args: [], command: 'skill-hub-mcp' } },
+    });
+    expect(checkMcpUpToDate('claude-code')).toBe(true);
+  });
+
+  test('возвращает true при другом порядке ключей (copilot)', () => {
+    writeMcpConfig('copilot', {
+      mcpServers: { 'skill-hub': { tools: ['*'], args: [], type: 'local', command: 'skill-hub-mcp' } },
+    });
+    expect(checkMcpUpToDate('copilot')).toBe(true);
+  });
+
+  test('возвращает true когда actual содержит доп. поля — нет (strict equality)', () => {
+    writeMcpConfig('claude-code', {
+      mcpServers: { 'skill-hub': { command: 'skill-hub-mcp', args: [], env: { DEBUG: '1' } } },
+    });
+    expect(checkMcpUpToDate('claude-code')).toBe(false);
+  });
 });
 
 // --- Base skill up-to-date ---

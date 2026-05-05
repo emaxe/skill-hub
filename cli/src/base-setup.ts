@@ -73,6 +73,28 @@ export function checkBaseSkillUpToDate(agent: AgentName): boolean {
   }
 }
 
+/** Рекурсивное сравнение объектов без зависимости от порядка ключей */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+  if (a === null || b === null) return a === b;
+  if (typeof a !== 'object') return false;
+
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((item, i) => deepEqual(item, b[i]));
+  }
+
+  const objA = a as Record<string, unknown>;
+  const objB = b as Record<string, unknown>;
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
+  if (keysA.length !== keysB.length) return false;
+
+  return keysA.every(key => key in objB && deepEqual(objA[key], objB[key]));
+}
+
 export function checkMcpUpToDate(agent: AgentName): boolean {
   const configPath = getMcpConfigPath(agent);
   if (configPath === null) return true;
@@ -81,11 +103,11 @@ export function checkMcpUpToDate(agent: AgentName): boolean {
     const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
     const servers = (raw.mcpServers || {}) as Record<string, unknown>;
     if (!('skill-hub' in servers)) return true;
-    const actual = servers['skill-hub'] as Record<string, unknown>;
+    const actual = servers['skill-hub'];
     const expected = agent === 'copilot'
       ? { type: 'local', command: 'skill-hub-mcp', args: [], tools: ['*'] }
       : { command: 'skill-hub-mcp', args: [] };
-    return JSON.stringify(actual) === JSON.stringify(expected);
+    return deepEqual(actual, expected);
   } catch {
     return false;
   }

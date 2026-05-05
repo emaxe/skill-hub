@@ -574,7 +574,7 @@ cd cli && npm run build       # сборка
 npm link                      # глобальная линковка
 skill-hub search git          # тестирование
 npm unlink -g @emaxe/skill-hub # удалить линк
-cd cli && npm test            # тесты (228 тестов)
+cd cli && npm test            # тесты (266 тестов)
 ```
 
 При изменениях в исходниках достаточно пересобрать (`npm run build`) — линк обновится автоматически.
