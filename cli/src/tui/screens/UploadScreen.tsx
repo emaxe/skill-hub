@@ -11,7 +11,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { spawn } from 'child_process';
 import { Box, Text, useInput } from 'ink';
-import { normalizeInput } from '../keymap';
+import { normalizeInput, isUpArrow, isDownArrow, isLeftArrow, isRightArrow } from '../keymap';
 import { HintBar, Hint } from '../components/HintBar';
 import { Confirm } from '../components/Confirm';
 import { ScrollableBox } from '../components/ScrollableBox';
@@ -243,7 +243,7 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({
         setEditValue(prev => prev.slice(0, -1));
         return;
       }
-      if (input && !inputKey.leftArrow && !inputKey.rightArrow && !inputKey.upArrow && !inputKey.downArrow) {
+      if (input && !isLeftArrow(input, inputKey) && !isRightArrow(input, inputKey) && !isUpArrow(input, inputKey) && !isDownArrow(input, inputKey)) {
         setEditValue(prev => prev + input);
         return;
       }
@@ -264,11 +264,11 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({
 
     const ni = normalizeInput(input);
 
-    if (inputKey.upArrow) {
+    if (isUpArrow(input, inputKey)) {
       setCursorIndex(i => Math.max(0, i - 1));
       return;
     }
-    if (inputKey.downArrow) {
+    if (isDownArrow(input, inputKey)) {
       setCursorIndex(i => Math.min(candidates.length - 1, i + 1));
       return;
     }
