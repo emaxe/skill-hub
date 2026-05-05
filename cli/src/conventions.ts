@@ -407,8 +407,14 @@ function removeMarkerSection(filePath: string): void {
 /** Вырезает текст между маркерами agents-conventions (включая сами маркеры) */
 function removeMarkerContent(content: string): string {
   const startIdx = content.indexOf(AC_MARKER_START);
-  const endIdx = content.indexOf(AC_MARKER_END);
   if (startIdx === -1) return content;
+
+  const endIdx = content.indexOf(AC_MARKER_END);
+  if (endIdx === -1) {
+    console.warn('⚠️ Конечный маркер agents-conventions не найден. Файл не изменён.');
+    return content;
+  }
+
   return content.slice(0, startIdx) + content.slice(endIdx + AC_MARKER_END.length);
 }
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { normalizeInput } from '../keymap';
+import { normalizeInput, isUpArrow, isDownArrow } from '../keymap';
 import { Extension, AgentName, ExtensionType } from '../../catalog';
 import { InstalledEntry } from '../hooks/useRegistry';
 import { useCatalog } from '../hooks/useCatalog';
@@ -91,12 +91,12 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
       return;
     }
 
-    if (key.upArrow) {
+    if (isUpArrow(input, key)) {
       setSelectedIndex(i => Math.max(0, i - 1));
       return;
     }
 
-    if (key.downArrow) {
+    if (isDownArrow(input, key)) {
       setSelectedIndex(i => Math.min(results.length - 1, i + 1));
       return;
     }

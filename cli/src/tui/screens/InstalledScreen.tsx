@@ -7,7 +7,7 @@
  */
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { normalizeInput } from '../keymap';
+import { normalizeInput, isUpArrow, isDownArrow } from '../keymap';
 import { Extension, AgentName, ExtensionType } from '../../catalog';
 import { InstallRecord } from '../../registry';
 import { InstalledEntry } from '../hooks/useRegistry';
@@ -156,9 +156,9 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
       return;
     }
 
-    if (key.upArrow) {
+    if (isUpArrow(input, key)) {
       setSelectedIndex(i => Math.max(0, i - 1));
-    } else if (key.downArrow) {
+    } else if (isDownArrow(input, key)) {
       setSelectedIndex(i => Math.min(filtered.length - 1, i + 1));
     } else if (key.return) {
       if (filtered.length > 0) {

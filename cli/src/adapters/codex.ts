@@ -131,8 +131,14 @@ export class CodexAdapter implements AgentAdapter {
     const start = MARKER_START(name);
     const end = MARKER_END(name);
     const startIdx = content.indexOf(start);
-    const endIdx = content.indexOf(end);
     if (startIdx === -1) return content;
+
+    const endIdx = content.indexOf(end);
+    if (endIdx === -1) {
+      console.warn(`⚠️ Конечный маркер для "${name}" не найден. Файл не изменён.`);
+      return content;
+    }
+
     return content.slice(0, startIdx) + content.slice(endIdx + end.length);
   }
 }

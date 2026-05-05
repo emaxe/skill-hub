@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { theme } from '../theme';
+import { isUpArrow, isDownArrow, isLeftArrow, isRightArrow } from '../keymap';
 
 interface TextEditModalProps {
   title: string;
@@ -35,11 +36,11 @@ export const TextEditModal: React.FC<TextEditModalProps> = ({
       return;
     }
 
-    if (key.upArrow || key.downArrow) {
+    if (isUpArrow(input, key) || isDownArrow(input, key)) {
       if (filteredHistory.length === 0) return;
       setSelectedIdx(prev => {
         const max = filteredHistory.length - 1;
-        if (key.downArrow) {
+        if (isDownArrow(input, key)) {
           if (prev === -1) {
             const next = 0;
             setText(filteredHistory[next]);
@@ -77,7 +78,7 @@ export const TextEditModal: React.FC<TextEditModalProps> = ({
       return;
     }
 
-    if (input && !key.leftArrow && !key.rightArrow) {
+    if (input && !isLeftArrow(input, key) && !isRightArrow(input, key)) {
       setText(prev => prev + input);
       setSelectedIdx(-1);
     }

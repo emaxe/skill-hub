@@ -3,7 +3,7 @@ import { Box, Text, useInput, useStdout } from 'ink';
 import { AiAgentsConfig } from '../../config';
 import { theme } from '../theme';
 import { useConventionsInit } from '../hooks/useConventionsInit';
-import { normalizeInput } from '../keymap';
+import { normalizeInput, isUpArrow, isDownArrow } from '../keymap';
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -72,9 +72,9 @@ export const InitConventionsModal: React.FC<InitConventionsModalProps> = ({
 
     // step === 'selectAgent' — выбор агента для автоанализа
     if (init.step === 'selectAgent') {
-      if (key.upArrow) {
+      if (isUpArrow(input, key)) {
         setSelectedIdx(i => (i - 1 + Math.max(enabledAgents.length, 1)) % Math.max(enabledAgents.length, 1));
-      } else if (key.downArrow) {
+      } else if (isDownArrow(input, key)) {
         setSelectedIdx(i => (i + 1) % Math.max(enabledAgents.length, 1));
       } else if (key.return && enabledAgents.length > 0) {
         const agent = enabledAgents[selectedIdx];

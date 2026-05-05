@@ -5,7 +5,7 @@ import { InstalledEntry } from '../hooks/useRegistry';
 import { useCatalog } from '../hooks/useCatalog';
 import { Confirm } from '../components/Confirm';
 import { HintBar } from '../components/HintBar';
-import { normalizeInput } from '../keymap';
+import { normalizeInput, isUpArrow, isDownArrow } from '../keymap';
 import { readExtensionContent } from '../utils/readExtensionContent';
 import { ScrollableBox } from '../components/ScrollableBox';
 import { useStatus } from '../contexts/StatusContext';
@@ -95,8 +95,8 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
 
     const ni = normalizeInput(input);
 
-    if (key.upArrow)   { setActionIndex(i => Math.max(0, i - 1)); return; }
-    if (key.downArrow) { setActionIndex(i => Math.min(actions.length - 1, i + 1)); return; }
+    if (isUpArrow(input, key))   { setActionIndex(i => Math.max(0, i - 1)); return; }
+    if (isDownArrow(input, key)) { setActionIndex(i => Math.min(actions.length - 1, i + 1)); return; }
 
     if (ni === 'c' && contentResult) {
       onOpenContent(entry.name, contentResult);

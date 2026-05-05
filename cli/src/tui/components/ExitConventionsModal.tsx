@@ -5,7 +5,7 @@ import { AiAgentsConfig } from '../../config';
 import { theme } from '../theme';
 import { useConventionsExit } from '../hooks/useConventionsExit';
 import { deleteConventionsArtifacts } from '../../conventions';
-import { normalizeInput } from '../keymap';
+import { normalizeInput, isUpArrow, isDownArrow, isLeftArrow, isRightArrow } from '../keymap';
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -60,7 +60,7 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
 
     if (exit.step === 'done') {
       if (deletingArtifacts) return;
-      if (key.leftArrow || key.rightArrow) {
+      if (isLeftArrow(input, key) || isRightArrow(input, key)) {
         setDeleteArtifacts(v => !v);
       } else if (key.return) {
         if (deleteArtifacts) {
@@ -91,9 +91,9 @@ export const ExitConventionsModal: React.FC<ExitConventionsModalProps> = ({
 
     // step === 'selectAgent' — выбор AI-агента для exit-agents
     if (exit.step === 'selectAgent') {
-      if (key.upArrow) {
+      if (isUpArrow(input, key)) {
         setSelectedIdx(i => (i - 1 + Math.max(enabledAgents.length, 1)) % Math.max(enabledAgents.length, 1));
-      } else if (key.downArrow) {
+      } else if (isDownArrow(input, key)) {
         setSelectedIdx(i => (i + 1) % Math.max(enabledAgents.length, 1));
       } else if (key.return && enabledAgents.length > 0) {
         const agent = enabledAgents[selectedIdx];

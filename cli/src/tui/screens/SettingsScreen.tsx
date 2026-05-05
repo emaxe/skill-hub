@@ -26,6 +26,7 @@ import { checkProjectConflicts, ProjectConflict } from '../../sync';
 import { GeneralTab, AiAgentsTab, SetupTab } from './settings';
 import { ScrollableBox } from '../components/ScrollableBox';
 import { Confirm } from '../components/Confirm';
+import { isUpArrow, isDownArrow, isLeftArrow, isRightArrow } from '../keymap';
 
 const AGENTS: AgentName[] = ['claude-code', 'cursor', 'copilot', 'codex', 'agents-conventions'];
 const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
@@ -174,11 +175,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
       return;
     }
 
-    if (key.upArrow || key.downArrow) {
+    if (isUpArrow(input, key) || isDownArrow(input, key)) {
       if (fields.length === 0) return;
       setActiveField(f => {
         const idx = fields.indexOf(f);
-        const next = key.downArrow
+        const next = isDownArrow(input, key)
           ? (idx + 1) % fields.length
           : (idx - 1 + fields.length) % fields.length;
         return fields[next];
@@ -186,10 +187,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
       return;
     }
 
-    if (key.leftArrow || key.rightArrow) {
+    if (isLeftArrow(input, key) || isRightArrow(input, key)) {
       if (activeField === 'agent') {
         const idx = AGENTS.indexOf(localAgent);
-        const newIdx = key.leftArrow
+        const newIdx = isLeftArrow(input, key)
           ? (idx - 1 + AGENTS.length) % AGENTS.length
           : (idx + 1) % AGENTS.length;
         const newAgent = AGENTS[newIdx];
@@ -200,7 +201,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ config, updateCo
       } else if (activeField === 'scope') {
         if (localAgent === 'agents-conventions') return;
         const idx = SCOPES.indexOf(localScope);
-        const newIdx = key.leftArrow
+        const newIdx = isLeftArrow(input, key)
           ? (idx - 1 + SCOPES.length) % SCOPES.length
           : (idx + 1) % SCOPES.length;
         setLocalScope(SCOPES[newIdx]);

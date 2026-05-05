@@ -57,11 +57,24 @@ export function isCloned(cachePath = getCachePath()): boolean {
   return fs.existsSync(path.join(cachePath, '.git'));
 }
 
+/** Записи в директории кеша, которые не должны удаляться при сбросе */
+const PRESERVED_ENTRIES = ['installed.json', 'bootstrap'];
+
+/**
+ * Удаляет содержимое кеш-директории, сохраняя защищённые записи
+ * (installed.json — реестр установок, bootstrap/ — conventions-скиллы).
+ */
+function cleanCacheDir(cachePath: string): void {
+  if (!fs.existsSync(cachePath)) return;
+  for (const entry of fs.readdirSync(cachePath)) {
+    if (PRESERVED_ENTRIES.includes(entry)) continue;
+    fs.rmSync(path.join(cachePath, entry), { recursive: true, force: true });
+  }
+}
+
 /** Полностью удаляет кеш каталога — используется при смене registryUrl */
 export function resetCache(cachePath = getCachePath()): void {
-  if (fs.existsSync(cachePath)) {
-    fs.rmSync(cachePath, { recursive: true, force: true });
-  }
+  cleanCacheDir(cachePath);
 }
 
 /**
@@ -127,10 +140,8 @@ async function ensureCacheWithUrl(registryUrl: string, cachePath: string): Promi
   }
 
   if (!isCloned(cachePath)) {
-    // Если директория существует без .git — удаляем и клонируем заново
-    if (fs.existsSync(cachePath)) {
-      fs.rmSync(cachePath, { recursive: true, force: true });
-    }
+    // Если директория существует без .git — очищаем git-содержимое и клонируем заново
+    cleanCacheDir(cachePath);
 
     console.log('Downloading extension catalog...');
     try {

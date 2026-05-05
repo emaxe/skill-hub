@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import { theme } from '../theme';
+import { isUpArrow, isDownArrow } from '../keymap';
 
 export interface GitCredentials {
   username: string;
@@ -53,7 +54,7 @@ export const GitCredentialsDialog: React.FC<Props> = ({ url, onConfirm, onCancel
       return;
     }
 
-    if (key.tab || key.upArrow || key.downArrow) {
+    if (key.tab || isUpArrow(input, key) || isDownArrow(input, key)) {
       setActiveField(f => (f === 'username' ? 'password' : 'username'));
       return;
     }

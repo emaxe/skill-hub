@@ -628,10 +628,11 @@ export const App: React.FC = () => {
     if (input === '2') { nav.setTab('installed'); return; }
     if (input === '3') { nav.setTab('settings'); return; }
 
-    if (!isTopLevel) return;
-
-    if (key.escape && !isTopLevel) {
-      handleBack();
+    if (!isTopLevel) {
+      if (key.escape) {
+        handleBack();
+        return;
+      }
       return;
     }
   }, { isActive: !dialogActive });

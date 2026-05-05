@@ -106,6 +106,43 @@ describe('Copilot Adapter Windows path', () => {
   });
 });
 
+// ─── C2: removeSection с отсутствующим конечным маркером ─────
+
+describe('Copilot Adapter: missing end marker safety', () => {
+  test('remove не портит файл при отсутствии конечного маркера', async () => {
+    const adapter = new CopilotAdapter(tmpProject, tmpHome);
+    const destPath = path.join(tmpProject, '.github', 'copilot-instructions.md');
+    // Записываем файл с начальным маркером, но без конечного
+    const corruptContent = 'Before\n<!-- skill-hub: test-skill -->\nOrphan content\nAfter';
+    fs.mkdirSync(path.dirname(destPath), { recursive: true });
+    fs.writeFileSync(destPath, corruptContent);
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    await adapter.remove(mockSkill, 'project');
+    const result = fs.readFileSync(destPath, 'utf-8');
+    expect(result).toBe(corruptContent); // файл не изменён
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('test-skill'));
+    warnSpy.mockRestore();
+  });
+
+  test('install не портит существующий контент при отсутствии конечного маркера', async () => {
+    const adapter = new CopilotAdapter(tmpProject, tmpHome);
+    const destPath = path.join(tmpProject, '.github', 'copilot-instructions.md');
+    // Файл с повреждённой секцией (без конечного маркера)
+    const existingContent = 'Existing rules\n<!-- skill-hub: test-skill -->\nOld content';
+    fs.mkdirSync(path.dirname(destPath), { recursive: true });
+    fs.writeFileSync(destPath, existingContent);
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    await adapter.install(mockSkill, 'project', tmpCache);
+    const result = fs.readFileSync(destPath, 'utf-8');
+    // Оригинальный контент сохранён, новая секция добавлена
+    expect(result).toContain('Existing rules');
+    expect(result).toContain('<!-- /skill-hub: test-skill -->');
+    warnSpy.mockRestore();
+  });
+});
+
 // ─── Multi-file skills ──────────────────────────────────────
 
 describe('Copilot Adapter: multi-file skills', () => {

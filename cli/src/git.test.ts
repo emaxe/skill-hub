@@ -1,4 +1,4 @@
-import { getCachePath, isCloned, fullCatalogReset } from './git';
+import { getCachePath, isCloned, resetCache, fullCatalogReset } from './git';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
@@ -55,37 +55,111 @@ describe('fullCatalogReset', () => {
     }
   });
 
-  test('при наличии расширений — очищает extensions и удаляет кеш', () => {
+  test('при наличии расширений — очищает extensions и удаляет содержимое кеша, но сохраняет директорию', () => {
     mockLoad.mockReturnValue([
       { type: 'skill', name: 'test-skill', version: '1.0.0', scope: 'project' },
     ]);
 
+    // Создаём файлы, имитирующие git-клон
+    fs.writeFileSync(path.join(tmpDir, 'catalog.json'), '{}');
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+
     fullCatalogReset(tmpDir);
 
     expect(mockSave).toHaveBeenCalledWith([]);
-    expect(fs.existsSync(tmpDir)).toBe(false);
+    // Директория осталась, но содержимое git-клона удалено
+    expect(fs.existsSync(tmpDir)).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'catalog.json'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, '.git'))).toBe(false);
   });
 
   test('при отсутствии расширений — не вызывает saveProjectExtensions, но сбрасывает кеш', () => {
     mockLoad.mockReturnValue([]);
+    fs.writeFileSync(path.join(tmpDir, 'catalog.json'), '{}');
 
     fullCatalogReset(tmpDir);
 
     expect(mockSave).not.toHaveBeenCalled();
-    expect(fs.existsSync(tmpDir)).toBe(false);
+    expect(fs.existsSync(tmpDir)).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'catalog.json'))).toBe(false);
   });
 
   test('при ошибке очистки конфига — выводит warning, кеш всё равно сбрасывается', () => {
     mockLoad.mockImplementation(() => { throw new Error('test error'); });
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    fs.writeFileSync(path.join(tmpDir, 'catalog.json'), '{}');
 
     try {
       fullCatalogReset(tmpDir);
 
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('test error'));
-      expect(fs.existsSync(tmpDir)).toBe(false);
+      expect(fs.existsSync(tmpDir)).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'catalog.json'))).toBe(false);
     } finally {
       warnSpy.mockRestore();
     }
+  });
+});
+
+describe('resetCache', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = path.join(os.tmpdir(), 'skill-hub-resetcache-test-' + Date.now());
+    fs.mkdirSync(tmpDir);
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(tmpDir)) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('сохраняет installed.json при сбросе кеша', () => {
+    fs.writeFileSync(path.join(tmpDir, 'installed.json'), '{"version":3,"installations":[]}');
+    fs.writeFileSync(path.join(tmpDir, 'catalog.json'), '{}');
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+
+    resetCache(tmpDir);
+
+    expect(fs.existsSync(path.join(tmpDir, 'installed.json'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'catalog.json'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, '.git'))).toBe(false);
+  });
+
+  test('сохраняет bootstrap/ при сбросе кеша', () => {
+    const bootstrapDir = path.join(tmpDir, 'bootstrap', 'init-agents');
+    fs.mkdirSync(bootstrapDir, { recursive: true });
+    fs.writeFileSync(path.join(bootstrapDir, 'SKILL.md'), '# test');
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    fs.mkdirSync(path.join(tmpDir, 'skills'));
+
+    resetCache(tmpDir);
+
+    expect(fs.existsSync(path.join(bootstrapDir, 'SKILL.md'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, '.git'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'skills'))).toBe(false);
+  });
+
+  test('удаляет .git, catalog.json, skills/ и прочее содержимое git-клона', () => {
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    fs.writeFileSync(path.join(tmpDir, 'catalog.json'), '{}');
+    fs.mkdirSync(path.join(tmpDir, 'skills'));
+    fs.mkdirSync(path.join(tmpDir, 'agents'));
+    fs.mkdirSync(path.join(tmpDir, 'schema'));
+
+    resetCache(tmpDir);
+
+    expect(fs.existsSync(path.join(tmpDir, '.git'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'catalog.json'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'skills'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'agents'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'schema'))).toBe(false);
+    expect(fs.existsSync(tmpDir)).toBe(true);
+  });
+
+  test('корректно работает если директория не существует', () => {
+    const nonExistent = path.join(os.tmpdir(), 'skill-hub-nonexist-' + Date.now());
+    expect(() => resetCache(nonExistent)).not.toThrow();
   });
 });
