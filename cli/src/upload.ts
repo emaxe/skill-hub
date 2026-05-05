@@ -12,7 +12,7 @@ import { AgentName, Extension, ExtensionType, Catalog, loadCatalog, platformKey 
 import { ScanResult } from './adapters/types';
 import { getAdapter } from './adapters/get-adapter';
 import { getCachePath, getRegistryUrl } from './git';
-import { listExtensionFiles, getExtensionDirSize, findBinaryFiles, MAX_EXTENSION_DIR_SIZE } from './multi-file';
+import { listExtensionFiles, getExtensionDirSize, findBinaryFiles, MAX_EXTENSION_DIR_SIZE, copyExtensionDir } from './multi-file';
 
 // ─── Типы ────────────────────────────────────────────────────
 
@@ -330,9 +330,12 @@ export async function uploadExtensions(opts: UploadOptions): Promise<UploadResul
       const srcPath = ext.path;
       if (fs.statSync(srcPath).isDirectory()) {
         // Копируем всю папку расширения
-        copyDirSync(srcPath, targetDir);
+        copyExtensionDir(srcPath, targetDir);
+      } else if (ext.type === 'skill') {
+        // Скиллы: копировать родительскую директорию (SKILL.md + доп. файлы)
+        copyExtensionDir(path.dirname(srcPath), targetDir);
       } else {
-        // Копируем один файл
+        // Агенты/команды: копировать один файл
         const destFile = path.join(targetDir, path.basename(srcPath));
         fs.copyFileSync(srcPath, destFile);
       }
@@ -403,20 +406,6 @@ function extensionToRaw(ext: Extension): Record<string, unknown> {
     raw.files = ext.files;
   }
   return raw;
-}
-
-/** Рекурсивно копирует директорию */
-function copyDirSync(src: string, dest: string): void {
-  fs.mkdirSync(dest, { recursive: true });
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const srcEntry = path.join(src, entry.name);
-    const destEntry = path.join(dest, entry.name);
-    if (entry.isDirectory()) {
-      copyDirSync(srcEntry, destEntry);
-    } else {
-      fs.copyFileSync(srcEntry, destEntry);
-    }
-  }
 }
 
 // ─── 5. Генерация URL для PR/MR ─────────────────────────────
