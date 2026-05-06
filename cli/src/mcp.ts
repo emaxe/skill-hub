@@ -26,7 +26,7 @@ function str(v: unknown): string | undefined {
 export async function startMcpServer(): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const server: any = new Server(
-    { name: 'skill-hub', version: '0.1.18' },
+    { name: 'skill-hub', version: '0.1.19' },
     { capabilities: { tools: {} } }
   );
 

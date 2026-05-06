@@ -332,6 +332,8 @@ skill-hub config set registryUrl "https://gitlab.example.com/team/my-catalog.git
 - У вас есть **write-доступ** к репозиторию каталога (git push)
 - Расширение имеет заполненный **frontmatter** (name, description, version, author)
 
+> **Примечание:** встроенные базовые скиллы CLI (`skill-hub`, `agents-conventions`, `init-agents`, `exit-agents`) автоматически исключаются из списка кандидатов на загрузку.
+
 ### Процесс загрузки
 
 1. **Откройте экран загрузки** одним из способов:
@@ -574,7 +576,7 @@ cd cli && npm run build       # сборка
 npm link                      # глобальная линковка
 skill-hub search git          # тестирование
 npm unlink -g @emaxe/skill-hub # удалить линк
-cd cli && npm test            # тесты (228 тестов)
+cd cli && npm test            # тесты (266 тестов)
 ```
 
 При изменениях в исходниках достаточно пересобрать (`npm run build`) — линк обновится автоматически.

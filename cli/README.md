@@ -332,6 +332,8 @@ skill-hub config set registryUrl "https://gitlab.example.com/team/my-catalog.git
 - У вас есть **write-доступ** к репозиторию каталога (git push)
 - Расширение имеет заполненный **frontmatter** (name, description, version, author)
 
+> **Примечание:** встроенные базовые скиллы CLI (`skill-hub`, `agents-conventions`, `init-agents`, `exit-agents`) автоматически исключаются из списка кандидатов на загрузку.
+
 ### Процесс загрузки
 
 1. **Откройте экран загрузки** одним из способов:

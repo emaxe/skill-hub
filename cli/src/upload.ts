@@ -544,6 +544,9 @@ export function generatePrTitle(extensions: ScanResult[], frontmatters: Map<stri
  * Возвращает список расширений на диске, отсутствующих в каталоге.
  * Фильтрует по scope (global/project).
  */
+/** Базовые скиллы, встроенные в CLI — не должны попадать в каталог */
+const BASE_SKILLS = new Set(['skill-hub', 'agents-conventions', 'init-agents', 'exit-agents']);
+
 export function getUploadCandidates(
   agent: AgentName,
   scope: 'global' | 'project',
@@ -558,6 +561,9 @@ export function getUploadCandidates(
     // Фильтр по scope (parent считается project)
     const effectiveScope = s.scope === 'parent' ? 'project' : s.scope;
     if (effectiveScope !== scope) return false;
+
+    // Исключить базовые скиллы CLI (base-skills)
+    if (BASE_SKILLS.has(s.name)) return false;
 
     // Исключить расширения, уже имеющиеся в каталоге
     if (catalogNames.has(`${s.type}:${s.name}`)) return false;
