@@ -38,6 +38,20 @@
 - **`init-agents` / `exit-agents` → `~/.skill-hub/bootstrap/`** — перенесены из проектного `.agents/skills/` в глобальную директорию; не регистрируются в registry.
 - **`skill-hub -U` — полная реконсиляция** — при запуске восстанавливает структуру conventions (каталоги, symlinks, pointers, bootstrap), доустанавливает расширения из `.skill-hub.json`, затем обновляет существующие.
 
+### Добавлено
+- **Установка скиллов из [skills.sh](https://skills.sh)** — прямая интеграция с реестром AI-скиллов от Vercel Labs
+  - Новый модуль `skillssh.ts` — обёртки над Search/Download API (`searchSkillssh()`, `downloadSkillssh()`, `skillsshToExtension()`)
+  - Три формата установки через CLI: `skillssh:slug`, `skillssh:owner/repo`, `skillssh:owner/repo@slug`
+  - Поиск: `skill-hub search --source skillssh <query>`
+  - Установка не требует кеша каталога (`ensureCache()` пропускается для skills.sh)
+  - Файлы скачиваются во временную директорию, устанавливаются через стандартный адаптер
+  - `source` поле в `Extension`, `InstallRecord`, `ProjectExtensionRecord` — отслеживает происхождение расширения
+  - Source-aware обновление: `skill-hub update` сравнивает hash от API для skills.sh-скиллов
+  - Source-aware восстановление missing: `update -U` доустанавливает skills.sh-скиллы из `.skill-hub.json`
+  - MCP: `search_extensions` с `source: "skillssh"`, `install_extension` с `skillssh:...` в `name`
+  - Временная директория очищается после установки (best effort)
+  - **TUI пока не поддерживает** skills.sh (требуется V2 с локальным индексом)
+
 ### Исправлено
 - Upload загружал только `SKILL.md`, игнорируя доп. файлы скилла (`ScanResult.path` указывал на файл → `isDirectory()` = false)
 - Сломанные импорты в `useKeymap.ts` и `UploadScreen.tsx` (неверный путь к модулю `keymap`, недостающие `isLeftArrow`/`isRightArrow`)

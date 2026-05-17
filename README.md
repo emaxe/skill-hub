@@ -109,6 +109,48 @@ mkdir -p ~/.codex
 cp "$(npm root -g)/@emaxe/skill-hub/base-skills/codex/SKILL.md" ~/.codex/AGENTS.md
 ```
 
+## Установка скиллов из skills.sh
+
+Skill-Hub поддерживает прямую установку скиллов из [skills.sh](https://skills.sh) — публичного реестра AI-скиллов от Vercel Labs. Это работает **только через CLI** (TUI пока не поддерживает внешние источники).
+
+### Поиск
+
+```bash
+skill-hub search --source skillssh react --limit 5
+```
+
+### Форматы установки
+
+```bash
+# По полному ID (рекомендуется)
+skill-hub install skillssh:vercel-labs/agent-skills@vercel-react-best-practices --agent claude-code --project
+
+# По slug (skills.sh ищет по ID)
+skill-hub install skillssh:vercel-react-best-practices --agent claude-code --project
+
+# По owner/repo — выведет список если несколько скиллов в репозитории
+skill-hub install skillssh:vercel-labs/agent-skills --agent claude-code --project
+```
+
+### Как это работает
+
+1. CLI вызывает `https://skills.sh/api/search` или `download` API
+2. Скачивает все файлы скилла во временную директорию
+3. Устанавливает через стандартный адаптер (как обычный скилл из каталога)
+4. Сохраняет `source: "skillssh:owner/repo@slug"` в реестр для обновлений
+
+### Обновление
+
+```bash
+# Обновить все скиллы (включая skills.sh)
+skill-hub update --agent claude-code
+
+# Обновить конкретный skills.sh скилл
+skill-hub update vercel-react-best-practices --agent claude-code
+```
+
+Для skills.sh-скиллов обновление сравнивает hash от API — если изменился, перекачивает и переустанавливает.
+
 ## Интерактивный TUI
 
 Запустите `skill-hub` без аргументов для полноэкранного интерфейса:
