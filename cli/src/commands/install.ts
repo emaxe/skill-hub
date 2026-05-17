@@ -72,11 +72,8 @@ export function makeInstallCommand(): Command {
     .option('--project', 'Установка в текущий проект (по умолчанию)')
     .option('--local', 'Установка в текущий проект (alias для --project)')
     .action(async (nameArg: string, opts: { agent?: string; global?: boolean; project?: boolean; local?: boolean }) => {
-      const spinner = ora('Обновление каталога...').start();
+      const spinner = ora().start();
       try {
-        await ensureCache();
-        const cachePath = getCachePath();
-        const catalog = loadCatalog(cachePath);
         const agent = (opts.agent || detectAgent()) as AgentName;
         const scope = opts.global ? 'global' : 'project';
 
@@ -85,12 +82,7 @@ export function makeInstallCommand(): Command {
           process.exit(1);
         }
 
-        let type: ExtensionType | undefined;
-        let name = nameArg;
-        if (nameArg.includes(':')) {
-          [type, name] = nameArg.split(':') as [ExtensionType, string];
-        }
-
+        // --- skills.sh установка (не требует кеша каталога) ---
         if (isSkillsshRef(nameArg)) {
           spinner.text = 'Поиск на skills.sh...';
           const ref = parseSkillsshRef(nameArg);
@@ -145,6 +137,18 @@ export function makeInstallCommand(): Command {
 
           spinner.succeed(chalk.green(`Установлен ${ext.type}:${ext.name} (${agent}, ${scope}) [skills.sh]`));
           return;
+        }
+
+        // --- Каталог установка (требует кеш) ---
+        spinner.text = 'Обновление каталога...';
+        await ensureCache();
+        const cachePath = getCachePath();
+        const catalog = loadCatalog(cachePath);
+
+        let type: ExtensionType | undefined;
+        let name = nameArg;
+        if (nameArg.includes(':')) {
+          [type, name] = nameArg.split(':') as [ExtensionType, string];
         }
 
         const ext = catalog.extensions.find(e => e.name === name && (!type || e.type === type));

@@ -56,7 +56,7 @@ export function skillsshToExtension(skill: SkillsshSearchResult, hash: string): 
       codex: 'SKILL.md',
       'agents-conventions': 'SKILL.md',
     },
-    path: `skills/${skill.id}/SKILL.md`,
+    path: 'SKILL.md',
     dependencies: [],
     projects: [],
     source: { type: 'skillssh', uri: `skillssh:${skill.source}@${skill.id}` },
