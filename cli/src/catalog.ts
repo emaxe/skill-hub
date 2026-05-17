@@ -21,6 +21,8 @@ export interface Extension {
   projects: string[];
   /** Список дополнительных файлов/директорий относительно директории расширения */
   files?: string[];
+  /** Источник расширения (для внешних источников вроде skills.sh) */
+  source?: { type: 'catalog' | 'skillssh'; uri: string };
 }
 
 export interface Catalog {

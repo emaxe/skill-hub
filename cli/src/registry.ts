@@ -17,6 +17,8 @@ export interface InstallRecord {
   projects?: string[];
   /** Теги расширения (копируются из каталога при установке) */
   tags?: string[];
+  /** Источник установки (например, 'skillssh:owner/repo@slug') */
+  source?: string;
 }
 
 /** CRUD-интерфейс для работы с реестром установленных расширений */
