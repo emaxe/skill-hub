@@ -1,29 +1,31 @@
+[Russian version](README-ru.md)
+
 # Skill-Hub
 
-Open-source менеджер расширений для AI-агентов. Ищите, устанавливайте и управляйте skills, agents и commands из центрального каталога.
+Open-source extension manager for AI coding agents. Search, install, and manage skills, agents, and commands from a central catalog.
 
-## Поддерживаемые AI-агенты
+## Supported AI Agents
 
-| Агент | Статус | Директории |
-|-------|--------|-----------|
-| **Claude Code** | Полная поддержка | `~/.claude/` / `.claude/` |
-| **Cursor** | Полная поддержка | `~/.cursor/` / `.cursor/` |
-| **Copilot** (VS Code) | Полная поддержка | `~/.config/Code/User/` / `.github/` |
-| **Codex** (OpenAI) | Полная поддержка | `~/.codex/` / `.codex/` |
+| Agent | Status | Directories |
+|-------|--------|-------------|
+| **Claude Code** | Full support | `~/.claude/` / `.claude/` |
+| **Cursor** | Full support | `~/.cursor/` / `.cursor/` |
+| **Copilot** (VS Code) | Full support | `~/.config/Code/User/` / `.github/` |
+| **Codex** (OpenAI) | Full support | `~/.codex/` / `.codex/` |
 
-Skill-Hub автоматически определяет активного агента по env vars (`CODEX_SANDBOX` → codex, `GITHUB_COPILOT` → copilot, `CURSOR_TRACE` → cursor) и наличию директорий (`.codex/`, `.cursor/`). Можно задать явно:
+Skill-Hub automatically detects the active agent via env vars (`CODEX_SANDBOX` → codex, `GITHUB_COPILOT` → copilot, `CURSOR_TRACE` → cursor) and directory presence (`.codex/`, `.cursor/`). You can also set it explicitly:
 
 ```bash
 skill-hub config set agent cursor
 ```
 
-## Поддерживаемые платформы
+## Supported Platforms
 
-| ОС | Статус | Примечания |
-|----|--------|-----------|
-| **macOS** | Полная поддержка | — |
-| **Linux** | Полная поддержка | — |
-| **Windows** | Полная поддержка | cmd.exe, PowerShell, Windows Terminal |
+| OS | Status | Notes |
+|----|--------|-------|
+| **macOS** | Full support | — |
+| **Linux** | Full support | — |
+| **Windows** | Full support | cmd.exe, PowerShell, Windows Terminal |
 
 ### Windows
 
@@ -31,341 +33,383 @@ skill-hub config set agent cursor
 npm install -g @emaxe/skill-hub
 ```
 
-Особенности работы на Windows:
+Windows-specific behavior:
 
-| Компонент | Поведение |
-|-----------|-----------|
-| Запуск агентов `-A` | Генерирует `.bat`-скрипт (CRLF) вместо `.sh`; самоудаляется через `del "%~f0"` |
-| Copilot-адаптер | Ищет конфиг VS Code в `%APPDATA%\Code\User\` |
-| `agents-conventions enable` | Создаёт symlinks типа `dir` → fallback `junction` → fallback копирование директории |
-| Сравнение путей | Case-insensitive (актуально для Claude Code адаптера) |
+| Component | Behavior |
+|-----------|----------|
+| Agent launcher `-A` | Generates `.bat` script (CRLF) instead of `.sh`; self-deletes via `del "%~f0"` |
+| Copilot adapter | Looks for VS Code config in `%APPDATA%\Code\User\` |
+| `agents-conventions enable` | Creates symlinks: `dir` → fallback `junction` → fallback directory copy |
+| Path comparison | Case-insensitive (relevant for Claude Code adapter) |
 
-> **Примечание:** Git Bash и WSL не являются целевой платформой. Рекомендуется нативный Windows.
+> **Note:** Git Bash and WSL are not target platforms. Native Windows is recommended.
 
-## Что такое расширения?
+## What Are Extensions?
 
-Skill-Hub управляет тремя типами расширений:
+Skill-Hub manages three types of extensions:
 
-| Тип | Описание | Пример установки (Claude Code) |
-|-----|----------|-------------------------------|
-| **Skill** (`SKILL.md`) | Инструкции для AI, активируемые контекстом | `~/.claude/skills/{name}/SKILL.md` |
-| **Agent** (`AGENT.md`) | Специализированные AI-ассистенты | `~/.claude/agents/{name}.md` |
-| **Command** (`COMMAND.md`) | Пользовательские slash-команды | `.claude/commands/{name}.md` |
+| Type | Description | Example installation (Claude Code) |
+|------|-------------|-----------------------------------|
+| **Skill** (`SKILL.md`) | AI instructions activated by context | `~/.claude/skills/{name}/SKILL.md` |
+| **Agent** (`AGENT.md`) | Specialized AI assistants | `~/.claude/agents/{name}.md` |
+| **Command** (`COMMAND.md`) | Custom slash commands | `.claude/commands/{name}.md` |
 
-Каждый агент хранит расширения в своей структуре директорий. Расширения могут объявлять поддержку конкретных платформ через поле `platforms` — несовместимые комбинации фильтруются автоматически.
+Each agent stores extensions in its own directory structure. Extensions can declare platform support via the `platforms` field — incompatible combinations are filtered automatically.
 
-### Многофайловые скиллы
+### Multi-file Skills
 
-Скиллы могут содержать **дополнительные файлы** помимо основного `SKILL.md` — скрипты, шаблоны, конфигурации, данные. Вся директория скилла устанавливается и загружается целиком.
+Skills can contain **additional files** besides the main `SKILL.md` — scripts, templates, configurations, data. The entire skill directory is installed and uploaded as a whole.
 
 ```
 skills/clean-runner/
-├── SKILL.md              # Основной файл (обязательный)
-├── runner.sh             # Shell-скрипт
-├── config.json           # Конфигурация
-├── .skillignore          # Файлы для исключения (не копируется)
+├── SKILL.md              # Main file (required)
+├── runner.sh             # Shell script
+├── config.json           # Configuration
+├── .skillignore          # Files to exclude (not copied)
 └── filters/
-    ├── common.grep       # Паттерны фильтрации
+    ├── common.grep       # Filter patterns
     └── npm.grep
 ```
 
-**Поведение при установке:**
+**Installation behavior:**
 
-| Адаптер | Основной файл | Доп. файлы |
-|---------|---------------|------------|
-| Claude Code / conventions | Копируется вся директория | В той же директории |
-| Cursor | Трансформация (Cursor frontmatter) | Копируются as-is |
-| Copilot | Marker-injection в конфиг | `.github/skills/{name}/` |
-| Codex | Marker-injection в конфиг | `.codex/skills/{name}/` |
+| Adapter | Main file | Additional files |
+|---------|-----------|------------------|
+| Claude Code / conventions | Full directory copied | In the same directory |
+| Cursor | Transformed (Cursor frontmatter) | Copied as-is |
+| Copilot | Marker-injection into config | `.github/skills/{name}/` |
+| Codex | Marker-injection into config | `.codex/skills/{name}/` |
 
-**`.skillignore`** — файлы, исключаемые из копирования (сам `.skillignore` также не копируется). Symlinks игнорируются. Максимальный размер директории — 1 МБ, бинарные файлы запрещены при загрузке в каталог.
+**`.skillignore`** — files excluded from copying (the `.skillignore` file itself is also not copied). Symlinks are ignored. Maximum directory size is 1 MB; binary files are prohibited when uploading to the catalog.
 
-## Быстрый старт
+## Quick Start
 
-### Вариант A: CLI + MCP (рекомендуется)
+### Option A: CLI + MCP (recommended)
 
 ```bash
 npm install -g @emaxe/skill-hub
 
-# Настроить для вашего агента (claude-code | cursor | copilot | codex)
+# Configure for your agent (claude-code | cursor | copilot | codex)
 skill-hub setup-mcp --agent claude-code
 ```
 
-После перезапуска агента MCP-инструменты будут доступны автоматически.
+After restarting the agent, MCP tools will be available automatically.
 
-### Вариант B: Bootstrap skill (ручной)
+### Option B: Bootstrap skill (manual)
 
 ```bash
-# Для Claude Code:
+# For Claude Code:
 mkdir -p ~/.claude/skills/skill-hub
 cp "$(npm root -g)/@emaxe/skill-hub/base-skills/claude-code/SKILL.md" ~/.claude/skills/skill-hub/SKILL.md
 
-# Для Cursor:
+# For Cursor:
 mkdir -p ~/.cursor/skills/skill-hub
 cp "$(npm root -g)/@emaxe/skill-hub/base-skills/cursor/SKILL.md" ~/.cursor/skills/skill-hub/SKILL.md
 
-# Для Codex:
+# For Codex:
 mkdir -p ~/.codex
 cp "$(npm root -g)/@emaxe/skill-hub/base-skills/codex/SKILL.md" ~/.codex/AGENTS.md
 ```
 
-## Интерактивный TUI
+## Installing Skills from skills.sh
 
-Запустите `skill-hub` без аргументов для полноэкранного интерфейса:
+Skill-Hub supports direct installation of skills from [skills.sh](https://skills.sh) — a public AI skills registry by Vercel Labs. This works **only via CLI** (TUI does not yet support external sources).
+
+### Search
+
+```bash
+skill-hub search --source skillssh react --limit 5
+```
+
+### Installation Formats
+
+```bash
+# By full ID (recommended)
+skill-hub install skillssh:vercel-labs/agent-skills@vercel-react-best-practices --agent claude-code --project
+
+# By slug (skills.sh searches by ID)
+skill-hub install skillssh:vercel-react-best-practices --agent claude-code --project
+
+# By owner/repo — lists skills if multiple exist in the repo
+skill-hub install skillssh:vercel-labs/agent-skills --agent claude-code --project
+```
+
+### How It Works
+
+1. CLI calls `https://skills.sh/api/search` or `download` API
+2. Downloads all skill files to a temporary directory
+3. Installs via the standard adapter (like a regular catalog skill)
+4. Saves `source: "skillssh:owner/repo@slug"` in the registry for updates
+
+### Update
+
+```bash
+# Update all skills (including skills.sh)
+skill-hub update --agent claude-code
+
+# Update a specific skills.sh skill
+skill-hub update vercel-react-best-practices --agent claude-code
+```
+
+For skills.sh skills, the update compares the hash from the API — if changed, it re-downloads and reinstalls.
+
+## Interactive TUI
+
+Run `skill-hub` without arguments for a fullscreen interface:
 
 ```bash
 skill-hub
 ```
 
-> **Минимальный размер терминала:** 60×12. TUI адаптируется к размеру окна:
-> при ширине < 80 кол. скрываются второстепенные колонки таблиц и сокращаются лейблы;
-> при высоте < 16 строк убирается панель статистики.
+> **Minimum terminal size:** 60×12. TUI adapts to window size:
+> at width < 80 cols secondary table columns are hidden and labels are shortened;
+> at height < 16 rows the stats panel is hidden.
 
-![Таб «Каталог» — поиск и установка расширений](imgs/img3.png)
+![Catalog tab — searching and installing extensions](imgs/img3.png)
 
-### Общая навигация
+### General Navigation
 
-| Клавиша | Действие |
-|---------|----------|
-| `Tab` / `Shift+Tab` | Переключение табов |
-| `1` / `2` / `3` | Прямой переход: Каталог / Установленные / Настройки |
-| `Esc` | Назад (на вложенных экранах) |
-| `Ctrl+Q` | Выход |
+| Key | Action |
+|-----|--------|
+| `Tab` / `Shift+Tab` | Switch tabs |
+| `1` / `2` / `3` | Direct jump: Catalog / Installed / Settings |
+| `Esc` | Back (on nested screens) |
+| `Ctrl+Q` | Exit |
 
-### Таб «Каталог»
+### Catalog Tab
 
-Поиск и установка расширений из каталога.
+Search and install extensions from the catalog.
 
-| Клавиша | Действие |
-|---------|----------|
-| `/` | Фокус на поле поиска |
-| `↑` `↓` | Навигация по списку |
-| `Enter` | Открыть карточку расширения |
-| `i` | Установить выбранное расширение |
+| Key | Action |
+|-----|--------|
+| `/` | Focus search field |
+| `↑` `↓` | Navigate list |
+| `Enter` | Open extension card |
+| `i` | Install selected extension |
 
-В строке поиска поддерживается фильтр по типу: `agent:reviewer`, `skill:git`.
+The search field supports type filters: `agent:reviewer`, `skill:git`.
 
-### Таб «Установленные»
+### Installed Tab
 
-Управление установленными расширениями.
+Manage installed extensions.
 
-| Клавиша | Действие |
-|---------|----------|
-| `↑` `↓` | Навигация по списку |
-| `Enter` | Открыть карточку расширения |
-| `d` | Удалить расширение (с подтверждением) |
-| `m` | Переместить (global ↔ project) |
-| `u` | Обновить выбранное расширение |
-| `U` | Обновить все расширения |
-| `p` | Загрузить в каталог (если есть доступ) |
-| `/` | Фокус на поле поиска |
-| `s` | Переключить scope (global / project / all) |
+| Key | Action |
+|-----|--------|
+| `↑` `↓` | Navigate list |
+| `Enter` | Open extension card |
+| `d` | Delete extension (with confirmation) |
+| `m` | Move (global ↔ project) |
+| `u` | Update selected extension |
+| `U` | Update all extensions |
+| `p` | Upload to catalog (if you have access) |
+| `/` | Focus search field |
+| `s` | Toggle scope (global / project / all) |
 
-![Таб «Установленные» — список расширений с управлением](imgs/img4.png)
+![Installed tab — extension list with controls](imgs/img4.png)
 
-При нажатии `Enter` открывается карточка расширения с подробной информацией и доступными действиями:
+Pressing `Enter` opens the extension card with detailed info and available actions:
 
-![Карточка установленного расширения — метаданные, путь и действия](imgs/img5.png)
+![Installed extension card — metadata, path, and actions](imgs/img5.png)
 
-Из карточки можно просмотреть содержимое файла расширения (`c`):
+From the card you can view the extension file content (`c`):
 
-![Просмотр содержимого файла расширения](imgs/img6.png)
+![Viewing extension file content](imgs/img6.png)
 
-### Таб «Настройки»
+### Settings Tab
 
-Две подвкладки: **Основное** и **AI-агенты**.
+Two sub-tabs: **General** and **AI Agents**.
 
-#### Подвкладка «Основное»
+#### General Sub-tab
 
-| Поле | Клавиша | Описание |
-|------|---------|----------|
-| Агент | `←` `→` | Переключение между claude-code, cursor, copilot, codex, agents-conventions |
-| Scope | `←` `→` | Scope по умолчанию: global или project |
-| Проект | — | Имя текущего проекта |
-| Registry URL | `Enter` | Редактировать URL репозитория каталога |
-| Обновить кеш | `Enter` | Загрузить актуальную версию каталога |
-| Папки ИИ-агентов в .gitignore | `←` `→` | Добавлять агентские папки в .gitignore (только проектный конфиг) |
-| Установить MCP | `Enter` | Зарегистрировать MCP-сервер для текущего агента |
-| Установить base skill | `Enter` | Установить bootstrap-скилл |
-| Обновить CLI | `Enter` | Обновить сам skill-hub до последней версии |
-| Сохранить в глобальный | `Enter` | Скопировать проектный конфиг в глобальный |
-| Сбросить к глобальному | `Enter` | Восстановить проектный конфиг из глобального |
-| Синхронизация | `Enter` | Проверить missing/untracked расширения |
+| Field | Key | Description |
+|-------|-----|-------------|
+| Agent | `←` `→` | Switch between claude-code, cursor, copilot, codex, agents-conventions |
+| Scope | `←` `→` | Default scope: global or project |
+| Project | — | Current project name |
+| Registry URL | `Enter` | Edit catalog repository URL |
+| Update cache | `Enter` | Download latest catalog version |
+| AI agent dirs in .gitignore | `←` `→` | Add agent directories to .gitignore (project config only) |
+| Install MCP | `Enter` | Register MCP server for current agent |
+| Install base skill | `Enter` | Install bootstrap skill |
+| Update CLI | `Enter` | Update skill-hub itself to the latest version |
+| Save as global | `Enter` | Copy project config to global |
+| Reset to global | `Enter` | Restore project config from global |
+| Sync | `Enter` | Check missing/untracked extensions |
 
-![Настройки — подвкладка «Основное»: агент, scope, registry URL и MCP](imgs/img1.png)
+![Settings — General sub-tab: agent, scope, registry URL, and MCP](imgs/img1.png)
 
-#### Подвкладка «AI-агенты»
+#### AI Agents Sub-tab
 
-Настройка запуска AI-агентов через skill-hub:
+Configure AI agent launch through skill-hub:
 
-| Поле | Клавиша | Описание |
-|------|---------|----------|
-| claude-code / cursor / copilot / codex | `←` `→` | Включить/выключить агента |
-| Proxy URL | `Enter` | Общий прокси для всех агентов |
-| Использовать прокси (per-agent) | `←` `→` | Вкл/выкл прокси для конкретного агента |
+| Field | Key | Description |
+|-------|-----|-------------|
+| claude-code / cursor / copilot / codex | `←` `→` | Enable/disable agent |
+| Proxy URL | `Enter` | Common proxy for all agents |
+| Use proxy (per-agent) | `←` `→` | Toggle proxy for a specific agent |
 
-![Настройки — подвкладка «AI-агенты»: включение агентов и настройка прокси](imgs/img2.png)
+![Settings — AI Agents sub-tab: enabling agents and proxy config](imgs/img2.png)
 
-### Экран «Загрузка в каталог»
+### Upload to Catalog Screen
 
-Загрузка собственных расширений в репозиторий каталога.
+Upload your own extensions to the catalog repository.
 
-| Клавиша | Действие |
-|---------|----------|
-| `↑` `↓` | Навигация по списку расширений |
-| `Space` | Выбрать/снять расширение |
-| `a` | Выбрать все |
-| `s` | Переключить scope (global / project) |
-| `c` | Просмотреть содержимое выбранного расширения |
-| `b` | Редактировать имя ветки |
-| `e` | Редактировать заголовок PR |
-| `Enter` | Начать загрузку |
-| `Esc` | Назад |
+| Key | Action |
+|-----|--------|
+| `↑` `↓` | Navigate extension list |
+| `Space` | Select/deselect extension |
+| `a` | Select all |
+| `s` | Toggle scope (global / project) |
+| `c` | View selected extension content |
+| `b` | Edit branch name |
+| `e` | Edit PR title |
+| `Enter` | Start upload |
+| `Esc` | Back |
 
-После загрузки:
-| `o` | Открыть ссылку для создания merge request в браузере |
+After upload:
+| `o` | Open link to create a merge request in the browser |
 
-### Диалог синхронизации
+### Sync Dialog
 
-При запуске TUI автоматически проверяется соответствие расширений проектному конфигу (`.skill-hub.json`). Если найдены несоответствия, отображается диалог:
+When starting TUI, extensions are automatically checked against the project config (`.skill-hub.json`). If discrepancies are found, a dialog appears:
 
-- **Не установлены** — расширения из конфига, отсутствующие на диске
-- **Не указаны** — расширения на диске, отсутствующие в конфиге
+- **Missing** — extensions from config not present on disk
+- **Untracked** — extensions on disk not in config
 
-| Клавиша | Действие |
-|---------|----------|
-| `Enter` | Синхронизировать (установить + добавить в конфиг) |
-| `p` | Загрузить в каталог (для расширений, отсутствующих в каталоге) |
-| `Esc` | Пропустить |
+| Key | Action |
+|-----|--------|
+| `Enter` | Sync (install + add to config) |
+| `p` | Upload to catalog (for extensions not in the catalog) |
+| `Esc` | Skip |
 
-### Диалог .gitignore
+### .gitignore Dialog
 
-Если в проектном конфиге включена настройка `gitignoreAgentDirs`, при старте TUI проверяется, все ли папки ИИ-агентов (`.claude/`, `.cursor/`, `.github/`, `.codex/`, `.agents/`, `.cursorrules`) добавлены в `.gitignore`. При наличии пропущенных записей отображается диалог:
+If `gitignoreAgentDirs` is enabled in the project config, TUI checks whether all AI agent folders (`.claude/`, `.cursor/`, `.github/`, `.codex/`, `.agents/`, `.cursorrules`) are added to `.gitignore`. If any are missing, a dialog appears:
 
-| Клавиша | Действие |
-|---------|----------|
-| `Enter` | Добавить в .gitignore |
-| `Esc` | Пропустить |
+| Key | Action |
+|-----|--------|
+| `Enter` | Add to .gitignore |
+| `Esc` | Skip |
 
-> **Примечание:** все хоткеи работают и в русской раскладке (й→q, ц→w, у→e и т.д.)
+> **Note:** all hotkeys work in Russian keyboard layout (й→q, ц→w, у→e, etc.)
 
-## Работа с AI-агентами
+## Working with AI Agents
 
-### Подключение через MCP
+### Connecting via MCP
 
-MCP-сервер предоставляет 7 инструментов для управления расширениями из AI-агента:
+The MCP server provides 7 tools for managing extensions from within an AI agent:
 
 ```bash
-# Автоматическая настройка
+# Automatic setup
 skill-hub setup-mcp --agent claude-code
 ```
 
-После настройки агент получает доступ к инструментам:
-- `search_extensions` — поиск по каталогу
-- `install_extension` — установка с автоматическим разрешением зависимостей
-- `remove_extension` — удаление
-- `move_extension` — перемещение между scope
-- `list_extensions` — список установленных
-- `suggest_extensions` — рекомендации на основе проекта
-- `get_extension_info` — полная информация о расширении
+After setup, the agent gets access to:
+- `search_extensions` — catalog search
+- `install_extension` — installation with automatic dependency resolution
+- `remove_extension` — removal
+- `move_extension` — move between scopes
+- `list_extensions` — list installed
+- `suggest_extensions` — project-based recommendations
+- `get_extension_info` — full extension info
 
-### Настройка прокси
+### Proxy Configuration
 
-Если AI-агенты работают через прокси (например, для доступа к API):
+If AI agents work through a proxy (e.g., for API access):
 
-**Через TUI:**
-1. Откройте вкладку **Настройки** → подвкладка **AI-агенты**
-2. Перейдите к полю **Proxy URL** → нажмите `Enter`
-3. Введите URL прокси
-4. Включите «Использовать прокси» для нужных агентов
+**Via TUI:**
+1. Open **Settings** → **AI Agents** sub-tab
+2. Go to **Proxy URL** → press `Enter`
+3. Enter the proxy URL
+4. Enable "Use proxy" for the desired agents
 
-**Через CLI:**
+**Via CLI:**
 ```bash
 skill-hub config set aiAgents.proxy "http://proxy.example.com:8080"
 ```
 
-### Запуск AI-агентов через skill-hub
+### Launching AI Agents via Skill-Hub
 
-Skill-Hub может запускать AI-агентов напрямую, применяя настройки прокси и другие параметры:
+Skill-Hub can launch AI agents directly, applying proxy and other settings:
 
 ```bash
-# Запуск через exec
-skill-hub -a claude-code "напиши тест для auth.ts"
+# Launch via exec
+skill-hub -a claude-code "write a test for auth.ts"
 
-# Запуск через временный скрипт
+# Launch via temporary script
 skill-hub -A cursor "review this code"
 ```
 
-## Переключение репозитория каталога
+## Switching Catalog Repository
 
-По умолчанию skill-hub использует каталог `https://github.com/emaxe/skill-hub-catalog.git`. Вы можете переключиться на свой форк или корпоративный каталог.
+By default skill-hub uses the catalog at `https://github.com/emaxe/skill-hub-catalog.git`. You can switch to your own fork or corporate catalog.
 
-### Через TUI
+### Via TUI
 
-1. Откройте **Настройки** → поле **Registry URL** → `Enter`
-2. Введите URL нового репозитория (HTTPS или SSH)
-3. Подтвердите — старый кеш будет удалён
-4. Каталог автоматически загрузится из нового репозитория
+1. Open **Settings** → **Registry URL** → `Enter`
+2. Enter the new repository URL (HTTPS or SSH)
+3. Confirm — old cache will be removed
+4. Catalog will auto-download from the new repository
 
-> При смене репозитория список расширений в проектном конфиге `.skill-hub.json` будет очищен, так как они привязаны к конкретному каталогу. Файлы расширений на диске останутся.
+> When switching repositories, the extension list in the project config `.skill-hub.json` will be cleared since they are tied to a specific catalog. Extension files on disk will remain.
 
-### Через CLI
+### Via CLI
 
 ```bash
 skill-hub config set registryUrl "https://gitlab.example.com/team/my-catalog.git"
 ```
 
-### Требования к каталогу
+### Catalog Requirements
 
-Ваш каталог должен содержать:
-- `catalog.json` — индекс расширений (генерируется скриптами из `skill-hub-catalog`)
-- Директории `skills/`, `agents/`, `commands/` с расширениями
+Your catalog must contain:
+- `catalog.json` — extension index (auto-generated by `skill-hub-catalog` scripts)
+- Directories `skills/`, `agents/`, `commands/` with extensions
 
-История использованных URL хранится (до 6 записей) и доступна при редактировании через TUI.
+A history of used URLs is kept (up to 6 entries) and available when editing via TUI.
 
-## Загрузка расширений в каталог
+## Uploading Extensions to the Catalog
 
-Вы можете загрузить собственные расширения в репозиторий каталога прямо из skill-hub.
+You can upload your own extensions to the catalog repository directly from skill-hub.
 
-### Предусловия
+### Prerequisites
 
-- У вас есть **write-доступ** к репозиторию каталога (git push)
-- Расширение имеет заполненный **frontmatter** (name, description, version, author)
+- You have **write access** to the catalog repository (git push)
+- The extension has a filled **frontmatter** (name, description, version, author)
 
-> **Примечание:** встроенные базовые скиллы CLI (`skill-hub`, `agents-conventions`, `init-agents`, `exit-agents`) автоматически исключаются из списка кандидатов на загрузку.
+> **Note:** built-in base CLI skills (`skill-hub`, `agents-conventions`, `init-agents`, `exit-agents`) are automatically excluded from the upload candidate list.
 
-### Процесс загрузки
+### Upload Process
 
-1. **Откройте экран загрузки** одним из способов:
-   - В табе «Установленные» нажмите `p`
-   - В карточке установленного расширения выберите «Загрузить в каталог»
-   - В диалоге синхронизации нажмите `p` (для расширений, отсутствующих в каталоге)
+1. **Open the upload screen** via one of:
+   - In the **Installed** tab press `p`
+   - In an installed extension card select "Upload to catalog"
+   - In the sync dialog press `p` (for extensions not in the catalog)
 
-2. **Выберите расширения** для загрузки:
-   - `Space` — выбрать/снять
-   - `a` — выбрать все
-   - `s` — переключить scope
-   - `c` — просмотреть содержимое перед загрузкой
+2. **Select extensions** to upload:
+   - `Space` — select/deselect
+   - `a` — select all
+   - `s` — toggle scope
+   - `c` — preview content before upload
 
-3. **Настройте параметры:**
-   - Имя ветки (автоматически: `upload/{username}-{timestamp}`)
-   - Заголовок PR (автоматически из выбранных расширений)
+3. **Configure options:**
+   - Branch name (auto: `upload/{username}-{timestamp}`)
+   - PR title (auto-generated from selected extensions)
 
-4. **Нажмите `Enter`** для загрузки — расширения будут:
-   - Провалидированы (frontmatter, kebab-case имена)
-   - Скопированы в структуру каталога
-   - Закоммичены и запушены в отдельную ветку
+4. **Press `Enter`** to upload — extensions will be:
+   - Validated (frontmatter, kebab-case names)
+   - Copied into the catalog structure
+   - Committed and pushed to a separate branch
 
-5. **Создайте merge request** — нажмите `o` для открытия формы MR/PR в браузере
+5. **Create a merge request** — press `o` to open the MR/PR form in the browser
 
-### Формат frontmatter
+### Frontmatter Format
 
 ```yaml
 ---
 name: my-extension
-description: "Описание расширения"
+description: "Extension description"
 version: 1.0.0
-author: "Имя Автора"
+author: "Author Name"
 tags: tag1, tag2, tag3
 platforms: claude-code, cursor
 ---
@@ -373,37 +417,37 @@ platforms: claude-code, cursor
 
 ## Agents-Conventions Mode
 
-Режим для мультиагентных проектов — общая директория `.agents/` с расширениями, доступными всем агентам через symlinks.
+Mode for multi-agent projects — a shared `.agents/` directory with extensions available to all agents via symlinks.
 
-### Включение
+### Enabling
 
 ```bash
 skill-hub agents-conventions enable
 ```
 
-Или через TUI: Настройки → Агент → `agents-conventions` → Init Conventions.
+Or via TUI: Settings → Agent → `agents-conventions` → Init Conventions.
 
-Что происходит:
-- Создаётся `.agents/` с поддиректориями `skills/`, `agents/`, `commands/`
-- Создаётся `AGENTS.md` (общие правила проекта)
-- Создаются symlinks: `.claude/` → `.agents/`, `.cursor/` → `.agents/`, `.codex/` → `.agents/`
-- Для Copilot создаётся thin pointer в `.github/copilot-instructions.md`
-- Bootstrap-скилл `agents-conventions` устанавливается глобально во все AI-агенты
-- Скиллы `init-agents` / `exit-agents` устанавливаются в `~/.skill-hub/bootstrap/`
+What happens:
+- `.agents/` is created with `skills/`, `agents/`, `commands/` subdirectories
+- `AGENTS.md` is created (common project rules)
+- Symlinks are created: `.claude/` → `.agents/`, `.cursor/` → `.agents/`, `.codex/` → `.agents/`
+- For Copilot a thin pointer is created at `.github/copilot-instructions.md`
+- Bootstrap skill `agents-conventions` is installed globally in all AI agents
+- Skills `init-agents` / `exit-agents` are installed to `~/.skill-hub/bootstrap/`
 
-### Выключение
+### Disabling
 
 ```bash
 skill-hub agents-conventions disable
 ```
 
-Расширения мигрируют обратно в директории конкретных агентов, symlinks удаляются.
+Extensions migrate back to individual agent directories, symlinks are removed.
 
-## Справочник CLI-команд
+## CLI Commands Reference
 
 ### search
 
-Поиск расширений по имени, тегам, ключевым словам.
+Search extensions by name, tags, keywords.
 
 ```bash
 skill-hub search git
@@ -413,19 +457,19 @@ skill-hub search "testing typescript"
 
 ### install
 
-Установка расширения. Без префикса — skill, с префиксом — по типу.
+Install an extension. Without prefix — skill, with prefix — by type.
 
 ```bash
 skill-hub install git-commit-and-push
 skill-hub install agent:code-reviewer
 skill-hub install command:deploy-check
 skill-hub install git-helper --scope=global
-skill-hub install git-helper -y              # без подтверждения
+skill-hub install git-helper -y              # no confirmation
 ```
 
 ### remove
 
-Удаление установленного расширения.
+Remove an installed extension.
 
 ```bash
 skill-hub remove git-commit-and-push
@@ -434,7 +478,7 @@ skill-hub remove agent:code-reviewer
 
 ### list
 
-Список установленных расширений с версиями и scope.
+List installed extensions with versions and scope.
 
 ```bash
 skill-hub list
@@ -443,7 +487,7 @@ skill-hub list --type=agent
 
 ### move
 
-Перемещение расширения между scope.
+Move an extension between scopes.
 
 ```bash
 skill-hub move git-helper project
@@ -452,7 +496,7 @@ skill-hub move agent:code-reviewer global
 
 ### info
 
-Подробная информация о расширении из каталога.
+Detailed info about a catalog extension.
 
 ```bash
 skill-hub info git-commit-and-push
@@ -461,18 +505,18 @@ skill-hub info agent:code-reviewer
 
 ### update
 
-Обновление расширений до последних версий.
+Update extensions to the latest versions.
 
 ```bash
-skill-hub update                     # обновить все
-skill-hub update agent:code-reviewer # обновить конкретное
-skill-hub -u code-reviewer           # сокращение
-skill-hub -U                         # обновить все (сокращение)
+skill-hub update                     # update all
+skill-hub update agent:code-reviewer # update specific
+skill-hub -u code-reviewer           # shorthand
+skill-hub -U                         # update all (shorthand)
 ```
 
 ### config
 
-Управление конфигурацией.
+Manage configuration.
 
 ```bash
 skill-hub config set agent cursor
@@ -484,7 +528,7 @@ skill-hub config reset
 
 ### setup-mcp
 
-Регистрация MCP-сервера для AI-агента.
+Register MCP server for an AI agent.
 
 ```bash
 skill-hub setup-mcp --agent claude-code
@@ -495,7 +539,7 @@ skill-hub setup-mcp --agent codex
 
 ### agents-conventions
 
-Управление мультиагентным режимом.
+Manage multi-agent mode.
 
 ```bash
 skill-hub agents-conventions enable
@@ -504,7 +548,7 @@ skill-hub agents-conventions disable
 
 ### help
 
-Полная справка по командам, флагам и опциям.
+Full help on commands, flags, and options.
 
 ```bash
 skill-hub help
@@ -512,21 +556,21 @@ skill-hub -h
 skill-hub --help
 ```
 
-### Специальные флаги
+### Special Flags
 
 ```bash
-skill-hub -a claude-code "задание"   # запуск агента через exec
-skill-hub -A cursor "задание"        # запуск через temp-скрипт
-skill-hub --then                     # цепочка двух команд
+skill-hub -a claude-code "task"   # launch agent via exec
+skill-hub -A cursor "task"        # launch via temp script
+skill-hub --then                     # chain two commands
 ```
 
-## Проектный конфиг (`.skill-hub.json`)
+## Project Config (`.skill-hub.json`)
 
-Файл `.skill-hub.json` в корне проекта позволяет:
-- Зафиксировать набор расширений для проекта (командная синхронизация)
-- Переопределить глобальные настройки для конкретного проекта
-- Автоматически синхронизировать расширения при открытии проекта в TUI
-- Управлять добавлением папок ИИ-агентов в `.gitignore`
+The `.skill-hub.json` file in the project root allows you to:
+- Pin the set of extensions for the project (team sync)
+- Override global settings for a specific project
+- Auto-sync extensions when opening the project in TUI
+- Control adding AI agent folders to `.gitignore`
 
 ```json
 {
@@ -540,52 +584,52 @@ skill-hub --then                     # цепочка двух команд
 }
 ```
 
-Коллеги, клонировав проект, при первом запуске `skill-hub` увидят диалог синхронизации и смогут автоматически установить все перечисленные расширения.
+Colleagues cloning the project will see the sync dialog on first `skill-hub` launch and can auto-install all listed extensions.
 
-## Архитектура
+## Architecture
 
 ```
-skill-hub (этот репо)
-├── cli/                     # CLI + MCP-сервер (npm: @emaxe/skill-hub)
+skill-hub (this repo)
+├── cli/                     # CLI + MCP server (npm: @emaxe/skill-hub)
 │   ├── src/
-│   │   ├── adapters/        # Адаптеры агентов (claude-code, cursor, copilot, codex)
-│   │   ├── commands/        # CLI-команды
-│   │   └── tui/             # Интерактивный TUI (Ink/React)
-│   └── base-skills/         # Бутстрап-скиллы для каждого агента
-├── docs/                    # Документация по фичам
-└── CLAUDE.md                # Инструкции для AI-агентов
+│   │   ├── adapters/        # Agent adapters (claude-code, cursor, copilot, codex)
+│   │   ├── commands/        # CLI commands
+│   │   └── tui/             # Interactive TUI (Ink/React)
+│   └── base-skills/         # Bootstrap skills for each agent
+├── docs/                    # Feature documentation
+└── CLAUDE.md                # Instructions for AI agents
 
-skill-hub-catalog (отдельный репо)
-├── skills/                  # Опубликованные скиллы
-├── agents/                  # Опубликованные агенты
-├── commands/                # Опубликованные команды
-├── catalog.json             # Автогенерируемый индекс
-├── schema/                  # Схемы валидации frontmatter
-└── docs/                    # Гайды по созданию расширений
+skill-hub-catalog (separate repo)
+├── skills/                  # Published skills
+├── agents/                  # Published agents
+├── commands/                # Published commands
+├── catalog.json             # Auto-generated index
+├── schema/                  # Frontmatter validation schemas
+└── docs/                    # Extension creation guides
 ```
 
-**Поток доставки:**
-1. `git clone --depth 1 skill-hub-catalog` → `~/.skill-hub/` (локальный кеш)
-2. Установка = адаптер копирует расширение в целевую директорию агента
-3. Обновление = `git pull` в кеше, повторное копирование установленных
+**Delivery flow:**
+1. `git clone --depth 1 skill-hub-catalog` → `~/.skill-hub/` (local cache)
+2. Installation = adapter copies extension to the agent's target directory
+3. Update = `git pull` in cache, re-copy installed extensions
 
-## Локальная разработка CLI
+## Local CLI Development
 
 ```bash
-cd cli && npm run build       # сборка
-npm link                      # глобальная линковка
-skill-hub search git          # тестирование
-npm unlink -g @emaxe/skill-hub # удалить линк
-cd cli && npm test            # тесты (266 тестов)
+cd cli && npm run build       # build
+npm link                      # global link
+skill-hub search git          # test
+npm unlink -g @emaxe/skill-hub # remove link
+cd cli && npm test            # tests (266 tests)
 ```
 
-При изменениях в исходниках достаточно пересобрать (`npm run build`) — линк обновится автоматически.
+After source changes, just rebuild (`npm run build`) — the link updates automatically.
 
 ## Contributing
 
-Расширения (skills, agents, commands) публикуются в [skill-hub-catalog](https://github.com/emaxe/skill-hub-catalog). Смотрите `docs/` каталога для гайдов по созданию.
+Extensions (skills, agents, commands) are published to [skill-hub-catalog](https://github.com/emaxe/skill-hub-catalog). See the `docs/` directory there for creation guides.
 
-Для доработки CLI — открывайте PR в этом репозитории. Подробности в [CONTRIBUTING.md](CONTRIBUTING.md).
+For CLI improvements — open a PR in this repository. Details in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
