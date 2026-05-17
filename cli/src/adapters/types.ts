@@ -36,4 +36,13 @@ export interface AgentAdapter {
 
   /** Сканирует файловую систему для обнаружения всех установленных расширений данного агента */
   scanInstalled(): ScanResult[];
+
+  /** Поддерживает ли агент runtime hooks (например, Claude Code settings.json hooks) */
+  supportsRuntimeHooks: boolean;
+
+  /** Устанавливает runtime hooks для расширения (Claude Code: обновляет settings.json) */
+  installHooks(ext: Extension, scope: 'global' | 'project', cachePath: string): Promise<void>;
+
+  /** Удаляет runtime hooks для расширения */
+  removeHooks(ext: Extension, scope: 'global' | 'project'): Promise<void>;
 }
