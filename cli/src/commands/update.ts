@@ -4,7 +4,8 @@ import chalk from 'chalk';
 import ora from 'ora';
 import os from 'os';
 import path from 'path';
-import { loadCatalog, AgentName, platformKey } from '../catalog';
+import { loadCatalog, AgentName, platformKey, Extension } from '../catalog';
+import { downloadSkillssh, skillsshToExtension } from '../skillssh';
 import { detectAgent } from '../detect-agent';
 import { getCachePath, updateCache } from '../git';
 import { createRegistry } from '../registry';
@@ -13,6 +14,15 @@ import { updateSelf } from '../base-setup';
 import { resolveConfig, loadProjectExtensions, findProjectRoot, loadGitignoreAgentDirs } from '../config';
 import { ensureConventionsStructure } from '../conventions';
 import { getMissingGitignoreEntries, addAgentDirsToGitignore } from '../gitignore-agents';
+
+function parseSkillsshSource(source: string): { source: string; slug: string } | null {
+  const prefix = 'skillssh:';
+  if (!source.startsWith(prefix)) return null;
+  const rest = source.slice(prefix.length);
+  const atIdx = rest.lastIndexOf('@');
+  if (atIdx === -1) return null;
+  return { source: rest.slice(0, atIdx), slug: rest.slice(atIdx + 1) };
+}
 
 export function makeUpdateCommand(): Command {
   return new Command('update')
@@ -46,14 +56,49 @@ export function makeUpdateCommand(): Command {
             spinner.text = 'Проверка проектных расширений...';
             let restored = 0;
             for (const pe of projectExtensions) {
-              const ext = catalog.extensions.find(e => e.name === pe.name && e.type === pe.type);
-              if (!ext || !ext.platforms[platformKey(agent)]) continue;
-
-              const destPath = adapter.getInstallPath(ext, pe.scope);
+              if (pe.scope === 'parent') continue;
+              const destPath = adapter.getInstallPath({ type: pe.type, name: pe.name, description: '', tags: [], scope: 'both', platforms: {}, path: '', dependencies: [], projects: [] } as Extension, pe.scope);
               const installed = reg.isInstalled(pe.name, pe.type, agent);
               const fileExists = fs.existsSync(destPath);
 
               if (!installed || !fileExists) {
+                // Source-aware restore for skills.sh
+                if (pe.source?.startsWith('skillssh:')) {
+                  const ref = parseSkillsshSource(pe.source);
+                  if (ref) {
+                    try {
+                      const download = await downloadSkillssh(ref.source, ref.slug);
+                      const ext = skillsshToExtension(
+                        { id: ref.slug, name: ref.slug, description: '', source: ref.source, installs: 0 },
+                        download.hash,
+                      );
+                      const tmpDir = path.join(os.homedir(), '.skill-hub', 'tmp', `skillssh-restore-${ref.slug}-${Date.now()}`);
+                      for (const file of download.files) {
+                        const filePath = path.join(tmpDir, file.path);
+                        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+                        fs.writeFileSync(filePath, file.contents, 'utf-8');
+                      }
+                      await adapter.install(ext, pe.scope, tmpDir);
+                      reg.add({
+                        type: pe.type,
+                        name: pe.name,
+                        version: download.hash,
+                        agent,
+                        scope: pe.scope,
+                        path: destPath,
+                        source: pe.source,
+                      });
+                      try { fs.rmSync(tmpDir, { recursive: true }); } catch {}
+                      restored++;
+                    } catch {
+                      // skip failed skillssh restores
+                    }
+                  }
+                  continue;
+                }
+
+                const ext = catalog.extensions.find(e => e.name === pe.name && e.type === pe.type);
+                if (!ext || !ext.platforms[platformKey(agent)]) continue;
                 try {
                   await adapter.install(ext, pe.scope, cachePath);
                   reg.add({
@@ -86,6 +131,36 @@ export function makeUpdateCommand(): Command {
         for (const record of installed) {
           if (name && record.name !== name) continue;
           if (record.scope === 'parent') continue;
+
+          // Source-aware update for skills.sh
+          if (record.source?.startsWith('skillssh:')) {
+            const ref = parseSkillsshSource(record.source);
+            if (!ref) continue;
+            try {
+              const download = await downloadSkillssh(ref.source, ref.slug);
+              if (download.hash !== record.version) {
+                spinner.text = `Обновление ${record.name} (skills.sh)...`;
+                const ext = skillsshToExtension(
+                  { id: ref.slug, name: ref.slug, description: '', source: ref.source, installs: 0 },
+                  download.hash,
+                );
+                const tmpDir = path.join(os.homedir(), '.skill-hub', 'tmp', `skillssh-update-${ref.slug}-${Date.now()}`);
+                for (const file of download.files) {
+                  const filePath = path.join(tmpDir, file.path);
+                  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+                  fs.writeFileSync(filePath, file.contents, 'utf-8');
+                }
+                await adapter.install(ext, record.scope, tmpDir);
+                reg.add({ ...record, version: download.hash, path: adapter.getInstallPath(ext, record.scope) });
+                try { fs.rmSync(tmpDir, { recursive: true }); } catch {}
+                updated++;
+              }
+            } catch {
+              // skip failed skillssh updates silently
+            }
+            continue;
+          }
+
           const ext = catalog.extensions.find(e => e.name === record.name && e.type === record.type);
           if (!ext || !ext.platforms[platformKey(agent)]) continue;
           try {
