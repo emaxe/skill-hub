@@ -4,6 +4,15 @@ import path from 'path';
 export type AgentName = 'claude-code' | 'cursor' | 'copilot' | 'codex' | 'agents-conventions';
 export type ExtensionType = 'skill' | 'agent' | 'command';
 
+/** Lifecycle и runtime hooks расширения */
+export interface ExtensionHooks {
+  preInstall?: string;
+  postInstall?: string;
+  preRemove?: string;
+  postRemove?: string;
+  agentHooks?: Partial<Record<AgentName, Record<string, string>>>;
+}
+
 export interface Extension {
   type: ExtensionType;
   name: string;
@@ -21,6 +30,9 @@ export interface Extension {
   projects: string[];
   /** Список дополнительных файлов/директорий относительно директории расширения */
   files?: string[];
+  hooks?: ExtensionHooks;
+  /** Источник расширения (для внешних источников вроде skills.sh) */
+  source?: { type: 'catalog' | 'skillssh'; uri: string };
 }
 
 export interface Catalog {
@@ -66,6 +78,7 @@ export function parseExtension(raw: unknown): Extension {
     color: r.color as string | undefined,
     projects: (r.projects as string[]) || [],
     files: Array.isArray(r.files) ? r.files as string[] : undefined,
+    hooks: r.hooks ? (r.hooks as ExtensionHooks) : undefined,
   };
 }
 

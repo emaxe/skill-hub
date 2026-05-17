@@ -2,7 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { AgentName, ExtensionType } from './catalog';
+import { AgentName, ExtensionType, ExtensionHooks } from './catalog';
 
 /** Запись об установленном расширении — хранится в installed.json */
 export interface InstallRecord {
@@ -17,6 +17,10 @@ export interface InstallRecord {
   projects?: string[];
   /** Теги расширения (копируются из каталога при установке) */
   tags?: string[];
+  /** Lifecycle и runtime hooks (копируются из каталога при установке) */
+  hooks?: ExtensionHooks;
+  /** Источник установки (например, 'skillssh:owner/repo@slug') */
+  source?: string;
 }
 
 /** CRUD-интерфейс для работы с реестром установленных расширений */

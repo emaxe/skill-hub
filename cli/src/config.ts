@@ -35,6 +35,8 @@ export interface ProjectExtensionRecord {
   name: string;
   version?: string;
   scope: 'global' | 'project';
+  /** Источник установки (например, 'skillssh:owner/repo@slug') */
+  source?: string;
 }
 
 export interface ResolvedConfig {

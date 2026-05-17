@@ -9,6 +9,13 @@ import { Extension, ExtensionType } from '../catalog';
 import { AgentAdapter, ScanResult } from './types';
 import { pathsEqual } from '../platform';
 import { copyExtensionDir, getExtensionDirRel } from '../multi-file';
+import {
+  getClaudeSettingsPath,
+  readClaudeSettings,
+  writeClaudeSettings,
+  generateHookAggregator,
+  getClaudeSkillsDir,
+} from './settings-json';
 
 export class ClaudeCodeAdapter implements AgentAdapter {
   agentName = 'claude-code' as const;
@@ -174,5 +181,90 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     }
 
     return results;
+  }
+
+  supportsRuntimeHooks = true;
+
+  async installHooks(ext: Extension, scope: 'global' | 'project', cachePath: string): Promise<void> {
+    const agentHooks = ext.hooks?.agentHooks?.['claude-code'];
+    if (!agentHooks || Object.keys(agentHooks).length === 0) return;
+
+    const srcDir = path.join(cachePath, getExtensionDirRel(ext.path));
+    const skillsDir = getClaudeSkillsDir(scope, this.projectDir, this.homeDir);
+    const skillHooksDir = path.join(skillsDir, ext.name, 'hooks');
+    const aggregatorDir = path.join(os.homedir(), '.skill-hub', 'hooks');
+
+    for (const [hookName, hookFile] of Object.entries(agentHooks)) {
+      const srcHookPath = path.join(srcDir, hookFile);
+      if (!fs.existsSync(srcHookPath)) {
+        throw new Error(`Hook file not found: ${srcHookPath}`);
+      }
+      const destHookName = hookName + path.extname(hookFile);
+      const destHookPath = path.join(skillHooksDir, destHookName);
+      fs.mkdirSync(skillHooksDir, { recursive: true });
+      fs.copyFileSync(srcHookPath, destHookPath);
+
+      // Агрегирующий скрипт
+      const aggregatorPath = path.join(aggregatorDir, `claude-code-${scope}-${hookName}.js`);
+      fs.mkdirSync(aggregatorDir, { recursive: true });
+      fs.writeFileSync(aggregatorPath, generateHookAggregator(hookName, skillsDir));
+
+      // Обновить settings.json
+      const settings = readClaudeSettings(scope, this.projectDir, this.homeDir);
+      settings[hookName] = `node ${aggregatorPath}`;
+      writeClaudeSettings(scope, settings, this.projectDir, this.homeDir);
+    }
+  }
+
+  async removeHooks(ext: Extension, scope: 'global' | 'project'): Promise<void> {
+    const skillsDir = getClaudeSkillsDir(scope, this.projectDir, this.homeDir);
+    const skillHooksDir = path.join(skillsDir, ext.name, 'hooks');
+    if (!fs.existsSync(skillHooksDir)) return;
+
+    // Запоминаем какие hookName были у этого скилла
+    const hookNames = new Set<string>();
+    for (const entry of fs.readdirSync(skillHooksDir, { withFileTypes: true })) {
+      if (entry.isFile()) {
+        hookNames.add(path.basename(entry.name, path.extname(entry.name)));
+      }
+    }
+
+    fs.rmSync(skillHooksDir, { recursive: true });
+
+    const aggregatorDir = path.join(os.homedir(), '.skill-hub', 'hooks');
+    const settings = readClaudeSettings(scope, this.projectDir, this.homeDir);
+    let settingsChanged = false;
+
+    for (const hookName of hookNames) {
+      // Проверяем, остались ли другие скиллы с этим hook
+      let hasOther = false;
+      if (fs.existsSync(skillsDir)) {
+        for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+          if (!entry.isDirectory() || entry.name === ext.name) continue;
+          const otherHookDir = path.join(skillsDir, entry.name, 'hooks');
+          if (!fs.existsSync(otherHookDir)) continue;
+          for (const f of fs.readdirSync(otherHookDir)) {
+            if (path.basename(f, path.extname(f)) === hookName) {
+              hasOther = true;
+              break;
+            }
+          }
+          if (hasOther) break;
+        }
+      }
+
+      if (!hasOther) {
+        delete settings[hookName];
+        settingsChanged = true;
+        const aggregatorPath = path.join(aggregatorDir, `claude-code-${scope}-${hookName}.js`);
+        if (fs.existsSync(aggregatorPath)) {
+          fs.unlinkSync(aggregatorPath);
+        }
+      }
+    }
+
+    if (settingsChanged) {
+      writeClaudeSettings(scope, settings, this.projectDir, this.homeDir);
+    }
   }
 }

@@ -160,4 +160,14 @@ export class CopilotAdapter implements AgentAdapter {
 
     return content.slice(0, startIdx) + content.slice(endIdx + end.length);
   }
+
+  supportsRuntimeHooks = false;
+
+  async installHooks(_ext: Extension, _scope: 'global' | 'project', _cachePath: string): Promise<void> {
+    return Promise.resolve();
+  }
+
+  async removeHooks(_ext: Extension, _scope: 'global' | 'project'): Promise<void> {
+    return Promise.resolve();
+  }
 }

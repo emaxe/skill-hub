@@ -127,4 +127,14 @@ export class AgentsConventionsAdapter implements AgentAdapter {
 
     return results;
   }
+
+  supportsRuntimeHooks = false;
+
+  async installHooks(_ext: Extension, _scope: 'global' | 'project', _cachePath: string): Promise<void> {
+    return Promise.resolve();
+  }
+
+  async removeHooks(_ext: Extension, _scope: 'global' | 'project'): Promise<void> {
+    return Promise.resolve();
+  }
 }
