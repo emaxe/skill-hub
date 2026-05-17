@@ -13,6 +13,9 @@ import { createRegistry } from './registry';
 import { getAdapter } from './adapters/get-adapter';
 import { filterRecordsByDirectory } from './path-filter';
 import { hasProjectConfig, addProjectExtension, removeProjectExtension, resolveProject, resolveConfig } from './config';
+import fs from 'fs';
+import { installExtension as managerInstall } from './extension-manager';
+import { downloadSkillssh, skillsshToExtension, searchSkillssh } from './skillssh';
 
 // MCP-сервер skill-hub — предоставляет 7 инструментов для AI-агентов через stdio транспорт.
 // Инструменты: search, install, remove, move, list, suggest, get_info.
@@ -42,6 +45,7 @@ export async function startMcpServer(): Promise<void> {
               query: { type: 'string', description: 'Поисковый запрос (имя, описание, тег)' },
               agent: { type: 'string', enum: ['claude-code', 'cursor', 'copilot', 'codex', 'agents-conventions'], description: 'Фильтр по агенту' },
               type: { type: 'string', enum: ['skill', 'agent', 'command'], description: 'Фильтр по типу' },
+              source: { type: 'string', enum: ['catalog', 'skillssh'], description: 'Источник поиска (по умолчанию: catalog)' },
               limit: { type: 'number', description: 'Макс. количество результатов (по умолчанию 10)' },
               offset: { type: 'number', description: 'Пропустить первые N результатов (по умолчанию 0)' },
             },
@@ -153,6 +157,17 @@ export async function startMcpServer(): Promise<void> {
 
     // --- search_extensions ---
     if (name === 'search_extensions') {
+      const source = str(a.source) || 'catalog';
+      if (source === 'skillssh') {
+        try {
+          const results = await searchSkillssh(str(a.query) || '', typeof a.limit === 'number' ? a.limit : 10);
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ results, total: results.length }, null, 2) }],
+          };
+        } catch (err) {
+          return { content: [{ type: 'text', text: `Ошибка skills.sh: ${String(err)}` }], isError: true };
+        }
+      }
       try {
         await ensureCache();
         const cachePath = getCachePath();
@@ -191,6 +206,32 @@ export async function startMcpServer(): Promise<void> {
         const agent = (str(a.agent) || detectAgent()) as AgentName;
         const scope = (str(a.scope) === 'global' ? 'global' : 'project') as 'global' | 'project';
         const nameArg = str(a.name) || '';
+
+        if (nameArg.startsWith('skillssh:')) {
+          const rest = nameArg.slice(9);
+          const atIdx = rest.lastIndexOf('@');
+          if (atIdx === -1) {
+            return { content: [{ type: 'text', text: 'Для MCP укажите полный skillssh:owner/repo@slug' }], isError: true };
+          }
+          const source = rest.slice(0, atIdx);
+          const slug = rest.slice(atIdx + 1);
+
+          try {
+            const download = await downloadSkillssh(source, slug);
+            const ext = skillsshToExtension({ id: slug, name: slug, description: '', source, installs: 0 }, download.hash);
+            const tmpDir = path.join(os.homedir(), '.skill-hub', 'tmp', `skillssh-mcp-${slug}-${Date.now()}`);
+            for (const file of download.files) {
+              const filePath = path.join(tmpDir, file.path);
+              fs.mkdirSync(path.dirname(filePath), { recursive: true });
+              fs.writeFileSync(filePath, file.contents, 'utf-8');
+            }
+            await managerInstall(ext, agent, scope, path.join(os.homedir(), '.skill-hub'), tmpDir);
+            try { fs.rmSync(tmpDir, { recursive: true }); } catch {}
+            return { content: [{ type: 'text', text: `Установлен ${ext.type}:${ext.name} v${ext.version} (${agent}, ${scope}) [skills.sh]` }] };
+          } catch (err) {
+            return { content: [{ type: 'text', text: `Ошибка skills.sh: ${String(err)}` }], isError: true };
+          }
+        }
 
         let type: ExtensionType | undefined;
         let extName = nameArg;
