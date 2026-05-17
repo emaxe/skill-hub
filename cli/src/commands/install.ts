@@ -10,6 +10,37 @@ import { createRegistry } from '../registry';
 import { AgentAdapter } from '../adapters/types';
 import { getAdapter } from '../adapters/get-adapter';
 import { hasProjectConfig, addProjectExtension } from '../config';
+import fs from 'fs';
+import { searchSkillssh, downloadSkillssh, skillsshToExtension, SkillsshSearchResult } from '../skillssh';
+import { installExtension as managerInstall } from '../extension-manager';
+
+const SKILLSSH_PREFIX = 'skillssh:';
+
+function isSkillsshRef(name: string): boolean {
+  return name.startsWith(SKILLSSH_PREFIX);
+}
+
+function parseSkillsshRef(name: string): { source?: string; slug?: string } {
+  const rest = name.slice(SKILLSSH_PREFIX.length);
+  if (rest.includes('@')) {
+    const [source, slug] = rest.split('@');
+    return { source, slug };
+  }
+  if (rest.includes('/')) {
+    return { source: rest };
+  }
+  return { slug: rest };
+}
+
+function writeSkillsshFilesToTmp(download: { files: { path: string; contents: string }[] }, slug: string): string {
+  const tmpDir = path.join(os.homedir(), '.skill-hub', 'tmp', `skillssh-${slug}-${Date.now()}`);
+  for (const file of download.files) {
+    const filePath = path.join(tmpDir, file.path);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, file.contents, 'utf-8');
+  }
+  return tmpDir;
+}
 
 async function installExtension(
   ext: Extension,
@@ -58,6 +89,62 @@ export function makeInstallCommand(): Command {
         let name = nameArg;
         if (nameArg.includes(':')) {
           [type, name] = nameArg.split(':') as [ExtensionType, string];
+        }
+
+        if (isSkillsshRef(nameArg)) {
+          spinner.text = 'Поиск на skills.sh...';
+          const ref = parseSkillsshRef(nameArg);
+
+          let skill: SkillsshSearchResult;
+
+          if (ref.slug && ref.source) {
+            // Fully qualified: skillssh:owner/repo@slug
+            skill = { id: ref.slug, name: ref.slug, description: '', source: ref.source, installs: 0 };
+          } else if (ref.source && !ref.slug) {
+            // Partial: skillssh:owner/repo — search and interactive select
+            const results = await searchSkillssh(ref.source, 20);
+            if (results.length === 0) {
+              spinner.fail(chalk.red(`Скиллы не найдены для ${ref.source}`));
+              process.exit(1);
+            }
+            if (results.length === 1) {
+              skill = results[0];
+            } else {
+              console.log(chalk.bold('\nНайдено несколько скиллов:\n'));
+              results.forEach((r, i) => console.log(`  ${i + 1}. ${r.id} — ${r.description || 'нет описания'}`));
+              console.log(chalk.yellow('\nУкажите конкретный скилл: skill-hub install skillssh:owner/repo@slug'));
+              process.exit(0);
+            }
+          } else if (ref.slug && !ref.source) {
+            // Just slug: search by slug
+            const results = await searchSkillssh(ref.slug, 10);
+            const found = results.find(r => r.id === ref.slug);
+            if (!found) {
+              spinner.fail(chalk.red(`Скилл "${ref.slug}" не найден на skills.sh`));
+              process.exit(1);
+            }
+            skill = found;
+          } else {
+            spinner.fail(chalk.red(`Неверный формат skills.sh ссылки: ${nameArg}`));
+            process.exit(1);
+          }
+
+          spinner.text = `Загрузка ${skill.id}...`;
+          const download = await downloadSkillssh(skill.source, skill.id);
+          const tmpDir = writeSkillsshFilesToTmp(download, skill.id);
+
+          const ext = skillsshToExtension(skill, download.hash);
+          const adapter = getAdapter(agent);
+          const registryDir = path.join(os.homedir(), '.skill-hub');
+
+          spinner.text = `Установка ${ext.name}...`;
+          await managerInstall(ext, agent, scope, registryDir, tmpDir);
+
+          // Cleanup tmp dir (best effort)
+          try { fs.rmSync(tmpDir, { recursive: true }); } catch {}
+
+          spinner.succeed(chalk.green(`Установлен ${ext.type}:${ext.name} (${agent}, ${scope}) [skills.sh]`));
+          return;
         }
 
         const ext = catalog.extensions.find(e => e.name === name && (!type || e.type === type));
