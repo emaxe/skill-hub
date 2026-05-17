@@ -4,6 +4,7 @@ import { loadCatalog, searchExtensions, AgentName, ExtensionType } from '../cata
 import { detectAgent } from '../detect-agent';
 import { getCachePath, ensureCache } from '../git';
 import { resolveProject } from '../config';
+import { searchSkillssh } from '../skillssh';
 
 export function makeSearchCommand(): Command {
   return new Command('search')
@@ -14,7 +15,31 @@ export function makeSearchCommand(): Command {
     .option('--limit <n>', 'Максимум результатов на страницу', '10')
     .option('--offset <n>', 'Пропустить первые N результатов', '0')
     .option('--project <project>', 'Фильтр по проекту')
-    .action(async (query: string, opts: { agent?: string; type?: string; limit?: string; offset?: string; project?: string }) => {
+    .option('--source <source>', 'Источник: catalog (default), skillssh')
+    .action(async (query: string, opts: { agent?: string; type?: string; limit?: string; offset?: string; project?: string; source?: string }) => {
+      if (opts.source === 'skillssh') {
+        const results = await searchSkillssh(query, Math.max(1, parseInt(opts.limit || '10', 10)));
+        const total = results.length;
+        const limit = Math.max(1, parseInt(opts.limit || '10', 10) || 10);
+        const offset = Math.max(0, parseInt(opts.offset || '0', 10) || 0);
+        const page = results.slice(offset, offset + limit);
+
+        if (total === 0) {
+          console.log(chalk.yellow('Скиллы не найдены на skills.sh'));
+          return;
+        }
+        console.log(chalk.bold(`\nНайдено ${total} скиллов на skills.sh:\n`));
+        for (const skill of page) {
+          console.log(`  ${chalk.green('[skill]')} ${chalk.bold(skill.id)}  ${chalk.dim(skill.source || '')}  ${skill.installs ? chalk.yellow(`${skill.installs} installs`) : ''}`);
+          console.log(`    ${skill.description || 'нет описания'}`);
+          console.log();
+        }
+        if (total > limit) {
+          console.log(chalk.dim(`Показано ${page.length} из ${total} (offset=${offset}, limit=${limit})`));
+        }
+        return;
+      }
+
       await ensureCache();
       const catalog = loadCatalog(getCachePath());
       const agent = (opts.agent || detectAgent()) as AgentName;
