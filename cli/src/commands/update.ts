@@ -56,7 +56,6 @@ export function makeUpdateCommand(): Command {
             spinner.text = 'Проверка проектных расширений...';
             let restored = 0;
             for (const pe of projectExtensions) {
-              if (pe.scope === 'parent') continue;
               const destPath = adapter.getInstallPath({ type: pe.type, name: pe.name, description: '', tags: [], scope: 'both', platforms: {}, path: '', dependencies: [], projects: [] } as Extension, pe.scope);
               const installed = reg.isInstalled(pe.name, pe.type, agent);
               const fileExists = fs.existsSync(destPath);
