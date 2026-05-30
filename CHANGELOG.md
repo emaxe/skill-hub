@@ -10,7 +10,7 @@
 
 ## [Unreleased]
 
-## [0.1.20] — 2026-05-17
+## [0.1.20] — 2026-05-30
 
 ### Исправлено (Security Audit)
 - **C2** — `removeSection()` / `removeMarkerContent()` больше не портят файлы при отсутствии конечного маркера. Вместо удаления всего от начального маркера до конца файла — оставляют содержимое нетронутым
@@ -52,7 +52,17 @@
   - Source-aware восстановление missing: `update -U` доустанавливает skills.sh-скиллы из `.skill-hub.json`
   - MCP: `search_extensions` с `source: "skillssh"`, `install_extension` с `skillssh:...` в `name`
   - Временная директория очищается после установки (best effort)
-  - **TUI пока не поддерживает** skills.sh (требуется V2 с локальным индексом)
+  - **Полная поддержка skills.sh в TUI** — поиск, установка, удаление, обновление, синхронизация
+    - Новый хук `useSkillsshSearch.ts` — debounce-поиск с skills.sh API, конвертация результатов в `Extension[]`
+    - Результаты skills.sh отображаются в табе «Каталог» с пометкой `[skills.sh]` и мета-информацией
+    - Установка: файлы скачиваются во временную директорию, ставятся через адаптер, tmp чистится в `finally`
+    - `DetailScreen` для skills.sh: `readExtensionContent` скрывает кнопку `c` (содержимое) пока скилл не установлен
+    - `InstalledScreen` / `InstalledDetailScreen` — `source` пробрасывается через `recordToExtension` / `makeExt` для update/remove
+    - `ExtensionUpdatesDialog` — поддержка `source?: string` для skills.sh-записей обновлений
+    - Startup sync (`handleSync`) — missing skills.sh восстанавливаются из `.skill-hub.json` через реконструкцию `Extension` с `source: { type: 'skillssh', uri }`
+    - Startup update check (`updateExtensions`) — асинхронная проверка hash API vs установленная версия, outdated skills.sh добавляются в диалог обновлений
+    - `handleUpdateExtensions` — обновление skills.sh через синтетический `Extension` с актуальным `source` и `version = newVersion`
+    - `sync.ts` — `MissingExtension.source?: string` для сохранения skills.sh URI при проверке missing
 
 ### Исправлено
 - Upload загружал только `SKILL.md`, игнорируя доп. файлы скилла (`ScanResult.path` указывал на файл → `isDirectory()` = false)

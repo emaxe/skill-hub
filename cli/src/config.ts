@@ -488,6 +488,8 @@ export function pushHistory(list: string[] | undefined, value: string): string[]
 export function hasProjectConfig(projectRoot?: string): boolean {
   const root = projectRoot ?? findProjectRoot();
   if (!root) return false;
+  if (!fs.existsSync(getProjectConfigPath(root))) return false;
+  ensureProjectConfig(root);
   return fs.existsSync(getProjectConfigPath(root)) && fs.existsSync(getProjectLocalConfigPath(root));
 }
 

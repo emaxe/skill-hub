@@ -11,7 +11,8 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist/",
-    "base-skills/"
+    "base-skills/",
+    "README-ru.md"
   ],
   "license": "MIT",
   "repository": {
@@ -40,7 +41,7 @@
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
-    "prepublishOnly": "cp ../CHANGELOG.md ./CHANGELOG.md && cp ../LICENSE ./LICENSE && cp ../README.md ./README.md && npm run build"
+    "prepublishOnly": "cp ../CHANGELOG.md ./CHANGELOG.md && cp ../LICENSE ./LICENSE && cp ../README.md ./README.md && cp ../README-ru.md ./README-ru.md && npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

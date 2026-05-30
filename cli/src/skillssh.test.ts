@@ -1,4 +1,4 @@
-import { searchSkillssh, downloadSkillssh, skillsshToExtension } from './skillssh';
+import { searchSkillssh, searchSkillsshWithMeta, downloadSkillssh, skillsshToExtension } from './skillssh';
 
 describe('skillssh', () => {
   beforeEach(() => {
@@ -15,6 +15,32 @@ describe('skillssh', () => {
     const results = await searchSkillssh('test');
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe('test-skill');
+  });
+
+  test('searchSkillssh strips owner/repo prefix from API ids', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        skills: [{ id: 'owner/repo/test-skill', name: 'Test', description: 'Desc', source: 'owner/repo', installs: 100 }],
+        count: 1,
+      }),
+    });
+    const results = await searchSkillssh('test');
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('test-skill');
+  });
+
+  test('searchSkillsshWithMeta preserves total count from API', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        skills: [{ id: 'owner/repo/test-skill', name: 'Test', description: 'Desc', source: 'owner/repo', installs: 100 }],
+        count: 42,
+      }),
+    });
+    const result = await searchSkillsshWithMeta('test', 5);
+    expect(result.count).toBe(42);
+    expect(result.skills[0].id).toBe('test-skill');
   });
 
   test('downloadSkillssh returns files and hash', async () => {

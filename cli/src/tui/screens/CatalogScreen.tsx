@@ -4,6 +4,7 @@ import { normalizeInput, isUpArrow, isDownArrow } from '../keymap';
 import { Extension, AgentName, ExtensionType } from '../../catalog';
 import { InstalledEntry } from '../hooks/useRegistry';
 import { useCatalog } from '../hooks/useCatalog';
+import { useSkillsshSearch } from '../hooks/useSkillsshSearch';
 import { useStatus } from '../contexts/StatusContext';
 import { ExtensionList } from '../components/ExtensionList';
 import { SearchInput } from '../components/SearchInput';
@@ -11,6 +12,7 @@ import { FilterBar } from '../components/FilterBar';
 import { HintBar } from '../components/HintBar';
 import type { Hint } from '../components/HintBar';
 import type { CatalogTableConfig } from '../hooks/useLayout';
+import { theme } from '../theme';
 
 export interface CatalogScreenProps {
   agent: AgentName;
@@ -22,28 +24,36 @@ export interface CatalogScreenProps {
   project?: string | null;
   viewHeight: number;
   inputActive?: boolean;
-  /** Конфиг колонок таблицы каталога (из useLayout) */
   tableConfig?: CatalogTableConfig;
-  /** Compact-режим для вложенных компонентов */
   compact?: boolean;
-  /** Ширина терминала для адаптивных хинтов */
   termColumns?: number;
 }
 
 const PAGE_SIZE_MIN = 3;
-// Fixed rows: SearchInput(1) + FilterBar(1) + header(1) + separator(1) + margin(1) + HintBar(1) + pagination(2)
-const FIXED_ROWS = 8;
+// Fixed rows: SearchInput(1) + sourceRow(1) + FilterBar(1) + header(1) + separator(1) + margin(1) + HintBar(1) + pagination(2)
+const FIXED_ROWS = 9;
 
 export const CatalogScreen: React.FC<CatalogScreenProps> = ({
   agent, onOpenDetail, onSearchFocusChange, install, installed, defaultScope, project, viewHeight, inputActive,
   tableConfig, compact, termColumns,
 }) => {
   const catalogAgent = agent === 'agents-conventions' ? 'claude-code' : agent;
-  const { results, query, typeFilter, loading, error, setQuery, setTypeFilter } = useCatalog(catalogAgent, project);
+  const catalogData = useCatalog(catalogAgent, project);
+  const skillsshData = useSkillsshSearch();
   const { setStatus } = useStatus();
 
+  const [searchSource, setSearchSource] = useState<'catalog' | 'skillssh'>('catalog');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [searchFocused, setSearchFocused] = useState(false);
+
+  const isSkillssh = searchSource === 'skillssh';
+  const results = isSkillssh ? skillsshData.results : catalogData.results;
+  const query = isSkillssh ? skillsshData.query : catalogData.query;
+  const loading = isSkillssh ? skillsshData.loading : catalogData.loading;
+  const error = isSkillssh ? skillsshData.error : catalogData.error;
+  const setQuery = isSkillssh ? skillsshData.setQuery : catalogData.setQuery;
+  const typeFilter = catalogData.typeFilter;
+  const setTypeFilter = catalogData.setTypeFilter;
 
   const pageSize = Math.max(PAGE_SIZE_MIN, viewHeight - FIXED_ROWS);
 
@@ -91,6 +101,12 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
       return;
     }
 
+    if (ni === 's') {
+      setSearchSource(src => src === 'catalog' ? 'skillssh' : 'catalog');
+      setSelectedIndex(0);
+      return;
+    }
+
     if (isUpArrow(input, key)) {
       setSelectedIndex(i => Math.max(0, i - 1));
       return;
@@ -116,7 +132,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
       return;
     }
 
-    if (ni === 't') {
+    if (ni === 't' && !isSkillssh) {
       const types: (ExtensionType | 'all')[] = ['all', 'skill', 'agent', 'command'];
       const idx = types.indexOf(typeFilter);
       setTypeFilter(types[(idx + 1) % types.length]);
@@ -127,18 +143,40 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
     ? [{ key: 'Esc', description: 'закрыть поиск' }]
     : [
         { key: '/', description: 'поиск' },
+        { key: 's', description: `источник: ${searchSource}` },
         { key: '↑↓', description: 'навигация' },
         { key: 'Enter', description: 'детали' },
         { key: 'i', description: 'установить' },
+        ...(!isSkillssh ? [{ key: 't', description: 'тип' }] : []),
       ];
+
+  const sourceRow = (
+    <Box paddingX={1}>
+      <Text color={theme.muted}>Источник </Text>
+      <Text color={theme.warning}>[s]</Text>
+      <Text color={theme.muted}>: </Text>
+      <Text color={searchSource === 'catalog' ? theme.selected : theme.muted} bold={searchSource === 'catalog'}>
+        catalog
+      </Text>
+      <Text color={theme.muted}> / </Text>
+      <Text color={searchSource === 'skillssh' ? theme.selected : theme.muted} bold={searchSource === 'skillssh'}>
+        skills.sh
+      </Text>
+    </Box>
+  );
+
+  const emptyMessage = isSkillssh && !query.trim()
+    ? 'Введите запрос для поиска на skills.sh'
+    : 'Ничего не найдено';
 
   return (
     <Box flexDirection="column" flexGrow={1}>
       <SearchInput value={query} onChange={setQuery} focused={searchFocused} />
-      <FilterBar activeType={typeFilter} onTypeChange={setTypeFilter} compact={compact} />
+      {sourceRow}
+      {!isSkillssh && <FilterBar activeType={typeFilter} onTypeChange={setTypeFilter} compact={compact} />}
       {loading ? (
         <Box paddingX={2}>
-          <Text dimColor>Загрузка каталога...</Text>
+          <Text dimColor>{isSkillssh ? 'Поиск на skills.sh...' : 'Загрузка каталога...'}</Text>
         </Box>
       ) : error ? (
         <Box paddingX={2}>
@@ -146,18 +184,26 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({
         </Box>
       ) : (
         <Box flexGrow={1} flexDirection="column" marginTop={1} marginBottom={1}>
-          <ExtensionList
-            extensions={pageItems}
-            selectedIndex={localIndex}
-            installedNames={installedNames}
-            installedScopes={installedScopes}
-            currentProject={project}
-            tableConfig={tableConfig}
-          />
-          {totalPages > 1 && (
-            <Box paddingX={1} marginTop={1}>
-              <Text dimColor>{`Стр. ${currentPage + 1} из ${totalPages}  (${results.length} шт.)`}</Text>
+          {results.length === 0 ? (
+            <Box paddingX={2}>
+              <Text dimColor>{emptyMessage}</Text>
             </Box>
+          ) : (
+            <>
+              <ExtensionList
+                extensions={pageItems}
+                selectedIndex={localIndex}
+                installedNames={installedNames}
+                installedScopes={installedScopes}
+                currentProject={project}
+                tableConfig={tableConfig}
+              />
+              {totalPages > 1 && (
+                <Box paddingX={1} marginTop={1}>
+                  <Text dimColor>{`Стр. ${currentPage + 1} из ${totalPages}  (${results.length} шт.)`}</Text>
+                </Box>
+              )}
+            </>
           )}
         </Box>
       )}

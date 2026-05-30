@@ -51,7 +51,7 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
   const contentResult = useMemo(() => readExtensionContent(entry.path), [entry.path]);
 
   const catalogExt = catalog?.extensions.find(e => e.name === entry.name && e.type === entry.type);
-  const isManualWithCatalog = entry.source === 'manual' && catalogExt != null;
+  const isManualWithCatalog = entry.entrySource === 'manual' && catalogExt != null;
 
   const isParent = entry.effectiveScope === 'parent';
 
@@ -64,7 +64,7 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
     if (!isConventions) {
       list.push({ id: 'move', label: `Переместить в ${entry.scope === 'global' ? 'project' : 'global'}` });
     }
-    if (catalogExt && entry.source === 'registry') {
+    if (catalogExt && entry.entrySource === 'registry') {
       list.push({ id: 'update', label: 'Обновить' });
     }
     if (isManualWithCatalog) {
@@ -75,7 +75,7 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
       list.push({ id: 'upload', label: 'Загрузить в каталог' });
     }
     return list;
-  }, [entry.scope, entry.source, isManualWithCatalog, catalogExt, isParent, agent, hasUploadAccess, onOpenUpload]);
+  }, [entry.scope, entry.entrySource, isManualWithCatalog, catalogExt, isParent, agent, hasUploadAccess, onOpenUpload]);
 
   const makeExt = (): Extension => ({
     type: entry.type, name: entry.name,
@@ -86,6 +86,7 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
     version: entry.version,
     author: catalogExt?.author,
     projects: catalogExt?.projects ?? [],
+    source: entry.source?.startsWith('skillssh:') ? { type: 'skillssh', uri: entry.source } : undefined,
   });
 
   useInput((input, key) => {
@@ -189,8 +190,8 @@ export const InstalledDetailScreen: React.FC<InstalledDetailScreenProps> = ({
           />
           <Row
             label="Источник:"
-            value={entry.source}
-            valueColor={entry.source === 'registry' ? theme.accent : theme.muted}
+            value={entry.entrySource}
+            valueColor={entry.entrySource === 'registry' ? theme.accent : theme.muted}
           />
           {entry.installed_at && (
             <Row label="Дата:"     value={new Date(entry.installed_at).toLocaleDateString('ru-RU')} />

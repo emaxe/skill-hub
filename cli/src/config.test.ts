@@ -242,10 +242,11 @@ describe('hasProjectConfig', () => {
     expect(hasProjectConfig(tmpDir)).toBe(true);
   });
 
-  test('false если только публичный существует', () => {
+  test('true если есть публичный файл и локальный можно автосоздать', () => {
     writeJSON(path.join(tmpDir, '.skill-hub.json'), { extensions: [] });
 
-    expect(hasProjectConfig(tmpDir)).toBe(false);
+    expect(hasProjectConfig(tmpDir)).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, '.skill-hub.local.json'))).toBe(true);
   });
 
   test('false если только локальный существует', () => {

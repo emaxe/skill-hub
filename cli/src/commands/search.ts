@@ -4,7 +4,7 @@ import { loadCatalog, searchExtensions, AgentName, ExtensionType } from '../cata
 import { detectAgent } from '../detect-agent';
 import { getCachePath, ensureCache } from '../git';
 import { resolveProject } from '../config';
-import { searchSkillssh } from '../skillssh';
+import { searchSkillsshWithMeta } from '../skillssh';
 
 export function makeSearchCommand(): Command {
   return new Command('search')
@@ -18,11 +18,11 @@ export function makeSearchCommand(): Command {
     .option('--source <source>', 'Источник: catalog (default), skillssh')
     .action(async (query: string, opts: { agent?: string; type?: string; limit?: string; offset?: string; project?: string; source?: string }) => {
       if (opts.source === 'skillssh') {
-        const results = await searchSkillssh(query, Math.max(1, parseInt(opts.limit || '10', 10)));
-        const total = results.length;
         const limit = Math.max(1, parseInt(opts.limit || '10', 10) || 10);
         const offset = Math.max(0, parseInt(opts.offset || '0', 10) || 0);
-        const page = results.slice(offset, offset + limit);
+        const { skills, count } = await searchSkillsshWithMeta(query, limit + offset);
+        const total = count;
+        const page = skills.slice(offset, offset + limit);
 
         if (total === 0) {
           console.log(chalk.yellow('Скиллы не найдены на skills.sh'));

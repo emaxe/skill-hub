@@ -73,6 +73,7 @@ function recordToExtension(record: InstallRecord): Extension {
     dependencies: [],
     version: record.version,
     projects: record.projects ?? [],
+    source: record.source?.startsWith('skillssh:') ? { type: 'skillssh', uri: record.source } : undefined,
   };
 }
 
@@ -390,8 +391,8 @@ export const InstalledScreen: React.FC<InstalledScreenProps> = ({
                   ) : null}
                   {(tableConfig ? tableConfig.source.visible : true) ? (
                     <Box minWidth={tableConfig ? tableConfig.source.width : 10}>
-                      <Text color={entry.source === 'manual' ? theme.muted : theme.accent}>
-                        {entry.source}
+                      <Text color={entry.entrySource === 'manual' ? theme.muted : theme.accent}>
+                        {entry.entrySource}
                       </Text>
                     </Box>
                   ) : null}

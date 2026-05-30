@@ -18,11 +18,13 @@ import { ScanResult } from '../../adapters/types';
 import { getCachePath } from '../../git';
 import { EffectiveScope, filterRecordsByDirectory } from '../../path-filter';
 import { hasProjectConfig, addProjectExtension, removeProjectExtension } from '../../config';
+import { installExtension, removeExtension, moveExtension, updateExtension } from '../../extension-manager';
+import { downloadSkillssh, writeSkillsshFilesToTmp, parseSkillsshRef } from '../../skillssh';
 
 const REGISTRY_DIR = path.join(os.homedir(), '.skill-hub');
 
 export interface InstalledEntry extends InstallRecord {
-  source: 'registry' | 'manual';
+  entrySource: 'registry' | 'manual';
   effectiveScope: EffectiveScope;
   /** ИИ-агент-владелец (актуально для agents-conventions, где глобальные расширения берутся от разных агентов) */
   sourceAgent?: AgentName;
@@ -44,6 +46,22 @@ export interface UseRegistryActions {
   refresh: () => void;
 }
 
+async function resolveSkillsshSource(ext: Extension): Promise<{ ext: Extension; sourcePath?: string }> {
+  if (ext.source?.type !== 'skillssh') return { ext };
+  const ref = parseSkillsshRef(ext.source.uri);
+  if (!ref.source || !ref.slug) throw new Error(`Invalid skillssh source: ${ext.source.uri}`);
+  const download = await downloadSkillssh(ref.source, ref.slug);
+  const tmpDir = writeSkillsshFilesToTmp(download, ref.slug);
+  const extWithHash = { ...ext, version: download.hash };
+  return { ext: extWithHash, sourcePath: tmpDir };
+}
+
+function cleanupTmp(sourcePath?: string) {
+  if (sourcePath) {
+    try { fs.rmSync(sourcePath, { recursive: true }); } catch {}
+  }
+}
+
 export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryActions {
   const [installed, setInstalled] = useState<InstalledEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,8 +70,6 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
   const [refreshKey, setRefreshKey] = useState(0);
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
-
-  const registryRef = useRef(createRegistry(REGISTRY_DIR));
 
   // Загрузка списка установленных (фильтруем по текущему агенту и директории)
   useEffect(() => {
@@ -67,10 +83,10 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
       // --- agents-conventions: проектные из .agents/ + глобальные от всех ИИ-агентов ---
 
       // 1) Проектные расширения из .agents/ (через AgentsConventionsAdapter)
-      const acRecords = registryRef.current.list(agent);
+      const acRecords = createRegistry(REGISTRY_DIR).list(agent);
       const acFiltered = filterRecordsByDirectory(acRecords, cwd, homeDir);
       for (const { record, effectiveScope } of acFiltered) {
-        entries.push({ ...record, source: 'registry', effectiveScope, sourceAgent: agent });
+        entries.push({ ...record, entrySource: 'registry', effectiveScope, sourceAgent: agent });
       }
 
       try {
@@ -82,7 +98,7 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
             entries.push({
               type: scan.type, name: scan.name, version: '?',
               agent, scope: scan.scope, path: scan.path,
-              source: 'manual', effectiveScope: scan.scope, sourceAgent: agent,
+              entrySource: 'manual', effectiveScope: scan.scope, sourceAgent: agent,
             });
           }
         }
@@ -92,14 +108,14 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
       const realAgents: AgentName[] = ['claude-code', 'cursor', 'copilot', 'codex'];
       for (const realAgent of realAgents) {
         // Из реестра — только global
-        const agentRecords = registryRef.current.list(realAgent);
+        const agentRecords = createRegistry(REGISTRY_DIR).list(realAgent);
         for (const record of agentRecords) {
           if (record.scope !== 'global') continue;
           // Пропускаем записи-призраки: файл удалён, но запись осталась в реестре
           if (!fs.existsSync(record.path)) continue;
           const already = entries.some(e => e.name === record.name && e.type === record.type && e.effectiveScope === 'global' && e.sourceAgent === realAgent);
           if (!already) {
-            entries.push({ ...record, source: 'registry', effectiveScope: 'global', sourceAgent: realAgent });
+            entries.push({ ...record, entrySource: 'registry', effectiveScope: 'global', sourceAgent: realAgent });
           }
         }
 
@@ -114,7 +130,7 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
               entries.push({
                 type: scan.type, name: scan.name, version: '?',
                 agent: realAgent, scope: 'global', path: scan.path,
-                source: 'manual', effectiveScope: 'global', sourceAgent: realAgent,
+                entrySource: 'manual', effectiveScope: 'global', sourceAgent: realAgent,
               });
             }
           }
@@ -122,10 +138,10 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
       }
     } else {
       // --- Стандартный режим (claude-code, cursor, copilot) ---
-      const records = registryRef.current.list(agent);
+      const records = createRegistry(REGISTRY_DIR).list(agent);
       const filtered = filterRecordsByDirectory(records, cwd, homeDir);
       for (const { record, effectiveScope } of filtered) {
-        entries.push({ ...record, source: 'registry', effectiveScope });
+        entries.push({ ...record, entrySource: 'registry', effectiveScope });
       }
 
       try {
@@ -137,7 +153,7 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
             entries.push({
               type: scan.type, name: scan.name, version: '?',
               agent, scope: scan.scope, path: scan.path,
-              source: 'manual', effectiveScope: scan.scope,
+              entrySource: 'manual', effectiveScope: scan.scope,
             });
           }
         }
@@ -172,72 +188,39 @@ export function useRegistry(agent: AgentName): UseRegistryState & UseRegistryAct
 
   const install = useCallback(async (ext: Extension, agent: AgentName, scope: 'global' | 'project') => {
     await withStatus(`Устанавливаю ${ext.name}...`, async () => {
-      const adapter = getAdapter(agent);
-      const cachePath = getCachePath();
-      await adapter.install(ext, scope, cachePath);
-      registryRef.current.add({
-        type: ext.type, name: ext.name,
-        version: ext.version || '0.0.0',
-        agent, scope,
-        path: adapter.getInstallPath(ext, scope),
-        projects: ext.projects.length > 0 ? ext.projects : undefined,
-        tags: ext.tags.length > 0 ? ext.tags : undefined,
-      });
-      if (hasProjectConfig()) {
-        addProjectExtension({ type: ext.type, name: ext.name, version: ext.version, scope });
+      const { ext: resolvedExt, sourcePath } = await resolveSkillsshSource(ext);
+      try {
+        await installExtension(resolvedExt, agent, scope, REGISTRY_DIR, sourcePath);
+      } finally {
+        cleanupTmp(sourcePath);
       }
     });
   }, [withStatus]);
 
   const remove = useCallback(async (ext: Extension, agent: AgentName, scope: 'global' | 'project', deleteFromDisk = true) => {
     await withStatus(`Удаляю ${ext.name}...`, async () => {
-      if (deleteFromDisk) {
-        const adapter = getAdapter(agent);
-        await adapter.remove(ext, scope);
-      }
-      registryRef.current.remove(ext.name, ext.type, agent);
-      if (hasProjectConfig()) {
-        removeProjectExtension(ext.name, ext.type);
-      }
+      await removeExtension(ext, agent, scope, REGISTRY_DIR, deleteFromDisk);
     });
   }, [withStatus]);
 
   const move = useCallback(async (ext: Extension, agent: AgentName, fromScope: 'global' | 'project') => {
-    const toScope = fromScope === 'global' ? 'project' : 'global';
-    await withStatus(`Перемещаю ${ext.name} в ${toScope}...`, async () => {
-      const adapter = getAdapter(agent);
-      const cachePath = getCachePath();
-      await adapter.install(ext, toScope, cachePath);
-      registryRef.current.add({
-        type: ext.type, name: ext.name,
-        version: ext.version || '0.0.0',
-        agent, scope: toScope,
-        path: adapter.getInstallPath(ext, toScope),
-        projects: ext.projects.length > 0 ? ext.projects : undefined,
-        tags: ext.tags.length > 0 ? ext.tags : undefined,
-      });
-      await adapter.remove(ext, fromScope);
-      if (hasProjectConfig()) {
-        addProjectExtension({ type: ext.type, name: ext.name, version: ext.version, scope: toScope });
+    await withStatus(`Перемещаю ${ext.name}...`, async () => {
+      const { ext: resolvedExt, sourcePath } = await resolveSkillsshSource(ext);
+      try {
+        await moveExtension(resolvedExt, agent, fromScope, REGISTRY_DIR, sourcePath);
+      } finally {
+        cleanupTmp(sourcePath);
       }
     });
   }, [withStatus]);
 
   const update = useCallback(async (ext: Extension, agent: AgentName, scope: 'global' | 'project') => {
     await withStatus(`Обновляю ${ext.name}...`, async () => {
-      const adapter = getAdapter(agent);
-      const cachePath = getCachePath();
-      await adapter.install(ext, scope, cachePath);
-      registryRef.current.add({
-        type: ext.type, name: ext.name,
-        version: ext.version || '0.0.0',
-        agent, scope,
-        path: adapter.getInstallPath(ext, scope),
-        projects: ext.projects.length > 0 ? ext.projects : undefined,
-        tags: ext.tags.length > 0 ? ext.tags : undefined,
-      });
-      if (hasProjectConfig()) {
-        addProjectExtension({ type: ext.type, name: ext.name, version: ext.version, scope });
+      const { ext: resolvedExt, sourcePath } = await resolveSkillsshSource(ext);
+      try {
+        await updateExtension(resolvedExt, agent, scope, REGISTRY_DIR, sourcePath);
+      } finally {
+        cleanupTmp(sourcePath);
       }
     });
   }, [withStatus]);

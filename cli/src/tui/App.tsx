@@ -37,7 +37,7 @@ import { ProjectConfigDialog } from './components/ProjectConfigDialog';
 import { ExtensionSyncDialog } from './components/ExtensionSyncDialog';
 import { ProjectConflictDialog } from './components/ProjectConflictDialog';
 import { GitCredentialsDialog, GitCredentials } from './components/GitCredentialsDialog';
-import { Extension, loadCatalog, AgentName } from '../catalog';
+import { Extension, ExtensionType, loadCatalog, AgentName } from '../catalog';
 import { InstalledEntry } from './hooks/useRegistry';
 import { getConventionsStatus, ensureConventionsStructure } from '../conventions';
 import { ProjectExtensionRecord, addProjectExtension, resolveProject, ResolvedProject, loadGitignoreAgentDirs, findProjectRoot } from '../config';
@@ -50,6 +50,7 @@ import { CatalogUpdateDialog, CatalogUpdateStatus } from './components/CatalogUp
 import { ExtensionUpdatesDialog, ExtensionUpdateEntry } from './components/ExtensionUpdatesDialog';
 import { SelfUpdateDialog } from './components/SelfUpdateDialog';
 import { checkSetupStatus, updateSelf } from '../base-setup';
+import { downloadSkillssh, parseSkillsshRef } from '../skillssh';
 
 const TABS: TabName[] = ['catalog', 'installed', 'settings'];
 
@@ -233,35 +234,62 @@ export const App: React.FC = () => {
     // Проверка 5: обновления установленных расширений
     if (startupPhase === 'updateExtensions') {
       if (registry.installed.length > 0) {
-        const cachePath = getCachePath();
-        try {
-          const catalog = loadCatalog(cachePath);
-          const outdated: ExtensionUpdateEntry[] = [];
-          for (const entry of registry.installed) {
-            if (entry.effectiveScope === 'parent') continue;
-            const catExt = catalog.extensions.find(e => e.name === entry.name && e.type === entry.type);
-            // Не предлагаем обновления если текущая версия неизвестна (manual/scan-only)
-            if (catExt && catExt.version && entry.version && entry.version !== '?' && catExt.version !== entry.version) {
-              outdated.push({
-                type: entry.type,
-                name: entry.name,
-                currentVersion: entry.version,
-                newVersion: catExt.version,
-                scope: entry.effectiveScope as 'global' | 'project',
-                sourceAgent: entry.sourceAgent,
-              });
+        (async () => {
+          const cachePath = getCachePath();
+          try {
+            const catalog = loadCatalog(cachePath);
+            const outdated: ExtensionUpdateEntry[] = [];
+            for (const entry of registry.installed) {
+              if (entry.effectiveScope === 'parent') continue;
+              // skills.sh расширения — проверяем обновление через API
+              if (entry.source?.startsWith('skillssh:')) {
+                try {
+                  const ref = parseSkillsshRef(entry.source);
+                  if (ref.source && ref.slug) {
+                    const download = await downloadSkillssh(ref.source, ref.slug);
+                    if (download.hash !== entry.version) {
+                      outdated.push({
+                        type: entry.type,
+                        name: entry.name,
+                        currentVersion: entry.version,
+                        newVersion: download.hash,
+                        scope: entry.effectiveScope as 'global' | 'project',
+                        sourceAgent: entry.sourceAgent,
+                      });
+                    }
+                  }
+                } catch {
+                  // пропускаем skills.sh проверку при ошибке сети
+                }
+                continue;
+              }
+              const catExt = catalog.extensions.find(e => e.name === entry.name && e.type === entry.type);
+              // Не предлагаем обновления если текущая версия неизвестна (manual/scan-only)
+              if (catExt && catExt.version && entry.version && entry.version !== '?' && catExt.version !== entry.version) {
+                outdated.push({
+                  type: entry.type,
+                  name: entry.name,
+                  currentVersion: entry.version,
+                  newVersion: catExt.version,
+                  scope: entry.effectiveScope as 'global' | 'project',
+                  sourceAgent: entry.sourceAgent,
+                });
+              }
             }
+            if (outdated.length > 0) {
+              setExtensionUpdates(outdated);
+              setShowExtensionUpdatesDialog(true);
+            } else {
+              setStartupPhase('selfUpdate');
+            }
+          } catch {
+            // Каталог недоступен — пропускаем проверку обновлений
+            setStartupPhase('selfUpdate');
           }
-          if (outdated.length > 0) {
-            setExtensionUpdates(outdated);
-            setShowExtensionUpdatesDialog(true);
-            return;
-          }
-        } catch {
-          // Каталог недоступен — пропускаем проверку обновлений
-        }
+        })();
+      } else {
+        setStartupPhase('selfUpdate');
       }
-      setStartupPhase('selfUpdate');
       return;
     }
 
@@ -355,7 +383,7 @@ export const App: React.FC = () => {
       let installedCount = 0;
       let trackedCount = 0;
 
-      // Установка missing-расширений (только те, что есть в каталоге)
+      // Установка missing-расширений (те, что есть в каталоге или skills.sh)
       let skippedCount = 0;
       if (missingExtensions.length > 0) {
         const installable = missingExtensions.filter(e => e.inCatalog);
@@ -365,10 +393,28 @@ export const App: React.FC = () => {
           const cachePath = getCachePath();
           const catalog = loadCatalog(cachePath);
           for (const ext of installable) {
-            const fullExt = catalog.extensions.find(e => e.name === ext.name && e.type === ext.type);
-            if (fullExt) {
-              await registry.install(fullExt, agent, ext.scope);
+            if (ext.source?.startsWith('skillssh:')) {
+              const skillsshExt: Extension = {
+                type: ext.type,
+                name: ext.name,
+                description: ext.name,
+                tags: [],
+                version: ext.catalogVersion || 'unknown',
+                scope: ext.scope,
+                path: 'SKILL.md',
+                platforms: {},
+                dependencies: [],
+                projects: [],
+                source: { type: 'skillssh', uri: ext.source },
+              };
+              await registry.install(skillsshExt, agent, ext.scope);
               installedCount++;
+            } else {
+              const fullExt = catalog.extensions.find(e => e.name === ext.name && e.type === ext.type);
+              if (fullExt) {
+                await registry.install(fullExt, agent, ext.scope);
+                installedCount++;
+              }
             }
           }
         }
@@ -408,10 +454,28 @@ export const App: React.FC = () => {
           const catalog = loadCatalog(cachePath);
           let installedCount = 0;
           for (const ext of missingExtensions) {
-            const fullExt = catalog.extensions.find(e => e.name === ext.name && e.type === ext.type);
-            if (fullExt) {
-              await registry.install(fullExt, agent, ext.scope);
+            if (ext.source?.startsWith('skillssh:')) {
+              const skillsshExt: Extension = {
+                type: ext.type,
+                name: ext.name,
+                description: ext.name,
+                tags: [],
+                version: ext.catalogVersion || 'unknown',
+                scope: ext.scope,
+                path: 'SKILL.md',
+                platforms: {},
+                dependencies: [],
+                projects: [],
+                source: { type: 'skillssh', uri: ext.source },
+              };
+              await registry.install(skillsshExt, agent, ext.scope);
               installedCount++;
+            } else {
+              const fullExt = catalog.extensions.find(e => e.name === ext.name && e.type === ext.type);
+              if (fullExt) {
+                await registry.install(fullExt, agent, ext.scope);
+                installedCount++;
+              }
             }
           }
           if (installedCount > 0) {
@@ -510,6 +574,29 @@ export const App: React.FC = () => {
       const catalog = loadCatalog(cachePath);
       let updatedCount = 0;
         for (const entry of extensionUpdates) {
+        if (entry.source?.startsWith('skillssh:')) {
+          const skillsshExt: Extension = {
+            type: entry.type as ExtensionType,
+            name: entry.name,
+            description: entry.name,
+            tags: [],
+            version: entry.newVersion,
+            scope: entry.scope,
+            path: 'SKILL.md',
+            platforms: {},
+            dependencies: [],
+            projects: [],
+            source: { type: 'skillssh', uri: entry.source },
+          };
+          try {
+            const targetAgent = (entry.sourceAgent || agent) as AgentName;
+            await registry.update(skillsshExt, targetAgent, entry.scope);
+            updatedCount++;
+          } catch {
+            // skip
+          }
+          continue;
+        }
         const catExt = catalog.extensions.find(e => e.name === entry.name && e.type === entry.type);
         if (!catExt) continue;
         try {

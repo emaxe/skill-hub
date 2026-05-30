@@ -15,7 +15,7 @@ import { filterRecordsByDirectory } from './path-filter';
 import { hasProjectConfig, addProjectExtension, removeProjectExtension, resolveProject, resolveConfig } from './config';
 import fs from 'fs';
 import { installExtension as managerInstall } from './extension-manager';
-import { downloadSkillssh, skillsshToExtension, searchSkillssh } from './skillssh';
+import { downloadSkillssh, skillsshToExtension, searchSkillsshWithMeta } from './skillssh';
 
 // MCP-сервер skill-hub — предоставляет 7 инструментов для AI-агентов через stdio транспорт.
 // Инструменты: search, install, remove, move, list, suggest, get_info.
@@ -160,9 +160,12 @@ export async function startMcpServer(): Promise<void> {
       const source = str(a.source) || 'catalog';
       if (source === 'skillssh') {
         try {
-          const results = await searchSkillssh(str(a.query) || '', typeof a.limit === 'number' ? a.limit : 10);
+          const limit = typeof a.limit === 'number' && a.limit > 0 ? a.limit : 10;
+          const offset = typeof a.offset === 'number' && a.offset >= 0 ? a.offset : 0;
+          const { skills, count } = await searchSkillsshWithMeta(str(a.query) || '', limit + offset);
+          const results = skills.slice(offset, offset + limit);
           return {
-            content: [{ type: 'text', text: JSON.stringify({ results, total: results.length }, null, 2) }],
+            content: [{ type: 'text', text: JSON.stringify({ results, total: count, limit, offset }, null, 2) }],
           };
         } catch (err) {
           return { content: [{ type: 'text', text: `Ошибка skills.sh: ${String(err)}` }], isError: true };

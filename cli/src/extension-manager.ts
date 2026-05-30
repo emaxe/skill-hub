@@ -149,9 +149,10 @@ export async function moveExtension(
   agent: AgentName,
   fromScope: 'global' | 'project',
   registryDir: string,
+  sourcePath?: string,
 ): Promise<void> {
   const toScope = fromScope === 'global' ? 'project' : 'global';
-  await installExtension(ext, agent, toScope, registryDir);
+  await installExtension(ext, agent, toScope, registryDir, sourcePath);
   await removeExtension(ext, agent, fromScope, registryDir, true);
 }
 
@@ -161,6 +162,7 @@ export async function updateExtension(
   agent: AgentName,
   scope: 'global' | 'project',
   registryDir: string,
+  sourcePath?: string,
 ): Promise<void> {
-  await installExtension(ext, agent, scope, registryDir);
+  await installExtension(ext, agent, scope, registryDir, sourcePath);
 }

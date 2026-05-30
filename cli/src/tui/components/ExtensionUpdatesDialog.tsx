@@ -16,6 +16,8 @@ export interface ExtensionUpdateEntry {
   newVersion: string;
   scope: 'global' | 'project';
   sourceAgent?: AgentName;
+  /** Источник установки (например, 'skillssh:owner/repo@slug') */
+  source?: string;
 }
 
 interface Props {

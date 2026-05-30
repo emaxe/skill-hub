@@ -11,36 +11,9 @@ import { AgentAdapter } from '../adapters/types';
 import { getAdapter } from '../adapters/get-adapter';
 import { hasProjectConfig, addProjectExtension } from '../config';
 import fs from 'fs';
-import { searchSkillssh, downloadSkillssh, skillsshToExtension, SkillsshSearchResult } from '../skillssh';
+import { searchSkillssh, downloadSkillssh, skillsshToExtension, SkillsshSearchResult, isSkillsshRef, parseSkillsshRef, writeSkillsshFilesToTmp } from '../skillssh';
 import { installExtension as managerInstall } from '../extension-manager';
 
-const SKILLSSH_PREFIX = 'skillssh:';
-
-function isSkillsshRef(name: string): boolean {
-  return name.startsWith(SKILLSSH_PREFIX);
-}
-
-function parseSkillsshRef(name: string): { source?: string; slug?: string } {
-  const rest = name.slice(SKILLSSH_PREFIX.length);
-  if (rest.includes('@')) {
-    const [source, slug] = rest.split('@');
-    return { source, slug };
-  }
-  if (rest.includes('/')) {
-    return { source: rest };
-  }
-  return { slug: rest };
-}
-
-function writeSkillsshFilesToTmp(download: { files: { path: string; contents: string }[] }, slug: string): string {
-  const tmpDir = path.join(os.homedir(), '.skill-hub', 'tmp', `skillssh-${slug}-${Date.now()}`);
-  for (const file of download.files) {
-    const filePath = path.join(tmpDir, file.path);
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, file.contents, 'utf-8');
-  }
-  return tmpDir;
-}
 
 async function installExtension(
   ext: Extension,
@@ -94,7 +67,7 @@ export function makeInstallCommand(): Command {
             skill = { id: ref.slug, name: ref.slug, description: '', source: ref.source, installs: 0 };
           } else if (ref.source && !ref.slug) {
             // Partial: skillssh:owner/repo — search and interactive select
-            const results = await searchSkillssh(ref.source, 20);
+            const results = (await searchSkillssh(ref.source, 20)).filter(r => r.source === ref.source);
             if (results.length === 0) {
               spinner.fail(chalk.red(`Скиллы не найдены для ${ref.source}`));
               process.exit(1);
@@ -109,13 +82,19 @@ export function makeInstallCommand(): Command {
             }
           } else if (ref.slug && !ref.source) {
             // Just slug: search by slug
-            const results = await searchSkillssh(ref.slug, 10);
-            const found = results.find(r => r.id === ref.slug);
-            if (!found) {
+            const results = await searchSkillssh(ref.slug, 20);
+            const exactMatches = results.filter(r => r.id === ref.slug);
+            if (exactMatches.length === 0) {
               spinner.fail(chalk.red(`Скилл "${ref.slug}" не найден на skills.sh`));
               process.exit(1);
             }
-            skill = found;
+            if (exactMatches.length > 1) {
+              console.log(chalk.bold('\nНайдено несколько скиллов с таким slug:\n'));
+              exactMatches.forEach((r, i) => console.log(`  ${i + 1}. ${r.source}@${r.id} — ${r.description || 'нет описания'}`));
+              console.log(chalk.yellow('\nУкажите полный путь: skill-hub install skillssh:owner/repo@slug'));
+              process.exit(0);
+            }
+            skill = exactMatches[0];
           } else {
             spinner.fail(chalk.red(`Неверный формат skills.sh ссылки: ${nameArg}`));
             process.exit(1);

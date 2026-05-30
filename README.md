@@ -113,15 +113,15 @@ cp "$(npm root -g)/@emaxe/skill-hub/base-skills/codex/SKILL.md" ~/.codex/AGENTS.
 
 ## Installing Skills from skills.sh
 
-Skill-Hub supports direct installation of skills from [skills.sh](https://skills.sh) — a public AI skills registry by Vercel Labs. This works **only via CLI** (TUI does not yet support external sources).
+Skill-Hub supports direct installation of skills from [skills.sh](https://skills.sh) — a public AI skills registry by Vercel Labs. Works both via **CLI** and **TUI**.
 
-### Search
+### Search (CLI)
 
 ```bash
 skill-hub search --source skillssh react --limit 5
 ```
 
-### Installation Formats
+### Installation (CLI)
 
 ```bash
 # By full ID (recommended)
@@ -141,7 +141,7 @@ skill-hub install skillssh:vercel-labs/agent-skills --agent claude-code --projec
 3. Installs via the standard adapter (like a regular catalog skill)
 4. Saves `source: "skillssh:owner/repo@slug"` in the registry for updates
 
-### Update
+### Update (CLI)
 
 ```bash
 # Update all skills (including skills.sh)
@@ -152,6 +152,14 @@ skill-hub update vercel-react-best-practices --agent claude-code
 ```
 
 For skills.sh skills, the update compares the hash from the API — if changed, it re-downloads and reinstalls.
+
+### TUI Support
+
+In the **Catalog** tab, type a query in the search field — results from the local catalog appear first, followed by live results from skills.sh (marked with `[skills.sh]` source). Press `Enter` on a skills.sh result to open its card, then `i` to install.
+
+Installed skills.sh skills behave like catalog extensions: appear in the **Installed** tab with version = API hash, support `d` (remove), `m` (move), `u` (update), and startup sync (if recorded in `.skill-hub.json`).
+
+> **Note:** The `c` (view content) hotkey is hidden for uninstalled skills.sh items because the skill files are not cached locally until installation.
 
 ## Interactive TUI
 
@@ -620,7 +628,7 @@ cd cli && npm run build       # build
 npm link                      # global link
 skill-hub search git          # test
 npm unlink -g @emaxe/skill-hub # remove link
-cd cli && npm test            # tests (266 tests)
+cd cli && npm test            # tests (290 tests)
 ```
 
 After source changes, just rebuild (`npm run build`) — the link updates automatically.

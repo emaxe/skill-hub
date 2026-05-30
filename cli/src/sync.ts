@@ -30,6 +30,8 @@ export interface MissingExtension extends ProjectExtensionRecord {
   inCatalog: boolean;
   /** Версия из каталога (если есть) */
   catalogVersion?: string;
+  /** Источник установки (например, 'skillssh:owner/repo@slug') */
+  source?: string;
 }
 
 export interface SyncResult {
@@ -97,7 +99,13 @@ export function checkExtensionSync(agent: AgentName): SyncResult {
   const missing: MissingExtension[] = missingRaw.map(e => {
     const key = `${e.type}:${e.name}`;
     const catalogVersion = catalogMap?.get(key);
-    return { ...e, inCatalog: !!catalogVersion, catalogVersion };
+    const isSkillssh = !!(e.source?.startsWith('skillssh:'));
+    return {
+      ...e,
+      inCatalog: !!catalogVersion || isSkillssh,
+      catalogVersion: catalogVersion || e.version,
+      source: e.source,
+    };
   });
 
   // Обратная проверка: расширения на диске (project scope), которых нет в конфиге
