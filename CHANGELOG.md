@@ -10,6 +10,11 @@
 
 ## [Unreleased]
 
+## [0.1.21] — 2026-05-30
+
+### Добавлено
+- Full skills.sh TUI integration (see 0.1.20 for full changelog)
+
 ## [0.1.20] — 2026-05-30
 
 ### Исправлено (Security Audit)

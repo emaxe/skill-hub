@@ -1,6 +1,6 @@
 {
   "name": "@emaxe/skill-hub",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "Extension manager for AI coding agents (Claude Code, Cursor, Copilot)",
   "bin": {
     "skill-hub": "dist/index.js",
