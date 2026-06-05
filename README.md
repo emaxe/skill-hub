@@ -617,7 +617,7 @@ skill-hub-catalog (separate repo)
 ```
 
 **Delivery flow:**
-1. `git clone --depth 1 skill-hub-catalog` → `~/.skill-hub/` (local cache)
+1. `git clone --depth 1 skill-hub-catalog` → `~/.skill-hub/` (local cache). Protected files (`installed.json`, `bootstrap/`) are preserved during re-clone by cloning into a temporary directory and moving contents atomically
 2. Installation = adapter copies extension to the agent's target directory
 3. Update = `git pull` in cache, re-copy installed extensions
 

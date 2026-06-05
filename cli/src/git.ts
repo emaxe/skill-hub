@@ -88,6 +88,32 @@ function cleanCacheDir(cachePath: string): void {
   }
 }
 
+/**
+ * Переносит содержимое клонированного репозитория из src в dest,
+ * пропуская защищённые записи (installed.json, bootstrap/).
+ * Использует rename (атомарно) с fallback на copy+remove для cross-device.
+ */
+function moveCloneContents(src: string, dest: string): void {
+  for (const entry of fs.readdirSync(src)) {
+    if (PRESERVED_ENTRIES.includes(entry)) continue;
+    const srcPath = path.join(src, entry);
+    const destPath = path.join(dest, entry);
+    if (fs.existsSync(destPath)) {
+      fs.rmSync(destPath, { recursive: true, force: true });
+    }
+    try {
+      fs.renameSync(srcPath, destPath);
+    } catch (err: any) {
+      if (err.code === 'EXDEV') {
+        fs.cpSync(srcPath, destPath, { recursive: true });
+        fs.rmSync(srcPath, { recursive: true, force: true });
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
 /** Полностью удаляет кеш каталога — используется при смене registryUrl */
 export function resetCache(cachePath = getCachePath()): void {
   cleanCacheDir(cachePath);
@@ -161,9 +187,17 @@ async function ensureCacheWithUrl(registryUrl: string, cachePath: string): Promi
     // Если директория существует без .git — очищаем git-содержимое и клонируем заново
     cleanCacheDir(cachePath);
 
+    // Создаём целевую директорию если отсутствует (для последующего переноса)
+    fs.mkdirSync(cachePath, { recursive: true });
+
+    // Клонируем во временный каталог, чтобы не требовать пустой target.
+    // cleanCacheDir оставляет защищённые записи (installed.json, bootstrap/),
+    // а git clone требует абсолютно пустую директорию.
+    const tmpCloneDir = path.join(os.tmpdir(), `skill-hub-clone-${Date.now()}`);
     console.log('Downloading extension catalog...');
     try {
-      await simpleGit().clone(registryUrl, cachePath, ['--depth', '1']);
+      await simpleGit().clone(registryUrl, tmpCloneDir, ['--depth', '1']);
+      moveCloneContents(tmpCloneDir, cachePath);
     } catch (err: any) {
       const msg = String(err.message || err);
       if (isAuthError(msg)) throw new GitAuthError(publicUrl);
@@ -172,6 +206,10 @@ async function ensureCacheWithUrl(registryUrl: string, cachePath: string): Promi
         `Check your internet connection and that ${publicUrl} is accessible.\n` +
         `Details: ${msg}`
       );
+    } finally {
+      if (fs.existsSync(tmpCloneDir)) {
+        fs.rmSync(tmpCloneDir, { recursive: true, force: true });
+      }
     }
   }
 

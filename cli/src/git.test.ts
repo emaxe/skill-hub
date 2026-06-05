@@ -1,7 +1,12 @@
-import { getCachePath, isCloned, resetCache, fullCatalogReset, normalizeGitUrl, injectCredentials } from './git';
+import { getCachePath, isCloned, resetCache, fullCatalogReset, normalizeGitUrl, injectCredentials, ensureCache } from './git';
+import simpleGit from 'simple-git';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
+
+jest.mock('simple-git', () => {
+  return jest.fn();
+});
 
 jest.mock('./config', () => {
   const original = jest.requireActual('./config');
@@ -10,7 +15,10 @@ jest.mock('./config', () => {
     loadProjectExtensions: jest.fn(),
     saveProjectExtensions: jest.fn(),
     findProjectRoot: jest.fn(() => '/mock/project'),
-    resolveConfig: original.resolveConfig,
+    resolveConfig: jest.fn(() => ({
+      config: { registryUrl: 'https://github.com/test/catalog.git' },
+      source: 'global' as const,
+    })),
   };
 });
 
@@ -208,5 +216,76 @@ describe('injectCredentials + normalizeGitUrl roundtrip', () => {
     const injected = injectCredentials(original, 'user', 'token123');
     expect(injected).not.toBe(original);
     expect(normalizeGitUrl(injected)).toBe(normalizeGitUrl(original));
+  });
+});
+
+describe('ensureCache', () => {
+  let cachePath: string;
+  const mockClone = jest.fn();
+  const mockRemote = jest.fn();
+  const mockPull = jest.fn();
+
+  beforeEach(() => {
+    mockClone.mockClear();
+    mockRemote.mockClear();
+    mockPull.mockClear();
+    (simpleGit as unknown as jest.Mock).mockReturnValue({
+      clone: mockClone,
+      remote: mockRemote,
+      pull: mockPull,
+    });
+    cachePath = path.join(os.tmpdir(), 'skill-hub-ensurecache-test-' + Date.now());
+    fs.mkdirSync(cachePath, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(cachePath)) {
+      fs.rmSync(cachePath, { recursive: true, force: true });
+    }
+  });
+
+  test('клонирует во временный каталог и переносит содержимое, оставляя защищённые файлы', async () => {
+    fs.writeFileSync(path.join(cachePath, 'installed.json'), '{"version":3}');
+
+    // Имитируем git clone: создаём файлы во временной директории
+    mockClone.mockImplementation(async (_url: string, target: string, _opts: any[]) => {
+      fs.mkdirSync(path.join(target, '.git'), { recursive: true });
+      fs.writeFileSync(path.join(target, 'catalog.json'), '{}');
+    });
+
+    await ensureCache(cachePath);
+
+    // Защищённые файлы остались
+    expect(fs.existsSync(path.join(cachePath, 'installed.json'))).toBe(true);
+    // Содержимое клона перенесено
+    expect(fs.existsSync(path.join(cachePath, '.git'))).toBe(true);
+    expect(fs.existsSync(path.join(cachePath, 'catalog.json'))).toBe(true);
+    // Временная директория удалена
+    expect(mockClone).toHaveBeenCalledTimes(1);
+    const tmpDir = mockClone.mock.calls[0][1];
+    expect(fs.existsSync(tmpDir)).toBe(false);
+  });
+
+  test('не клонирует если .git уже существует и origin совпадает', async () => {
+    fs.mkdirSync(path.join(cachePath, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(cachePath, 'catalog.json'), '{}');
+    mockRemote.mockResolvedValue('https://github.com/test/catalog.git\n');
+
+    await ensureCache(cachePath);
+
+    expect(mockClone).not.toHaveBeenCalled();
+    expect(mockPull).not.toHaveBeenCalled();
+  });
+
+  test('кидает GitAuthError при ошибке аутентификации', async () => {
+    mockClone.mockRejectedValue(new Error('could not read Username'));
+
+    await expect(ensureCache(cachePath)).rejects.toThrow('Требуется аутентификация');
+  });
+
+  test('кидает обычную ошибку при других проблемах клонирования', async () => {
+    mockClone.mockRejectedValue(new Error('network timeout'));
+
+    await expect(ensureCache(cachePath)).rejects.toThrow(/Failed to clone/);
   });
 });

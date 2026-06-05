@@ -108,7 +108,7 @@ async function executeArgs(argv) {
     program
         .name('skill-hub')
         .description('Extension manager for AI coding agents (Claude Code, Cursor, Copilot)')
-        .version('0.1.19');
+        .version('0.1.21');
     program.addCommand(makeSearchCommand());
     program.addCommand(makeListCommand());
     program.addCommand(makeInfoCommand());
