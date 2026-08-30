@@ -1,6 +1,7 @@
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import simpleGit from 'simple-git';
 import { resolveConfig, loadProjectExtensions, saveProjectExtensions, findProjectRoot } from './config';
 
@@ -65,58 +66,78 @@ export function getRegistryUrl(): string {
   return resolveConfig().config.registryUrl;
 }
 
-export function getCachePath(): string {
-  return path.join(os.homedir(), '.skill-hub');
+/**
+ * Генерирует уникальное имя папки для кеша репозитория на основе его URL.
+ * Включает slug репозитория и sha256 хеш для предотвращения коллизий.
+ */
+export function getCacheDirName(registryUrl: string): string {
+  const normalized = normalizeGitUrl(registryUrl).trim().toLowerCase();
+  const hash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12);
+  let slug = '';
+  try {
+    const cleanUrl = normalized.replace(/\.git$/, '');
+    const parts = cleanUrl.split(/[/:]/).filter(Boolean);
+    if (parts.length > 0) {
+      slug = parts[parts.length - 1].replace(/[^a-zA-Z0-9._-]/g, '_');
+    }
+  } catch {
+    // fallback
+  }
+  return slug ? `${slug}-${hash}` : hash;
+}
+
+/**
+ * Возвращает путь к кешу каталога для указанного (или текущего активного) registryUrl.
+ * Каждый репозиторий изолирован в ~/.skill-hub/catalogs/<dirName>.
+ */
+export function getCachePath(registryUrl?: string): string {
+  const url = registryUrl || getRegistryUrl();
+  const dirName = getCacheDirName(url);
+  return path.join(os.homedir(), '.skill-hub', 'catalogs', dirName);
 }
 
 export function isCloned(cachePath = getCachePath()): boolean {
   return fs.existsSync(path.join(cachePath, '.git'));
 }
 
-/** Записи в директории кеша, которые не должны удаляться при сбросе */
-const PRESERVED_ENTRIES = ['installed.json', 'bootstrap'];
-
 /**
- * Удаляет содержимое кеш-директории, сохраняя защищённые записи
- * (installed.json — реестр установок, bootstrap/ — conventions-скиллы).
+ * Очищает устаревшие файлы git-клона из корневой директории ~/.skill-hub,
+ * если они там остались от предыдущих версий.
+ * Сохраняет config.json, installed.json, bootstrap/ и папку catalogs/.
  */
-function cleanCacheDir(cachePath: string): void {
-  if (!fs.existsSync(cachePath)) return;
-  for (const entry of fs.readdirSync(cachePath)) {
-    if (PRESERVED_ENTRIES.includes(entry)) continue;
-    fs.rmSync(path.join(cachePath, entry), { recursive: true, force: true });
-  }
-}
+export function cleanLegacyRootCache(baseDir = path.join(os.homedir(), '.skill-hub')): void {
+  const legacyGit = path.join(baseDir, '.git');
+  if (!fs.existsSync(legacyGit)) return;
 
-/**
- * Переносит содержимое клонированного репозитория из src в dest,
- * пропуская защищённые записи (installed.json, bootstrap/).
- * Использует rename (атомарно) с fallback на copy+remove для cross-device.
- */
-function moveCloneContents(src: string, dest: string): void {
-  for (const entry of fs.readdirSync(src)) {
-    if (PRESERVED_ENTRIES.includes(entry)) continue;
-    const srcPath = path.join(src, entry);
-    const destPath = path.join(dest, entry);
-    if (fs.existsSync(destPath)) {
-      fs.rmSync(destPath, { recursive: true, force: true });
-    }
-    try {
-      fs.renameSync(srcPath, destPath);
-    } catch (err: any) {
-      if (err.code === 'EXDEV') {
-        fs.cpSync(srcPath, destPath, { recursive: true });
-        fs.rmSync(srcPath, { recursive: true, force: true });
-      } else {
-        throw err;
+  const LEGACY_ENTRIES_TO_REMOVE = [
+    '.git',
+    'catalog.json',
+    'skills',
+    'rules',
+    'agents',
+    'subagents',
+    'commands',
+    'mcp-servers',
+    'schema',
+  ];
+
+  for (const entry of LEGACY_ENTRIES_TO_REMOVE) {
+    const p = path.join(baseDir, entry);
+    if (fs.existsSync(p)) {
+      try {
+        fs.rmSync(p, { recursive: true, force: true });
+      } catch {
+        // ignore
       }
     }
   }
 }
 
-/** Полностью удаляет кеш каталога — используется при смене registryUrl */
+/** Полностью удаляет кеш конкретного каталога */
 export function resetCache(cachePath = getCachePath()): void {
-  cleanCacheDir(cachePath);
+  if (fs.existsSync(cachePath)) {
+    fs.rmSync(cachePath, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -139,12 +160,13 @@ export function fullCatalogReset(cachePath = getCachePath()): void {
 /**
  * Гарантирует наличие локального кеша каталога.
  * Клонирует репозиторий при первом запуске, делает pull если отсутствует catalog.json,
- * пересоздаёт кеш если registryUrl изменился.
+ * пересоздаёт кеш если origin изменился.
  * Бросает GitAuthError если репозиторий требует аутентификации.
  */
-export async function ensureCache(cachePath = getCachePath()): Promise<void> {
+export async function ensureCache(cachePath?: string): Promise<void> {
   const registryUrl = getRegistryUrl();
-  await ensureCacheWithUrl(registryUrl, cachePath);
+  const targetPath = cachePath ?? getCachePath(registryUrl);
+  await ensureCacheWithUrl(registryUrl, targetPath);
 }
 
 /**
@@ -154,17 +176,19 @@ export async function ensureCache(cachePath = getCachePath()): Promise<void> {
 export async function ensureCacheWithCredentials(
   username: string,
   password: string,
-  cachePath = getCachePath()
+  cachePath?: string
 ): Promise<void> {
   const registryUrl = getRegistryUrl();
   const authedUrl = injectCredentials(registryUrl, username, password);
-  await ensureCacheWithUrl(authedUrl, cachePath);
+  const targetPath = cachePath ?? getCachePath(registryUrl);
+  await ensureCacheWithUrl(authedUrl, targetPath);
 }
 
 /**
  * Внутренняя реализация ensureCache с явным URL (может содержать учётные данные).
  */
 async function ensureCacheWithUrl(registryUrl: string, cachePath: string): Promise<void> {
+  cleanLegacyRootCache();
   const publicUrl = getRegistryUrl(); // для сообщений об ошибках (без credentials)
 
   // Если клон есть, проверяем совпадение origin с текущим registryUrl.
@@ -184,21 +208,14 @@ async function ensureCacheWithUrl(registryUrl: string, cachePath: string): Promi
   }
 
   if (!isCloned(cachePath)) {
-    // Если директория существует без .git — очищаем git-содержимое и клонируем заново
-    cleanCacheDir(cachePath);
-
-    // Создаём целевую директорию если отсутствует (для последующего переноса)
     fs.mkdirSync(cachePath, { recursive: true });
-
-    // Клонируем во временный каталог, чтобы не требовать пустой target.
-    // cleanCacheDir оставляет защищённые записи (installed.json, bootstrap/),
-    // а git clone требует абсолютно пустую директорию.
-    const tmpCloneDir = path.join(os.tmpdir(), `skill-hub-clone-${Date.now()}`);
     console.log('Downloading extension catalog...');
     try {
-      await simpleGit().clone(registryUrl, tmpCloneDir, ['--depth', '1']);
-      moveCloneContents(tmpCloneDir, cachePath);
+      await simpleGit().clone(registryUrl, cachePath, ['--depth', '1']);
     } catch (err: any) {
+      if (fs.existsSync(cachePath)) {
+        fs.rmSync(cachePath, { recursive: true, force: true });
+      }
       const msg = String(err.message || err);
       if (isAuthError(msg)) throw new GitAuthError(publicUrl);
       throw new Error(
@@ -206,10 +223,6 @@ async function ensureCacheWithUrl(registryUrl: string, cachePath: string): Promi
         `Check your internet connection and that ${publicUrl} is accessible.\n` +
         `Details: ${msg}`
       );
-    } finally {
-      if (fs.existsSync(tmpCloneDir)) {
-        fs.rmSync(tmpCloneDir, { recursive: true, force: true });
-      }
     }
   }
 
@@ -235,16 +248,23 @@ async function ensureCacheWithUrl(registryUrl: string, cachePath: string): Promi
 }
 
 /** Обновляет кеш каталога (git pull). Если кеш отсутствует — вызывает ensureCache */
-export async function updateCache(cachePath = getCachePath()): Promise<void> {
-  if (!isCloned(cachePath)) {
-    await ensureCache(cachePath);
+export async function updateCache(cachePath?: string): Promise<void> {
+  const registryUrl = getRegistryUrl();
+  const targetPath = cachePath ?? getCachePath(registryUrl);
+
+  if (!isCloned(targetPath)) {
+    await ensureCache(targetPath);
     return;
   }
 
-  const registryUrl = getRegistryUrl();
-
   try {
-    const git = simpleGit(cachePath);
+    const git = simpleGit(targetPath);
+    const currentOrigin = (await git.remote(['get-url', 'origin']))?.trim();
+    if (currentOrigin && normalizeGitUrl(currentOrigin) !== normalizeGitUrl(registryUrl)) {
+      console.log('Registry URL changed, re-ensuring cache...');
+      await ensureCache(targetPath);
+      return;
+    }
     await git.pull('origin', 'main', ['--ff-only']);
   } catch (err: any) {
     const msg = String(err.message || err);
@@ -256,7 +276,7 @@ export async function updateCache(cachePath = getCachePath()): Promise<void> {
     );
   }
 
-  if (!fs.existsSync(path.join(cachePath, 'catalog.json'))) {
+  if (!fs.existsSync(path.join(targetPath, 'catalog.json'))) {
     throw new Error(
       `catalog.json not found after update.\n` +
       `The remote repository may be missing the catalog file.`

@@ -7,12 +7,14 @@
 
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+import { execSync } from 'child_process';
 import simpleGit from 'simple-git';
 import { AgentName, Extension, ExtensionType, Catalog, loadCatalog, platformKey } from './catalog';
 import { ScanResult } from './adapters/types';
 import { getAdapter } from './adapters/get-adapter';
 import { getCachePath, getRegistryUrl, resetCache, ensureCache } from './git';
-import { listExtensionFiles, getExtensionDirSize, findBinaryFiles, MAX_EXTENSION_DIR_SIZE, copyExtensionDir } from './multi-file';
+import { listExtensionFiles, getExtensionDirSize, findBinaryFiles, MAX_EXTENSION_DIR_SIZE, copyExtensionDir, DEFAULT_IGNORE } from './multi-file';
 
 // ─── Типы ────────────────────────────────────────────────────
 
@@ -65,7 +67,7 @@ export interface UploadResult {
  */
 export async function checkCatalogWriteAccess(registryUrl?: string): Promise<AccessCheckResult> {
   const url = registryUrl ?? getRegistryUrl();
-  const cachePath = getCachePath();
+  const cachePath = getCachePath(url);
 
   if (!fs.existsSync(path.join(cachePath, '.git'))) {
     return { hasAccess: false, error: 'Кеш каталога не найден. Запустите skill-hub update.' };
@@ -103,6 +105,32 @@ export async function checkCatalogWriteAccess(registryUrl?: string): Promise<Acc
 // ─── 2. Валидация расширений ─────────────────────────────────
 
 const KEBAB_CASE_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+
+let defaultAuthorCache: string | undefined;
+
+/**
+ * Возвращает автора по умолчанию для загрузки в каталог.
+ * Пробует git config user.name, затем os.userInfo().username, fallback на 'unknown'.
+ */
+function getDefaultAuthor(): string {
+  if (defaultAuthorCache !== undefined) return defaultAuthorCache;
+
+  try {
+    const gitName = execSync('git config user.name', { encoding: 'utf-8', timeout: 5000 }).trim();
+    if (gitName) {
+      defaultAuthorCache = gitName;
+      return defaultAuthorCache;
+    }
+  } catch { /* ignore */ }
+
+  try {
+    defaultAuthorCache = os.userInfo().username || 'unknown';
+  } catch {
+    defaultAuthorCache = 'unknown';
+  }
+
+  return defaultAuthorCache;
+}
 
 /**
  * Парсит YAML-фронтматтер из markdown-файла.
@@ -188,8 +216,6 @@ export function validateExtensionsForUpload(
     const missingFields: string[] = [];
     if (!fm.name) missingFields.push('name');
     if (!fm.description) missingFields.push('description');
-    if (!fm.version) missingFields.push('version');
-    if (!fm.author) missingFields.push('author');
     if (missingFields.length > 0) {
       errors.push(`Отсутствуют поля во фронтматтере: ${missingFields.join(', ')}`);
     }
@@ -222,8 +248,15 @@ export function validateExtensionsForUpload(
       errors.push(`Обнаружены бинарные файлы: ${binaries.join(', ')}`);
     }
 
-    const frontmatter = (fm.name && fm.description && fm.version && fm.author)
-      ? fm as Frontmatter
+    // Автозаполнение version и author если отсутствуют — позволяет загружать скиллы без этих полей
+    const frontmatter: Frontmatter | undefined = (fm.name && fm.description)
+      ? {
+          name: fm.name,
+          description: fm.description,
+          version: fm.version || '1.0.0',
+          author: fm.author || getDefaultAuthor(),
+          tags: fm.tags,
+        }
       : undefined;
 
     return { extension: ext, valid: errors.length === 0, errors, frontmatter };
@@ -285,6 +318,7 @@ function listAdditionalFilesFromDir(dirPath: string, mainFile: string): string[]
   function walk(current: string): void {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       if (entry.name === '.skillignore') continue;
+      if (DEFAULT_IGNORE.has(entry.name)) continue;
       if (entry.isSymbolicLink()) continue;
 
       const full = path.join(current, entry.name);
@@ -545,7 +579,7 @@ export function generatePrTitle(extensions: ScanResult[], frontmatters: Map<stri
  * Фильтрует по scope (global/project).
  */
 /** Базовые скиллы, встроенные в CLI — не должны попадать в каталог */
-const BASE_SKILLS = new Set(['skill-hub', 'agents-conventions', 'init-agents', 'exit-agents']);
+const BASE_SKILLS = new Set(['skill-hub', 'agents-conventions', 'init-agents', 'exit-agents', 'bootstrap']);
 
 export function getUploadCandidates(
   agent: AgentName,

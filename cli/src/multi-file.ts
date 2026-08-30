@@ -9,6 +9,12 @@ import path from 'path';
 /** Максимальный размер директории расширения (1 МБ) */
 export const MAX_EXTENSION_DIR_SIZE = 1024 * 1024;
 
+/** Файлы и директории, которые всегда исключаются при копировании/сканировании расширений */
+export const DEFAULT_IGNORE = new Set([
+  '.git', 'node_modules', '.DS_Store', 'Thumbs.db',
+  'catalog.json', 'installed.json',
+]);
+
 /**
  * Вычисляет путь к директории расширения в кеше каталога.
  * Обратная совместимость: ext.path может быть путём к файлу (skills/name/SKILL.md)
@@ -32,12 +38,13 @@ const BINARY_EXTENSIONS = new Set([
 
 /**
  * Рекурсивно копирует содержимое директории расширения.
- * Пропускает: .skillignore, symlinks.
+ * Пропускает: .skillignore, symlinks, DEFAULT_IGNORE.
  */
 export function copyExtensionDir(src: string, dest: string, ignore?: string[]): void {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
     if (entry.name === '.skillignore') continue;
+    if (DEFAULT_IGNORE.has(entry.name)) continue;
     if (ignore?.includes(entry.name)) continue;
     if (entry.isSymbolicLink()) continue;
 
@@ -110,6 +117,7 @@ export function listExtensionFiles(extPath: string, cachePath: string, mainFile?
 function collectFiles(base: string, current: string, mainFile: string, result: string[]): void {
   for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
     if (entry.name === '.skillignore') continue;
+    if (DEFAULT_IGNORE.has(entry.name)) continue;
     if (entry.isSymbolicLink()) continue;
 
     const full = path.join(current, entry.name);
@@ -133,6 +141,7 @@ export function getExtensionDirSize(dirPath: string): number {
   let total = 0;
 
   for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+    if (DEFAULT_IGNORE.has(entry.name)) continue;
     const full = path.join(dirPath, entry.name);
     if (entry.isDirectory()) {
       total += getExtensionDirSize(full);
@@ -155,6 +164,7 @@ export function findBinaryFiles(dirPath: string): string[] {
   function walk(dir: string): void {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.isSymbolicLink()) continue;
+      if (DEFAULT_IGNORE.has(entry.name)) continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         walk(full);
